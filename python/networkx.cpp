@@ -297,6 +297,37 @@ py::object wrap_into_buffer(py_graph_t& g, strided_range_gt<element_at> range) {
     return py::reinterpret_steal<py::object>(obj);
 }
 
+template <typename array_type_at>
+void make_key_value( //
+    py_graph_t& g,
+    edges_view_t es,
+    std::shared_ptr<arrow::Array> array,
+    std::string_view column_name) {
+    auto numeric_array = std::static_pointer_cast<array_type_at>(array);
+
+    std::string json_str;
+    for (size_t idx = 0; idx != es.size(); idx++) {
+        json_str = fmt::format("{{\"{}\": {}}}", column_name, numeric_array->Value(idx));
+        g.relations_attrs[es[idx].id].assign(value_view_t(json_str)).throw_unhandled();
+    }
+}
+
+template <>
+void make_key_value<arrow::BinaryArray>( //
+    py_graph_t& g,
+    edges_view_t es,
+    std::shared_ptr<arrow::Array> array,
+    std::string_view column_name) {
+    auto binary_array = std::static_pointer_cast<arrow::BinaryArray>(array);
+
+    std::string json_str;
+    for (size_t idx = 0; idx != es.size(); idx++) {
+        auto value = binary_array->Value(idx);
+        json_str = fmt::format("{\"{}\":\"{}\"}", column_name.data(), std::string_view(value.data(), value.size()));
+        g.relations_attrs[es[idx].id].assign(value_view_t(json_str)).throw_unhandled();
+    }
+}
+
 void ustore::wrap_networkx(py::module& m) {
 
     auto degs = py::class_<degree_view_t>(m, "DegreeView", py::module_local());
@@ -1015,6 +1046,75 @@ void ustore::wrap_networkx(py::module& m) {
         py::arg("vs"),
         py::arg("keys") = nullptr,
         "Removes edges from members of the first array to members of the second array.");
+
+    g.def(
+        "add_edges_from",
+        [](py_graph_t& g,
+           py::object table,
+           ustore_str_view_t source,
+           ustore_str_view_t target,
+           ustore_str_view_t edge) {
+            if (!arrow::py::is_table(table.ptr()))
+                throw std::runtime_error("Wrong arg py::object isn't table");
+
+            arrow::Result<std::shared_ptr<arrow::Table>> result = arrow::py::unwrap_table(table.ptr());
+            if (!result.ok())
+                throw std::runtime_error("Failed to unwrap table");
+
+            auto table_ptr = result.ValueOrDie();
+            auto count_column = table_ptr->num_columns();
+            if (count_column < 3)
+                throw std::runtime_error("Wrong column count");
+
+            auto source_col = table_ptr->GetColumnByName(source);
+            auto target_col = table_ptr->GetColumnByName(target);
+            auto edge_col = table_ptr->GetColumnByName(edge);
+
+            size_t chunk_idx = 0;
+            auto chunks_count = source_col->num_chunks();
+            auto column_names = table_ptr->ColumnNames();
+            while (chunk_idx != chunks_count) {
+                edges_view_t edges = parsed_adjacency_list_t(chunk_idx, source_col, target_col, edge_col);
+                g.ref().upsert_edges(edges).throw_unhandled();
+
+                if (count_column < 3)
+                    continue;
+
+                for (size_t col_idx = 0; col_idx != count_column; col_idx++) {
+                    auto attr_name = column_names[col_idx];
+                    if (attr_name == source || attr_name == target, attr_name == edge)
+                        continue;
+
+                    auto attr_col = table_ptr->GetColumnByName(attr_name);
+                    auto array = attr_col->chunk(chunk_idx);
+
+                    using type = arrow::Type;
+                    switch (attr_col->chunk(chunk_idx)->type_id()) {
+                    case type::HALF_FLOAT: make_key_value<arrow::HalfFloatArray>(g, edges, array, attr_name); break;
+                    case type::FLOAT: make_key_value<arrow::FloatArray>(g, edges, array, attr_name); break;
+                    case type::DOUBLE: make_key_value<arrow::DoubleArray>(g, edges, array, attr_name); break;
+                    case type::BOOL: make_key_value<arrow::BooleanArray>(g, edges, array, attr_name); break;
+                    case type::UINT8: make_key_value<arrow::UInt8Array>(g, edges, array, attr_name); break;
+                    case type::INT8: make_key_value<arrow::Int8Array>(g, edges, array, attr_name); break;
+                    case type::UINT16: make_key_value<arrow::UInt16Array>(g, edges, array, attr_name); break;
+                    case type::INT16: make_key_value<arrow::Int16Array>(g, edges, array, attr_name); break;
+                    case type::UINT32: make_key_value<arrow::UInt32Array>(g, edges, array, attr_name); break;
+                    case type::INT32: make_key_value<arrow::Int32Array>(g, edges, array, attr_name); break;
+                    case type::UINT64: make_key_value<arrow::UInt64Array>(g, edges, array, attr_name); break;
+                    case type::INT64: make_key_value<arrow::Int64Array>(g, edges, array, attr_name); break;
+                    case type::STRING:
+                    case type::BINARY: make_key_value<arrow::BinaryArray>(g, edges, array, attr_name); break;
+                    }
+                }
+
+                ++chunk_idx;
+            }
+        },
+        py::arg("table"),
+        py::arg("source"),
+        py::arg("target"),
+        py::arg("edge"),
+        "Adds edges from members of the first array to members of the second array.");
 
     g.def(
         "clear_edges",
