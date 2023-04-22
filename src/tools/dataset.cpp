@@ -31,13 +31,15 @@
 
 #include <ustore/ustore.hpp>
 #include <ustore/cpp/ranges.hpp>
-#include <ustore/cpp/blobs_range.hpp>      // `keys_stream_t`
+#include <ustore/cpp/blobs_range.hpp>   // `keys_stream_t`
 #include <../helpers/linked_memory.hpp> // `linked_memory_lock_t`
 
 #include "dataset.h"
 
 using namespace unum::ustore;
 
+// 2 vertices and 1 edge
+constexpr ustore_size_t vertices_edge_k = 3;
 // Count of symbols to make json ('"', '"', ':', ',')
 constexpr ustore_size_t symbols_count_k = 4;
 // Json object open brackets for json and parquet
@@ -55,6 +57,7 @@ using chunked_array_t = std::shared_ptr<arrow::ChunkedArray>;
 using array_t = std::shared_ptr<arrow::Array>;
 using int_builder_t = arrow::NumericBuilder<arrow::Int64Type>;
 using docs_t = ptr_range_gt<value_view_t>;
+using edges_t = ptr_range_gt<edge_t>;
 
 enum ustore_dataset_ext_t {
     parquet_k = 0,
@@ -271,6 +274,75 @@ std::string generate_file_name() {
 }
 
 template <typename task_at>
+bool validate_graph_fields(task_at& imp_exp, bool is_exp = false) {
+    if (!imp_exp.source_id_field) {
+        *imp_exp.error = "Invalid source id field";
+        return false;
+    }
+    if (!imp_exp.target_id_field) {
+        *imp_exp.error = "Invalid target id field";
+        return false;
+    }
+
+    if (is_exp) {
+        auto check_first_char = [](ustore_char_t ch) {
+            return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || ch == '_';
+        };
+
+        auto check_char = [](ustore_char_t ch) {
+            return (ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || //
+                   ch == ' ' || ch == '-' || ch == '_';
+        };
+
+        auto validate_field = [=](ustore_str_view_t field) {
+            for (ustore_size_t idx = 1; idx < strlen(field); ++idx) {
+                if (check_char(field[idx]))
+                    continue;
+
+                return false;
+            }
+            return true;
+        };
+
+        if (!check_first_char(imp_exp.source_id_field[0])) {
+            *imp_exp.error = "(source) field must start with A-Z, a-z, '_'";
+            return false;
+        }
+
+        if (!check_first_char(imp_exp.target_id_field[0])) {
+            *imp_exp.error = "(target) field must start with A-Z, a-z, '_'";
+            return false;
+        }
+
+        if (imp_exp.edge_id_field) {
+            if (!check_first_char(imp_exp.edge_id_field[0])) {
+                *imp_exp.error = "(edge) field must start with A-Z, a-z, '_'";
+                return false;
+            }
+        }
+
+        if (!validate_field(imp_exp.source_id_field)) {
+            *imp_exp.error = "(source) field can contain A-Z, a-z, 0-9, ' ', '-', '_'";
+            return false;
+        }
+
+        if (!validate_field(imp_exp.target_id_field)) {
+            *imp_exp.error = "(target) field can contain A-Z, a-z, 0-9, ' ', '-', '_'";
+            return false;
+        }
+
+        if (imp_exp.edge_id_field) {
+            if (!validate_field(imp_exp.edge_id_field)) {
+                *imp_exp.error = "(edge) field can contain A-Z, a-z, 0-9, ' ', '-', '_'";
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+template <typename task_at>
 void validate_docs_fields(task_at& task) {
     if (!task.fields_count && !task.fields)
         return;
@@ -376,7 +448,10 @@ simdjson::ondemand::object& rewinded(simdjson::ondemand::object& doc) noexcept {
     return doc;
 }
 
-void get_value(simdjson::ondemand::object& data, ustore_str_view_t json_field, ustore_str_view_t field, std::string& json) {
+void get_value(simdjson::ondemand::object& data,
+               ustore_str_view_t json_field,
+               ustore_str_view_t field,
+               std::string& json) {
 
     bool state = is_json_ptr(field);
 
@@ -620,30 +695,51 @@ void upsert_docs(ustore_docs_import_t& c, docs_t& docs, ustore_size_t task_count
     ustore_docs_write(&docs_write);
 }
 
+void upsert_graph(ustore_graph_import_t& c, edges_t const& edges_src, ustore_size_t task_count) {
+
+    auto strided = edges(edges_src);
+    ustore_graph_upsert_edges_t graph_upsert_edges {
+        .db = c.db,
+        .error = c.error,
+        .arena = c.arena,
+        .options = ustore_option_dont_discard_memory_k,
+        .tasks_count = task_count,
+        .collections = &c.collection,
+        .edges_ids = strided.edge_ids.begin().get(),
+        .edges_stride = strided.edge_ids.stride(),
+        .sources_ids = strided.source_ids.begin().get(),
+        .sources_stride = strided.source_ids.stride(),
+        .targets_ids = strided.target_ids.begin().get(),
+        .targets_stride = strided.target_ids.stride(),
+    };
+
+    ustore_graph_upsert_edges(&graph_upsert_edges);
+}
+
 #pragma endregion - Upserting
 
-#pragma region - Docs
-
-void import_parquet(ustore_docs_import_t& c, std::shared_ptr<arrow::Table>& table, ustore_size_t& rows_count) {
+template <typename import_t>
+void import_parquet(import_t& c, std::shared_ptr<arrow::Table>& table) {
 
     arrow::Status status;
     arrow::MemoryPool* pool = arrow::default_memory_pool();
 
     // Open File
     auto maybe_input = arrow::io::ReadableFile::Open(c.paths_pattern);
-    return_error_if_m(maybe_input.ok(), c.error, 0, status.ToString().c_str());
+    return_error_if_m(maybe_input.ok(), c.error, 0, "Can't open file");
     auto input = *maybe_input;
 
     std::unique_ptr<parquet::arrow::FileReader> arrow_reader;
     status = parquet::arrow::OpenFile(input, pool, &arrow_reader);
-    return_error_if_m(status.ok(), c.error, 0, status.ToString().c_str());
+    return_error_if_m(status.ok(), c.error, 0, "Can't instantiate reader");
 
     // Read File into table
     status = arrow_reader->ReadTable(&table);
-    return_error_if_m(status.ok(), c.error, 0, status.ToString().c_str());
+    return_error_if_m(status.ok(), c.error, 0, "Can't read file");
 }
 
-void import_csv(ustore_docs_import_t& c, std::shared_ptr<arrow::Table>& table) {
+template <typename import_t>
+void import_csv(import_t& c, std::shared_ptr<arrow::Table>& table) {
 
     arrow::io::IOContext io_context = arrow::io::default_io_context();
     auto maybe_input = arrow::io::ReadableFile::Open(c.paths_pattern);
@@ -665,7 +761,399 @@ void import_csv(ustore_docs_import_t& c, std::shared_ptr<arrow::Table>& table) {
     table = *maybe_table;
 }
 
-void parse_arrow_table(ustore_docs_import_t& c, std::shared_ptr<arrow::Table> const& table) {
+#pragma region - Graph
+
+void parse_arrow_table_graph(ustore_graph_import_t& c,
+                             ustore_size_t task_count,
+                             std::shared_ptr<arrow::Table> const& table) {
+
+    auto sources = table->GetColumnByName(c.source_id_field);
+    return_error_if_m(sources, c.error, 0, "The source field does not exist");
+    auto targets = table->GetColumnByName(c.target_id_field);
+    return_error_if_m(targets, c.error, 0, "The target field does not exist");
+    auto edges = c.edge_id_field ? table->GetColumnByName(c.edge_id_field) : nullptr;
+    return_error_if_m(edges || (c.edge_id_field == nullptr), c.error, 0, "The edge field does not exist");
+    ustore_size_t count = sources->num_chunks();
+    return_error_if_m(count > 0, c.error, 0, "Empty Input");
+
+    auto arena = linked_memory(c.arena, c.options, c.error);
+    auto vertices_edges = arena.alloc<edge_t>(table->num_rows(), c.error);
+    ustore_size_t idx = 0;
+
+    for (ustore_size_t chunk_idx = 0; chunk_idx != count; ++chunk_idx) {
+        auto source_chunk = sources->chunk(chunk_idx);
+        auto target_chunk = targets->chunk(chunk_idx);
+        auto edge_chunk = edges ? edges->chunk(chunk_idx) : array_t {};
+        auto source_array = std::static_pointer_cast<arrow::Int64Array>(source_chunk);
+        auto target_array = std::static_pointer_cast<arrow::Int64Array>(target_chunk);
+        auto edge_array = std::static_pointer_cast<arrow::Int64Array>(edge_chunk);
+        for (ustore_size_t value_idx = 0; value_idx != source_array->length(); ++value_idx) {
+            edge_t edge {
+                .source_id = source_array->Value(value_idx),
+                .target_id = target_array->Value(value_idx),
+                .id = edges ? edge_array->Value(value_idx) : ustore_default_edge_id_k,
+            };
+            vertices_edges[idx] = edge;
+            ++idx;
+            if (idx == task_count) {
+                upsert_graph(c, vertices_edges, idx);
+                idx = 0;
+            }
+        }
+    }
+    if (idx != 0)
+        upsert_graph(c, vertices_edges, idx);
+}
+
+void import_ndjson_graph(ustore_graph_import_t& c, ustore_size_t task_count) noexcept {
+
+    auto arena = linked_memory(c.arena, c.options, c.error);
+    auto edges = arena.alloc<edge_t>(task_count, c.error);
+
+    auto handle = open(c.paths_pattern, O_RDONLY);
+    return_error_if_m(handle != -1, c.error, 0, "Can't open file");
+
+    ustore_size_t file_size = std::filesystem::file_size(std::filesystem::path(c.paths_pattern));
+    auto begin = mmap(nullptr, file_size, PROT_READ, MAP_PRIVATE, handle, 0);
+    std::string_view mapped_content = std::string_view(reinterpret_cast<ustore_char_t const*>(begin), file_size);
+    madvise(begin, file_size, MADV_SEQUENTIAL);
+
+    auto get_data = [&](simdjson::ondemand::object& data, ustore_str_view_t field) {
+        return chrcmp_(field[0], '/') ? rewinded(data).at_pointer(field) : rewinded(data)[field];
+    };
+
+    simdjson::ondemand::parser parser;
+    simdjson::ondemand::document_stream docs = parser.iterate_many( //
+        mapped_content.data(),
+        mapped_content.size(),
+        1000000ul);
+
+    ustore_key_t edge = ustore_default_edge_id_k;
+    ustore_size_t idx = 0;
+    for (auto doc : docs) {
+        simdjson::ondemand::object data = doc.get_object().value();
+        try {
+            if (c.edge_id_field)
+                edge = get_data(data, c.edge_id_field);
+            edges[idx] = edge_t {get_data(data, c.source_id_field), get_data(data, c.target_id_field), edge};
+        }
+        catch (simdjson::simdjson_error const& ex) {
+            *c.error = ex.what();
+            return_if_error_m(c.error);
+        }
+        ++idx;
+        if (idx == task_count) {
+            upsert_graph(c, edges, idx);
+            idx = 0;
+        }
+    }
+    if (idx != 0)
+        upsert_graph(c, edges, idx);
+
+    munmap((void*)mapped_content.data(), mapped_content.size());
+    close(handle);
+}
+
+void make_parquet_graph(ustore_graph_export_t& c, parquet::StreamWriter& os) {
+    parquet::schema::NodeVector fields;
+    fields.push_back(parquet::schema::PrimitiveNode::Make( //
+        c.source_id_field,
+        parquet::Repetition::REQUIRED,
+        parquet::Type::INT64,
+        parquet::ConvertedType::INT_64));
+
+    fields.push_back(parquet::schema::PrimitiveNode::Make( //
+        c.target_id_field,
+        parquet::Repetition::REQUIRED,
+        parquet::Type::INT64,
+        parquet::ConvertedType::INT_64));
+
+    if (c.edge_id_field)
+        fields.push_back(parquet::schema::PrimitiveNode::Make( //
+            c.edge_id_field,
+            parquet::Repetition::REQUIRED,
+            parquet::Type::INT64,
+            parquet::ConvertedType::INT_64));
+
+    std::shared_ptr<parquet::schema::GroupNode> schema = std::static_pointer_cast<parquet::schema::GroupNode>(
+        parquet::schema::GroupNode::Make("schema", parquet::Repetition::REQUIRED, fields));
+
+    auto maybe_outfile =
+        arrow::io::FileOutputStream::Open(fmt::format("{}{}", generate_file_name(), c.paths_extension));
+    return_error_if_m(maybe_outfile.ok(), c.error, 0, "Can't open file");
+    auto outfile = *maybe_outfile;
+
+    parquet::WriterProperties::Builder builder;
+    builder.memory_pool(arrow::default_memory_pool());
+    builder.write_batch_size(c.max_batch_size / vertices_edge_k);
+
+    os = parquet::StreamWriter {parquet::ParquetFileWriter::Open(outfile, schema, builder.build())};
+}
+
+template <typename docs_graph_t>
+int make_ndjson(docs_graph_t& docs_graph) {
+    return open(fmt::format("{}{}", generate_file_name(), docs_graph.paths_extension).data(),
+                O_CREAT | O_WRONLY,
+                S_IRUSR | S_IWUSR);
+}
+
+void write_in_file_graph( //
+    ustore_graph_export_t& c,
+    keys_length_t const& ids,
+    int_builder_t& sources_builder,
+    int_builder_t& targets_builder,
+    int_builder_t& edges_builder,
+    ptr_range_gt<ustore_key_t>& sources,
+    ptr_range_gt<ustore_key_t>& targets,
+    ptr_range_gt<ustore_key_t>& edges,
+    parquet::StreamWriter& os,
+    int handle,
+    ext_t pcn) {
+
+    ustore_size_t csv_idx = 0;
+    ustore_key_t* data = nullptr;
+
+    arrow::Status status;
+    status = sources_builder.Resize(sources_builder.capacity() + (ids.second / vertices_edge_k));
+    return_error_if_m(status.ok(), c.error, 0, "Can't resize builder");
+    status = targets_builder.Resize(targets_builder.capacity() + (ids.second / vertices_edge_k));
+    return_error_if_m(status.ok(), c.error, 0, "Can't resize builder");
+    status = edges_builder.Resize(edges_builder.capacity() + (ids.second / vertices_edge_k));
+    return_error_if_m(status.ok(), c.error, 0, "Can't resize builder");
+
+    if (!c.edge_id_field) {
+        data = ids.first;
+        for (ustore_size_t idx = 0; idx < ids.second; idx += 3, ++csv_idx) {
+            if (pcn == parquet_k)
+                os << data[idx] << data[idx + 1] << parquet::EndRow;
+            else if (pcn == csv_k) {
+                sources[csv_idx] = data[idx];
+                targets[csv_idx] = data[idx + 1];
+            }
+            else {
+                auto str = fmt::format( //
+                    "{{\"{}\":{},\"{}\":{}}}\n",
+                    c.source_id_field,
+                    data[idx],
+                    c.target_id_field,
+                    data[idx + 1]);
+                write(handle, str.data(), str.size());
+            }
+        }
+    }
+    else {
+        data = ids.first;
+        for (ustore_size_t idx = 0; idx < ids.second; idx += 3, ++csv_idx) {
+            if (pcn == parquet_k)
+                os << data[idx] << data[idx + 1] << data[idx + 2] << parquet::EndRow;
+            else if (pcn == csv_k) {
+                sources[csv_idx] = data[idx];
+                targets[csv_idx] = data[idx + 1];
+                edges[csv_idx] = data[idx + 2];
+            }
+            else {
+                auto str = fmt::format( //
+                    "{{\"{}\":{},\"{}\":{},\"{}\":{}}}\n",
+                    c.source_id_field,
+                    data[idx],
+                    c.target_id_field,
+                    data[idx + 1],
+                    c.edge_id_field,
+                    data[idx + 2]);
+                write(handle, str.data(), str.size());
+            }
+        }
+    }
+    status = sources_builder.AppendValues(sources.begin(), csv_idx);
+    return_error_if_m(status.ok(), c.error, 0, "Can't append sources");
+    status = targets_builder.AppendValues(targets.begin(), csv_idx);
+    return_error_if_m(status.ok(), c.error, 0, "Can't append targets");
+    if (c.edge_id_field) {
+        status = edges_builder.AppendValues(edges.begin(), csv_idx);
+        return_error_if_m(status.ok(), c.error, 0, "Can't append edges");
+    }
+}
+
+void end_csv_graph( //
+    ustore_graph_export_t& c,
+    int_builder_t& sources_builder,
+    int_builder_t& targets_builder,
+    int_builder_t& edges_builder) {
+
+    array_t sources_array;
+    array_t targets_array;
+    array_t edges_array;
+
+    auto status = sources_builder.Finish(&sources_array);
+    return_error_if_m(status.ok(), c.error, 0, "Can't finish array(sources)");
+    status = targets_builder.Finish(&targets_array);
+    return_error_if_m(status.ok(), c.error, 0, "Can't finish array(targets)");
+    if (c.edge_id_field) {
+        status = edges_builder.Finish(&edges_array);
+        return_error_if_m(status.ok(), c.error, 0, "Can't finish array(edges)");
+    }
+
+    arrow::FieldVector fields;
+    fields.push_back(arrow::field(c.source_id_field, arrow::int64()));
+    fields.push_back(arrow::field(c.target_id_field, arrow::int64()));
+    if (c.edge_id_field)
+        fields.push_back(arrow::field(c.edge_id_field, arrow::int64()));
+
+    std::shared_ptr<arrow::Schema> schema = std::make_shared<arrow::Schema>(fields);
+    std::shared_ptr<arrow::Table> table = nullptr;
+
+    if (c.edge_id_field)
+        table = arrow::Table::Make(schema, {sources_array, targets_array, edges_array});
+    else
+        table = arrow::Table::Make(schema, {sources_array, targets_array});
+    return_error_if_m(table, c.error, 0, "Can't make schema");
+
+    auto maybe_outstream =
+        arrow::io::FileOutputStream::Open(fmt::format("{}{}", generate_file_name(), c.paths_extension));
+    return_error_if_m(maybe_outstream.ok(), c.error, 0, "Can't open file");
+    std::shared_ptr<arrow::io::FileOutputStream> outstream = *maybe_outstream;
+
+    status = arrow::csv::WriteCSV(*table, arrow::csv::WriteOptions::Defaults(), outstream.get());
+    return_error_if_m(status.ok(), c.error, 0, "Can't write in file");
+}
+
+void end_ndjson(int fd) {
+    close(fd);
+}
+
+#pragma region - Main Functions(Graph)
+
+void ustore_graph_import(ustore_graph_import_t* c_ptr) noexcept(false) {
+
+    ustore_graph_import_t& c = *c_ptr;
+
+    return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    return_error_if_m(c.paths_pattern, c.error, uninitialized_state_k, "Paths pattern is uninitialized");
+    return_error_if_m(c.max_batch_size, c.error, uninitialized_state_k, "Max batch size is 0");
+    if (!validate_graph_fields(c))
+        return_if_error_m(c.error);
+
+    if (!c.arena)
+        c.arena = arena_t(c.db).member_ptr();
+
+    auto ext = std::filesystem::path(c.paths_pattern).extension();
+    ustore_size_t task_count = c.max_batch_size / sizeof(edge_t);
+    if (ext == ".ndjson")
+        import_ndjson_graph(c, task_count);
+    else {
+        std::shared_ptr<arrow::Table> table;
+        if (ext == ".parquet")
+            import_parquet(c, table);
+        else if (ext == ".csv")
+            import_csv(c, table);
+        return_if_error_m(c.error);
+        parse_arrow_table_graph(c, task_count, table);
+    }
+}
+
+void ustore_graph_export(ustore_graph_export_t* c_ptr) noexcept(false) {
+
+    ustore_graph_export_t& c = *c_ptr;
+
+    return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    if (!validate_graph_fields(c, true))
+        return_if_error_m(c.error);
+    return_error_if_m(c.paths_extension, c.error, uninitialized_state_k, "Paths extension is uninitialized");
+    return_error_if_m(c.max_batch_size, c.error, uninitialized_state_k, "Max batch size is 0");
+
+    auto ext = c.paths_extension;
+    ext_t pcn = strcmp_(ext, ".parquet")  ? parquet_k
+                : strcmp_(ext, ".csv")    ? csv_k
+                : strcmp_(ext, ".ndjson") ? ndjson_k
+                                          : unknown_k;
+    return_error_if_m(!(pcn == unknown_k), c.error, 0, "Not supported format");
+
+    if (!c.arena)
+        c.arena = arena_t(c.db).member_ptr();
+
+    parquet::StreamWriter os;
+    int handle = 0;
+
+    if (pcn == parquet_k)
+        make_parquet_graph(c, os);
+    else if (pcn == ndjson_k)
+        handle = make_ndjson(c);
+
+    auto arena = linked_memory(c.arena, c.options, c.error);
+    ustore_vertex_degree_t* degrees = nullptr;
+    ustore_vertex_role_t const role = ustore_vertex_source_k;
+
+    ustore_size_t count = 0;
+    ustore_size_t batch_ids = 0;
+    ustore_size_t total_ids = 0;
+    ustore_size_t task_count = c.max_batch_size / sizeof(edge_t);
+
+    int_builder_t sources_builder;
+    int_builder_t targets_builder;
+    int_builder_t edges_builder;
+    auto sources = arena.alloc<ustore_key_t>(task_count, c.error);
+    auto targets = arena.alloc<ustore_key_t>(task_count, c.error);
+    ptr_range_gt<ustore_key_t> edges;
+    if (c.edge_id_field)
+        edges = arena.alloc<ustore_key_t>(task_count, c.error);
+
+    keys_stream_t stream(c.db, c.collection, task_count, nullptr);
+    auto status = stream.seek_to_first();
+    return_error_if_m(status, c.error, 0, "No batches in stream");
+
+    while (!stream.is_end()) {
+        keys_length_t ids_in_edges {nullptr, 0};
+        count = stream.keys_batch().size();
+
+        ustore_graph_find_edges_t graph_find {
+            .db = c.db,
+            .error = c.error,
+            .arena = c.arena,
+            .options = ustore_option_dont_discard_memory_k,
+            .tasks_count = count,
+            .collections = &c.collection,
+            .vertices = stream.keys_batch().begin(),
+            .vertices_stride = sizeof(ustore_key_t),
+            .roles = &role,
+            .degrees_per_vertex = &degrees,
+            .edges_per_vertex = &ids_in_edges.first,
+        };
+        ustore_graph_find_edges(&graph_find);
+
+        batch_ids = std::transform_reduce(degrees, degrees + count, 0ul, std::plus {}, [](ustore_vertex_degree_t d) {
+            return d != ustore_vertex_degree_missing_k ? d : 0;
+        });
+        batch_ids *= vertices_edge_k;
+        total_ids += batch_ids;
+        ids_in_edges.second = batch_ids;
+
+        write_in_file_graph( //
+            c,
+            ids_in_edges,
+            sources_builder,
+            targets_builder,
+            edges_builder,
+            sources,
+            targets,
+            edges,
+            os,
+            handle,
+            pcn);
+        status = stream.seek_to_next_batch();
+        return_error_if_m(status, c.error, 0, "Invalid batch");
+    }
+    if (pcn == csv_k)
+        end_csv_graph(c, sources_builder, targets_builder, edges_builder);
+    else if (pcn == ndjson_k)
+        end_ndjson(handle);
+}
+
+#pragma endregion - Main Functions(Graph)
+#pragma endregion - Graph
+
+#pragma region - Docs
+
+void parse_arrow_table_docs(ustore_docs_import_t& c, std::shared_ptr<arrow::Table> const& table) {
 
     fields_t fields;
     ustore_size_t used_mem = 0;
@@ -1071,10 +1559,6 @@ void end_csv( //
     return_error_if_m(status.ok(), c.error, 0, "Can't write in file");
 }
 
-void end_ndjson(int fd) {
-    close(fd);
-}
-
 void write_in_ndjson( //
     ustore_docs_export_t& c,
     linked_memory_lock_t& arena,
@@ -1110,17 +1594,16 @@ void ustore_docs_import(ustore_docs_import_t* c_ptr) noexcept(false) {
         c.arena = arena_t(c.db).member_ptr();
 
     auto ext = std::filesystem::path(c.paths_pattern).extension();
-    ustore_size_t rows_count = 0;
     if (ext == ".ndjson")
         import_ndjson_docs(c);
     else {
         std::shared_ptr<arrow::Table> table;
         if (ext == ".parquet")
-            import_parquet(c, table, rows_count);
+            import_parquet(c, table);
         else if (ext == ".csv")
             import_csv(c, table);
         return_if_error_m(c.error);
-        parse_arrow_table(c, table);
+        parse_arrow_table_docs(c, table);
     }
 }
 
