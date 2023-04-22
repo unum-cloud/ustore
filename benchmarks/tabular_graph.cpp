@@ -147,8 +147,10 @@ static void bench_docs_import(bm::State& state, args_t const& args) {
             status.release_error();
         ++idx;
     }
+
     auto end = std::chrono::high_resolution_clock::now();
     double duration = std::chrono::duration<double, std::milli>(end - start).count() / 1000;
+
     state.counters["bytes/s"] = bm::Counter(size / duration);
     state.counters["duration"] = bm::Counter(duration, bm::Counter::kAvgThreads);
     state.counters["imported"] = bm::Counter(size);
@@ -178,9 +180,11 @@ static void bench_graph_import(bm::State& state, args_t const& args) {
             status.release_error();
         ++idx;
     }
+
     auto end = std::chrono::high_resolution_clock::now();
     size_t size = get_keys_count() * sizeof(ustore_key_t);
     double duration = std::chrono::duration<double, std::milli>(end - start).count() / 1000;
+
     state.counters["bytes/s"] = bm::Counter(size / duration);
     state.counters["duration"] = bm::Counter(duration, bm::Counter::kAvgThreads);
     state.counters["imported"] = bm::Counter(size);
@@ -188,14 +192,17 @@ static void bench_graph_import(bm::State& state, args_t const& args) {
 
 size_t find_and_delete() {
     static std::mutex mtx;
+
     mtx.lock();
     time_t now = time(0);
     std::string exp = ctime(&now);
+
     exp = exp.substr(0, 10);
     for (auto& ch : exp) {
         if ((ch == ' ') | (ch == ':'))
             ch = '_';
     }
+
     for (const auto& entry : std::filesystem::directory_iterator(path_k)) {
         if (entry.path().string().substr(2, 10) == exp) {
             size_t size = entry.file_size();
@@ -204,6 +211,7 @@ size_t find_and_delete() {
             return size;
         }
     }
+
     mtx.unlock();
     return 0;
 }
@@ -225,16 +233,20 @@ static void bench_docs_export(bm::State& state, args_t const& args) {
         docs.paths_extension = args.extension.c_str();
         docs.max_batch_size = max_batch_size_k;
         ustore_docs_export(&docs);
+
         if (status)
             size += find_and_delete();
         else
             status.release_error();
     }
+
     auto end = std::chrono::high_resolution_clock::now();
     double duration = std::chrono::duration<double, std::milli>(end - start).count() / 1000;
+
     state.counters["bytes/s"] = bm::Counter(size / duration);
     state.counters["duration"] = bm::Counter(duration);
     state.counters["exported"] = bm::Counter(size);
+
     db.clear().throw_unhandled();
 }
 
@@ -271,9 +283,11 @@ static void bench_graph_export(bm::State& state, args_t const& args) {
         else
             status.release_error();
     }
+
     db.clear().throw_unhandled();
     auto end = std::chrono::high_resolution_clock::now();
     double duration = std::chrono::duration<double, std::milli>(end - start).count() / 1000;
+
     state.counters["bytes/s"] = bm::Counter(size / duration);
     state.counters["duration"] = bm::Counter(duration);
     state.counters["exported"] = bm::Counter(size);
@@ -281,10 +295,12 @@ static void bench_graph_export(bm::State& state, args_t const& args) {
 
 void parse_paths(args_t& args) {
     fmt::print("Will search for {} files...\n", args.extension);
+
     auto dataset_path = args.path;
     auto home_path = std::getenv("HOME");
     if (dataset_path.front() == '~')
         dataset_path = std::filesystem::path(home_path) / dataset_path.substr(2);
+
     auto opts = std::filesystem::directory_options::follow_directory_symlink;
     for (auto const& dir_entry : std::filesystem::directory_iterator(dataset_path, opts)) {
         if (dir_entry.path().extension() != args.extension)
@@ -293,9 +309,11 @@ void parse_paths(args_t& args) {
         source_files.push_back(dir_entry.path());
         source_sizes.push_back(dir_entry.file_size());
     }
+
     size_t files_count = std::min(source_files.size(), args.files_count * args.threads_count);
     source_files.resize(files_count);
     source_sizes.resize(files_count);
+
     fmt::print("Files are ready for benchmark\n");
 }
 
@@ -333,6 +351,5 @@ int main(int argc, char** argv) {
     bm::Shutdown();
 
     db.close();
-
     return 0;
 }
