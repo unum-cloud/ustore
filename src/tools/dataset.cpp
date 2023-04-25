@@ -45,8 +45,6 @@ constexpr ustore_str_view_t prefix_k = "{";
 // 2 vertices and 1 edge
 constexpr ustore_size_t vertices_edge_k = 3;
 
-std::mutex gen_mtx;
-
 using tape_t = ptr_range_gt<ustore_char_t>;
 using fields_t = strided_iterator_gt<ustore_str_view_t const>;
 using lengths_t = strided_iterator_gt<ustore_length_t const>;
@@ -261,15 +259,19 @@ auto get_time_since_epoch() {
 }
 
 std::string generate_file_name() {
+    static std::mutex mtx;
     time_t now = time(0);
-    gen_mtx.lock();
+    
+    mtx.lock();
     ustore_char_t* out = std::ctime(&now);
-    gen_mtx.unlock();
+    mtx.unlock();
+
     for (ustore_size_t idx = 0; idx < strlen(out); ++idx) {
         if ((out[idx] == ' ') | (out[idx] == ':'))
             out[idx] = '_';
     }
     out[strlen(out) - 1] = '\0';
+
     return fmt::format("{}_{}", out, get_time_since_epoch());
 }
 
@@ -378,8 +380,8 @@ void check_for_id_field(ustore_docs_import_t& imp) {
     return_error_if_m(state, imp.error, 0, "Fields must contain id_field");
 }
 
-template <typename ustore_docs_task_t>
-fields_t prepare_fields(ustore_docs_task_t& c, linked_memory_lock_t& arena) {
+template <typename ustore_docs_task_at>
+fields_t prepare_fields(ustore_docs_task_at& c, linked_memory_lock_t& arena) {
 
     if (c.fields_count == 1)
         return {c.fields, c.fields_stride};
@@ -719,8 +721,8 @@ void upsert_graph(ustore_graph_import_t& c, edges_t const& edges_src, ustore_siz
 #pragma endregion - Upserting
 
 #pragma region - Files Importing
-template <typename import_t>
-void import_parquet(import_t& c, std::shared_ptr<arrow::Table>& table) {
+template <typename import_at>
+void import_parquet(import_at& c, std::shared_ptr<arrow::Table>& table) {
 
     arrow::Status status;
     arrow::MemoryPool* pool = arrow::default_memory_pool();
@@ -739,8 +741,8 @@ void import_parquet(import_t& c, std::shared_ptr<arrow::Table>& table) {
     return_error_if_m(status.ok(), c.error, 0, "Can't read file");
 }
 
-template <typename import_t>
-void import_csv(import_t& c, std::shared_ptr<arrow::Table>& table) {
+template <typename import_at>
+void import_csv(import_at& c, std::shared_ptr<arrow::Table>& table) {
 
     arrow::io::IOContext io_context = arrow::io::default_io_context();
     auto maybe_input = arrow::io::ReadableFile::Open(c.paths_pattern);
@@ -1189,7 +1191,7 @@ void write_in_ndjson( //
 
 #pragma region - Main Functions(Docs)
 
-void ustore_docs_import(ustore_docs_import_t* c_ptr) noexcept(false) {
+void ustore_docs_import(ustore_docs_import_t* c_ptr) {
 
     ustore_docs_import_t& c = *c_ptr;
 
@@ -1219,7 +1221,7 @@ void ustore_docs_import(ustore_docs_import_t* c_ptr) noexcept(false) {
     }
 }
 
-void ustore_docs_export(ustore_docs_export_t* c_ptr) noexcept(false) {
+void ustore_docs_export(ustore_docs_export_t* c_ptr) {
 
     ustore_docs_export_t& c = *c_ptr;
 
@@ -1479,8 +1481,8 @@ void make_parquet_graph(ustore_graph_export_t& c, parquet::StreamWriter& os) {
     os = parquet::StreamWriter {parquet::ParquetFileWriter::Open(outfile, schema, builder.build())};
 }
 
-template <typename docs_graph_t>
-int make_ndjson(docs_graph_t& docs_graph) {
+template <typename docs_graph_at>
+int make_ndjson(docs_graph_at& docs_graph) {
     return open(fmt::format("{}{}", generate_file_name(), docs_graph.paths_extension).data(),
                 O_CREAT | O_WRONLY,
                 S_IRUSR | S_IWUSR);
@@ -1612,7 +1614,7 @@ void end_ndjson(int fd) {
 
 #pragma region - Main Functions(Graph)
 
-void ustore_graph_import(ustore_graph_import_t* c_ptr) noexcept(false) {
+void ustore_graph_import(ustore_graph_import_t* c_ptr) {
 
     ustore_graph_import_t& c = *c_ptr;
 
@@ -1640,7 +1642,7 @@ void ustore_graph_import(ustore_graph_import_t* c_ptr) noexcept(false) {
     }
 }
 
-void ustore_graph_export(ustore_graph_export_t* c_ptr) noexcept(false) {
+void ustore_graph_export(ustore_graph_export_t* c_ptr) {
 
     ustore_graph_export_t& c = *c_ptr;
 
