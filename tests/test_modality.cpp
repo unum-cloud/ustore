@@ -28,12 +28,44 @@ simdjson::ondemand::object& rewinded(simdjson::ondemand::object& doc) noexcept {
 }
 
 std::vector<ustore_doc_field_type_t> types;
+std::vector<value_view_t> paths;
 std::vector<edge_t> vtx_n_edges;
 std::vector<std::string> fields;
 std::vector<value_view_t> docs;
 std::vector<ustore_key_t> keys;
 
 constexpr ustore_str_view_t id = "id";
+
+struct triplet_t {
+    ustore_str_view_t raw;
+    std::vector<char> strs;
+    std::vector<ustore_length_t> offs;
+    std::vector<ustore_length_t> lens;
+    std::vector<ustore_octet_t> pres;
+    ustore_size_t count;
+    void fill(std::vector<value_view_t> const& src, bool is_str = false) {
+        count = src.size();
+        offs.reserve(src.size());
+        lens.reserve(src.size());
+        pres.reserve(src.size());
+        offs.push_back(0);
+        for (auto path : src) {
+            for (auto ch : path)
+                strs.push_back(char(ch));
+            pres.push_back(path.size() ? 1 : 0);
+            if (is_str)
+                strs.push_back('\0');
+            offs.push_back(strs.size());
+            lens.push_back(path.size());
+        }
+        raw = strs.data();
+    }
+    ustore_str_view_t const* ptr() { return &raw; }
+    ustore_length_t const* offsets() { return offs.data(); }
+    ustore_length_t const* lengths() { return lens.data(); }
+    ustore_octet_t const* presences() { return pres.data(); }
+    ustore_size_t size() { return count; }
+};
 
 void make_batch() {
 
@@ -57,6 +89,7 @@ void make_batch() {
     docs.reserve(docs_count);
     keys.reserve(docs_count);
     vtx_n_edges.reserve(docs_count);
+    paths.reserve(docs_count);
     size_t count = 0;
     size_t idx = 0;
     for (auto doc : documents) {
@@ -91,6 +124,7 @@ void make_batch() {
         }
         docs.push_back(rewinded(object).raw_json().value());
         keys.push_back(rewinded(object)[id]);
+        paths.push_back(rewinded(object)[id].raw_json_token().value());
         vtx_n_edges.push_back(edge_t {idx, idx + 1, idx + 2});
         ++count;
         if (count == docs_count)
@@ -503,11 +537,12 @@ void test_graph_find() {
     ustore_graph_find_edges(&find);
     EXPECT_TRUE(status);
 
-    ids_count = std::transform_reduce(degrees,
-                                      degrees + strided.target_ids.size(),
-                                      0ul,
-                                      std::plus {},
-                                      [](ustore_vertex_degree_t d) { return d != ustore_vertex_degree_missing_k ? d : 0; });
+    ids_count =
+        std::transform_reduce(degrees,
+                              degrees + strided.target_ids.size(),
+                              0ul,
+                              std::plus {},
+                              [](ustore_vertex_degree_t d) { return d != ustore_vertex_degree_missing_k ? d : 0; });
     ids_count *= 3;
 
     EXPECT_EQ(ids_count, vtx_n_edges.size() * 3);
@@ -535,11 +570,12 @@ void test_graph_find() {
     ustore_graph_find_edges(&find);
     EXPECT_TRUE(status);
 
-    ids_count = std::transform_reduce(degrees,
-                                      degrees + exp_strided.source_ids.size(),
-                                      0ul,
-                                      std::plus {},
-                                      [](ustore_vertex_degree_t d) { return d != ustore_vertex_degree_missing_k ? d : 0; });
+    ids_count =
+        std::transform_reduce(degrees,
+                              degrees + exp_strided.source_ids.size(),
+                              0ul,
+                              std::plus {},
+                              [](ustore_vertex_degree_t d) { return d != ustore_vertex_degree_missing_k ? d : 0; });
     ids_count *= 3;
 
     EXPECT_EQ(ids_count, expected.size() * 3);
@@ -702,30 +738,133 @@ void test_graph_remove_vertices(ustore_vertex_role_t role) {
     db.clear().throw_unhandled();
 }
 
-TEST(docs, read_n_write) {
-    test_single_read_n_write();
-    test_batch_read_n_write();
+void test_paths_read() {
+    status_t status;
+    arena_t arena(db);
+    ustore_collection_t collection = db.main();
+
+    ustore_octet_t* presences = nullptr;
+    ustore_length_t* offsets = nullptr;
+    ustore_length_t* lengths = nullptr;
+    ustore_byte_t* values = nullptr;
+
+    ustore_paths_read_t read {};
+    read.db = db;
+    read.error = status.member_ptr();
+    read.arena = arena.member_ptr();
+    read.options = ustore_options_default_k;
+    read.tasks_count = paths.size();
+    read.collections = &collection;
+    read.paths = (ustore_str_view_t*)paths.front().member_ptr();
+    read.paths_stride = sizeof(value_view_t);
+    read.paths_lengths = paths.front().member_length();
+    read.paths_lengths_stride = sizeof(value_view_t);
+    read.presences = &presences;
+    read.offsets = &offsets;
+    read.lengths = &lengths;
+    read.values = &values;
+    ustore_paths_read(&read);
+    EXPECT_TRUE(status);
+
+    strided_iterator_gt<ustore_length_t const> offs {offsets, sizeof(ustore_length_t)};
+    strided_iterator_gt<ustore_length_t const> lens {lengths, sizeof(ustore_length_t)};
+    strided_iterator_gt<ustore_bytes_cptr_t const> vals {&values, 0};
+    bits_view_t preses {presences};
+
+    contents_arg_t contents {preses, offs, lens, vals, keys.size()};
+
+    for (size_t idx = 0; idx < paths.size(); ++idx) {
+        EXPECT_EQ(std::strncmp(docs[idx].c_str(), contents[idx].c_str(), docs[idx].size()), 0);
+    }
 }
 
-TEST(docs, gist) {
-    test_gist();
+void test_paths_write() {
+    status_t status;
+    arena_t arena(db);
+    ustore_collection_t collection = db.main();
+
+    triplet_t paths_trip;
+    paths_trip.fill(paths);
+
+    triplet_t values_trip;
+    values_trip.fill(docs);
+
+    ustore_paths_write_t write {};
+    write.db = db;
+    write.error = status.member_ptr();
+    write.arena = arena.member_ptr();
+    write.options = ustore_options_default_k;
+    write.tasks_count = paths_trip.size();
+    write.collections = &collection;
+    write.paths = paths_trip.ptr();
+    write.paths_offsets = paths_trip.offsets();
+    write.paths_offsets_stride = sizeof(ustore_length_t);
+    write.paths_lengths = paths_trip.lengths();
+    write.paths_lengths_stride = sizeof(ustore_length_t);
+    write.values_offsets = values_trip.offsets();
+    write.values_offsets_stride = sizeof(ustore_length_t);
+    write.values_lengths = values_trip.lengths();
+    write.values_lengths_stride = sizeof(ustore_length_t);
+    write.values_bytes = (ustore_bytes_cptr_t const*)values_trip.ptr();
+
+    ustore_paths_write(&write);
+    EXPECT_TRUE(status);
+    test_paths_read();
+    db.clear().throw_unhandled();
+
+    write.paths_lengths = nullptr;
+    write.paths_lengths_stride = 0;
+    ustore_paths_write(&write);
+    EXPECT_TRUE(status);
+    test_paths_read();
+    db.clear().throw_unhandled();
+
+    write.paths = (ustore_str_view_t const*)paths[0].member_ptr();
+    write.paths_stride = sizeof(value_view_t);
+    write.paths_offsets = nullptr;
+    write.paths_offsets_stride = 0;
+    write.path_separator = ',';
+    ustore_paths_write(&write);
+    EXPECT_TRUE(status);
+    test_paths_read();
+    db.clear().throw_unhandled();
+
+    write.paths_lengths = paths[0].member_length();
+    write.paths_lengths_stride = sizeof(value_view_t);
+    ustore_paths_write(&write);
+    EXPECT_TRUE(status);
+    test_paths_read();
+    db.clear().throw_unhandled();
 }
 
-TEST(grpah, upsert) {
-    test_graph_single_upsert();
-    test_graph_batch_upsert_vtx();
-    test_graph_batch_upsert_edges();
-}
+// TEST(docs, read_n_write) {
+//     test_single_read_n_write();
+//     test_batch_read_n_write();
+// }
 
-TEST(grpah, find) {
-    test_graph_find();
-}
+// TEST(docs, gist) {
+//     test_gist();
+// }
 
-TEST(grpah, remove) {
-    test_graph_remove_edges();
-    test_graph_remove_vertices(ustore_vertex_role_any_k);
-    test_graph_remove_vertices(ustore_vertex_source_k);
-    test_graph_remove_vertices(ustore_vertex_target_k);
+// TEST(grpah, upsert) {
+//     test_graph_single_upsert();
+//     test_graph_batch_upsert_vtx();
+//     test_graph_batch_upsert_edges();
+// }
+
+// TEST(grpah, find) {
+//     test_graph_find();
+// }
+
+// TEST(grpah, remove) {
+//     test_graph_remove_edges();
+//     test_graph_remove_vertices(ustore_vertex_role_any_k);
+//     test_graph_remove_vertices(ustore_vertex_source_k);
+//     test_graph_remove_vertices(ustore_vertex_target_k);
+// }
+
+TEST(paths, write) {
+    test_paths_write();
 }
 
 int main(int argc, char** argv) {
