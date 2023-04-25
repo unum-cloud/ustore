@@ -106,12 +106,12 @@ Full <a href="https://unum.cloud/ustore">documentation</a>
 <a href="#"><img src="https://img.shields.io/github/workflow/status/unum-cloud/ustore/Build"/></a>
 </div>
 
----
+## Quickstart
 
 Installing UStore is a breeze, and the usage is about as simple as a Python `dict`.
 
 ```python
-$ pip install ustore
+$ pip install ukv
 $ python
 
 from ustore import ucset
@@ -210,13 +210,35 @@ Here is the map:
   - [Configuration](#configuration)
     - [Key Sizes](#key-sizes)
     - [Value Sizes](#value-sizes)
-  - [Tooling ∆][ustore-tooling]
-  - [Testing ∆][ustore-testing]
+  - [Tools ∆][ustore-tools]
+  - [Tests ∆][ustore-tests]
   - [Benchmarks ∆][ustore-benchmarks]
 - For contributors and advanced users looking to fork, extend, wrap, or distribute and, potentially, monetize alternative builds of UStore:
   - [Architecture and Dependencies ∆][ustore-architecture]
   - [Roadmap ∆][ustore-roadmap]
   - [Contributing ∆][ustore-contributing]
+
+[ustore-c]: https://unum.cloud/docs/ustore/c
+[ustore-cpp]: https://unum.cloud/docs/ustore/cpp
+[ustore-python]: https://unum.cloud/docs/ustore/python
+[ustore-java]: https://unum.cloud/docs/ustore/java
+[ustore-golang]: https://unum.cloud/docs/ustore/golang
+
+[ustore-tests]: https://unum.cloud/docs/ustore/tests
+[ustore-benchmarks]: https://unum.cloud/docs/ustore/benchmarks
+[ustore-tools]: https://unum.cloud/docs/ustore/tools
+
+[ustore-ai]: https://unum.cloud/docs/ustore/ai
+[ustore-flight]: https://unum.cloud/docs/ustore/flight
+
+[ustore-architecture]: https://unum.cloud/docs/ustore/architecture
+[ustore-roadmap]: https://github.com/orgs/unum-cloud/projects/2
+[ustore-contributing]: https://unum.cloud/docs/ustore/contributing
+
+[ustore-c-headers]: https://github.com/unum-cloud/ustore/tree/main/include/ustore
+[ustore-new-drivers]: https://github.com/unum-cloud/ustore/c#implementing-a-new-language-binding
+[ustore-new-engine]: https://github.com/unum-cloud/ustore/c#implementing-a-new-engine
+
 
 ---
 
@@ -314,12 +336,12 @@ Some frontends here have entire ecosystems around them!
 
 ### Frequently Questioned Answers
 
-- Keys are 64-bit integers, by default. [Why?][ustore-keys-size]
-- Values are binary strings under 4 GB long. [Why?][ustore-values-size]
+- Keys are 64-bit integers, by default. [Why?](#key-sizes)
+- Values are binary strings under 4 GB long. [Why?](#value-sizes)
 
 ### Frequently Asked Questions
 
-- Transactions are ACI(D) by-default. [What does it mean?][ustore-acid]
+- Transactions are ACI(D) by-default. [What does it mean?](#transactions)
 - Why not use LevelDB or RocksDB interface? [Answered][ustore-vs-rocks]
 - Why not use SQL, MQL or CYPHER? [Answered][ustore-vs-sql]
 - Does UStore support Time-To-Live? [Answered][ustore-ttl]
@@ -327,6 +349,13 @@ Some frontends here have entire ecosystems around them!
 - Does UStore support queues? [Answered][ustore-queues]
 - How can I add drivers for language X? [Answered][ustore-new-drivers]
 - How can I add database X as an engine? [Answered][ustore-new-engine]
+
+[ustore-vs-rocks]: https://unum.cloud/docs/ustore/related#leveldb-rocksdb
+[ustore-vs-sql]: https://unum.cloud/docs/ustore/related#sql-mql-cypher
+
+[ustore-ttl]: https://github.com/unum-cloud/ustore/discussions/230
+[ustore-compression]: https://github.com/unum-cloud/ustore/discussions/232
+[ustore-queues]: https://github.com/unum-cloud/ustore/discussions/228
 
 ## Advanced Usage
 
@@ -413,7 +442,7 @@ Even more so in distributed databases, where three separate Write Ahead Logs may
 - in Distributed Consensus implementation.
 
 If you still need durability, flush writes on commits with an optional flag.
-In the [C driver][ustore-c-tutor] you would call `ustore_transaction_commit()` with the `::ustore_option_write_flush_k` flag.
+In the [C driver][ustore-c] you would call `ustore_transaction_commit()` with the `::ustore_option_write_flush_k` flag.
 
 ### Containers and Cloud Deployments
 
@@ -521,42 +550,17 @@ So we stick to smaller length types, making using Apache Arrow representation sl
 Our [development roadmap][ustore-roadmap] is public and is hosted within the GitHub repository.
 Upcoming tasks include:
 
-- Builds for Arm, MacOS, Windows.
-- Persistent Snapshots.
-- Continuous Replication.
-- Document-schema validation.
-- Richer drivers for GoLang, Java, JavaScript.
-- Improved Vector Search.
-- Collection-level configuration.
-- Owning and non-owning C++ wrappers.
-- Horizontal Scaling.
+- [x] Builds for Arm, MacOS.
+- [x] Persistent Snapshots.
+- [ ] Continuous Replication.
+- [ ] Document-schema validation.
+- [ ] Richer drivers for GoLang, Java, JavaScript.
+- [ ] Improved Vector Search.
+- [ ] Collection-level configuration.
+- [ ] Owning and non-owning C++ wrappers.
+- [ ] Horizontal Scaling.
 
-> [Read full roadmap in our docs here][ustore-details].
-
-
-[ustore-c-tutor]: https://unum.cloud/ustore/c
-[ustore-cpp-tutor]: https://unum.cloud/ustore/cpp
-[ustore-python-tutor]: https://unum.cloud/ustore/python
-[ustore-java-tutor]: https://unum.cloud/ustore/java
-[ustore-golang-tutor]: https://unum.cloud/ustore/golang
-[ustore-flight-tutor]: https://unum.cloud/ustore/flight
-[ustore-tests]: https://unum.cloud/ustore/tests
-[ustore-benchmarks]: https://unum.cloud/ustore/benchmarks
-[ustore-tools]: https://unum.cloud/ustore/tools
-[ustore-install]: https://unum.cloud/ustore/install
-[ustore-details]: https://unum.cloud/ustore/details
-[ustore-keys-size]: https://unum.cloud/ustore/c#integer-keys
-[ustore-values-size]: https://unum.cloud/ustore/c#smallish-values
-[ustore-acid]: https://unum.cloud/ustore/c#acid-transactions
-[ustore-vs-rocks]: https://unum.cloud/ustore/related#leveldb-rocksdb
-[ustore-vs-sql]: https://unum.cloud/ustore/related#sql-mql-cypher
-[ustore-c-headers]: https://github.com/unum-cloud/ustore/tree/main/include/ustore
-[ustore-roadmap]: https://github.com/orgs/unum-cloud/projects/2
-[ustore-compression]: https://github.com/unum-cloud/ustore/discussions/232
-[ustore-ttl]: https://github.com/unum-cloud/ustore/discussions/230
-[ustore-queues]: https://github.com/unum-cloud/ustore/discussions/228
-[ustore-new-drivers]: https://github.com/unum-cloud/ustore/c#implementing-a-new-language-binding
-[ustore-new-engine]: https://github.com/unum-cloud/ustore/c#implementing-a-new-engine
+> [Read full roadmap in our docs here][ustore-architecture].
 
 [ucsb-10]: https://unum.cloud/post/2022-03-22-ucsb
 [ucsb-1]: https://unum.cloud/post/2021-11-25-ycsb
@@ -571,11 +575,3 @@ Upcoming tasks include:
 [spdk]: https://spdk.io
 [redis]: https://redis.com
 [foundationdb]: https://www.foundationdb.org/
-
-
-TODO:
-
-- MacOS builds
-- Graph compression
-- Sampling support
-- Replace `ustore.Transaction(db)` and `db.transaction()` with `db.transact()` for consistency with C++?
