@@ -255,6 +255,7 @@ void ustore_paths_write(ustore_paths_write_t* c_ptr) {
     keys_str_args.lengths_begin = {c.paths_lengths, c.paths_lengths_stride};
     keys_str_args.contents_begin = {(ustore_bytes_cptr_t const*)c.paths, c.paths_stride};
     keys_str_args.count = c.tasks_count;
+    keys_str_args.separator = c.path_separator;
 
     auto unique_col_keys = arena.alloc<collection_key_t>(c.tasks_count, c.error);
     return_if_error_m(c.error);
