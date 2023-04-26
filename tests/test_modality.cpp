@@ -43,7 +43,7 @@ struct triplet_t {
     std::vector<ustore_length_t> lens;
     std::vector<ustore_octet_t> pres;
     ustore_size_t count;
-    void fill(std::vector<value_view_t> const& src, bool is_str = false) {
+    void fill(std::vector<value_view_t> const& src) {
         count = src.size();
         offs.reserve(src.size());
         lens.reserve(src.size());
@@ -53,8 +53,6 @@ struct triplet_t {
             for (auto ch : path)
                 strs.push_back(char(ch));
             pres.push_back(path.size() ? 1 : 0);
-            if (is_str)
-                strs.push_back('\0');
             offs.push_back(strs.size());
             lens.push_back(path.size());
         }
@@ -738,7 +736,7 @@ void test_graph_remove_vertices(ustore_vertex_role_t role) {
     db.clear().throw_unhandled();
 }
 
-void test_paths_read() {
+void test_simple_paths_read() {
     status_t status;
     arena_t arena(db);
     ustore_collection_t collection = db.main();
@@ -809,14 +807,14 @@ void test_paths_write() {
 
     ustore_paths_write(&write);
     EXPECT_TRUE(status);
-    test_paths_read();
+    test_simple_paths_read();
     db.clear().throw_unhandled();
 
     write.paths_lengths = nullptr;
     write.paths_lengths_stride = 0;
     ustore_paths_write(&write);
     EXPECT_TRUE(status);
-    test_paths_read();
+    test_simple_paths_read();
     db.clear().throw_unhandled();
 
     write.paths = (ustore_str_view_t const*)paths[0].member_ptr();
@@ -826,21 +824,21 @@ void test_paths_write() {
     write.path_separator = ',';
     ustore_paths_write(&write);
     EXPECT_TRUE(status);
-    test_paths_read();
+    test_simple_paths_read();
     db.clear().throw_unhandled();
 
     write.paths_lengths = paths[0].member_length();
     write.paths_lengths_stride = sizeof(value_view_t);
     ustore_paths_write(&write);
     EXPECT_TRUE(status);
-    test_paths_read();
+    test_simple_paths_read();
     db.clear().throw_unhandled();
 
     write.values_lengths = nullptr;
     write.values_lengths_stride = 0;
     ustore_paths_write(&write);
     EXPECT_TRUE(status);
-    test_paths_read();
+    test_simple_paths_read();
     db.clear().throw_unhandled();
 
     write.values_offsets = nullptr;
@@ -851,8 +849,118 @@ void test_paths_write() {
     write.values_bytes_stride = sizeof(value_view_t);
     ustore_paths_write(&write);
     EXPECT_TRUE(status);
-    test_paths_read();
+    test_simple_paths_read();
     db.clear().throw_unhandled();
+}
+
+void test_paths_read() {
+    status_t status;
+    arena_t arena(db);
+    ustore_collection_t collection = db.main();
+
+    triplet_t paths_trip;
+    paths_trip.fill(paths);
+
+    triplet_t values_trip;
+    values_trip.fill(docs);
+
+    ustore_paths_write_t write {};
+    write.db = db;
+    write.error = status.member_ptr();
+    write.arena = arena.member_ptr();
+    write.options = ustore_options_default_k;
+    write.tasks_count = paths_trip.size();
+    write.collections = &collection;
+    write.paths = paths_trip.ptr();
+    write.paths_offsets = paths_trip.offsets();
+    write.paths_offsets_stride = sizeof(ustore_length_t);
+    write.paths_lengths = paths_trip.lengths();
+    write.paths_lengths_stride = sizeof(ustore_length_t);
+    write.values_offsets = values_trip.offsets();
+    write.values_offsets_stride = sizeof(ustore_length_t);
+    write.values_lengths = values_trip.lengths();
+    write.values_lengths_stride = sizeof(ustore_length_t);
+    write.values_bytes = (ustore_bytes_cptr_t const*)values_trip.ptr();
+
+    ustore_paths_write(&write);
+    EXPECT_TRUE(status);
+
+    ustore_octet_t* presences = nullptr;
+    ustore_length_t* offsets = nullptr;
+    ustore_length_t* lengths = nullptr;
+    ustore_byte_t* values = nullptr;
+
+    ustore_paths_read_t read {};
+    read.db = db;
+    read.error = status.member_ptr();
+    read.arena = arena.member_ptr();
+    read.options = ustore_options_default_k;
+    read.tasks_count = paths_trip.size();
+    read.collections = &collection;
+    read.paths = paths_trip.ptr();
+    read.paths_offsets = paths_trip.offsets();
+    read.paths_offsets_stride = sizeof(ustore_length_t);
+    read.paths_lengths = paths_trip.lengths();
+    read.paths_lengths_stride = sizeof(ustore_length_t);
+    read.presences = &presences;
+    read.offsets = &offsets;
+    read.lengths = &lengths;
+    read.values = &values;
+    ustore_paths_read(&read);
+    EXPECT_TRUE(status);
+
+    strided_iterator_gt<ustore_length_t const> offs {offsets, sizeof(ustore_length_t)};
+    strided_iterator_gt<ustore_length_t const> lens {lengths, sizeof(ustore_length_t)};
+    strided_iterator_gt<ustore_bytes_cptr_t const> vals {&values, 0};
+    bits_view_t preses {presences};
+
+    contents_arg_t contents {preses, offs, lens, vals, keys.size()};
+
+    for (size_t idx = 0; idx < paths.size(); ++idx) {
+        EXPECT_EQ(std::strncmp(docs[idx].c_str(), contents[idx].c_str(), docs[idx].size()), 0);
+    }
+
+    presences = nullptr;
+    offsets = nullptr;
+    lengths = nullptr;
+    values = nullptr;
+    read.paths_lengths = nullptr;
+    read.paths_lengths_stride = 0;
+    ustore_paths_read(&read);
+    EXPECT_TRUE(status);
+
+    for (size_t idx = 0; idx < paths.size(); ++idx) {
+        EXPECT_EQ(std::strncmp(docs[idx].c_str(), contents[idx].c_str(), docs[idx].size()), 0);
+    }
+
+    presences = nullptr;
+    offsets = nullptr;
+    lengths = nullptr;
+    values = nullptr;
+    read.paths = (ustore_str_view_t const*)paths[0].member_ptr();
+    read.paths_stride = sizeof(value_view_t);
+    read.paths_offsets = nullptr;
+    read.paths_offsets_stride = 0;
+    read.path_separator = ',';
+    ustore_paths_read(&read);
+    EXPECT_TRUE(status);
+
+    for (size_t idx = 0; idx < paths.size(); ++idx) {
+        EXPECT_EQ(std::strncmp(docs[idx].c_str(), contents[idx].c_str(), docs[idx].size()), 0);
+    }
+
+    presences = nullptr;
+    offsets = nullptr;
+    lengths = nullptr;
+    values = nullptr;
+    write.paths_lengths = paths[0].member_length();
+    write.paths_lengths_stride = sizeof(value_view_t);
+    ustore_paths_read(&read);
+    EXPECT_TRUE(status);
+
+    for (size_t idx = 0; idx < paths.size(); ++idx) {
+        EXPECT_EQ(std::strncmp(docs[idx].c_str(), contents[idx].c_str(), docs[idx].size()), 0);
+    }
 }
 
 TEST(docs, read_n_write) {
@@ -883,6 +991,10 @@ TEST(grpah, remove) {
 
 TEST(paths, write) {
     test_paths_write();
+}
+
+TEST(paths, read) {
+    test_paths_read();
 }
 
 int main(int argc, char** argv) {
