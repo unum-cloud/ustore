@@ -835,33 +835,51 @@ void test_paths_write() {
     EXPECT_TRUE(status);
     test_paths_read();
     db.clear().throw_unhandled();
+
+    write.values_lengths = nullptr;
+    write.values_lengths_stride = 0;
+    ustore_paths_write(&write);
+    EXPECT_TRUE(status);
+    test_paths_read();
+    db.clear().throw_unhandled();
+
+    write.values_offsets = nullptr;
+    write.values_offsets_stride = 0;
+    write.values_lengths = docs[0].member_length();
+    write.values_lengths_stride = sizeof(value_view_t);
+    write.values_bytes = docs[0].member_ptr();
+    write.values_bytes_stride = sizeof(value_view_t);
+    ustore_paths_write(&write);
+    EXPECT_TRUE(status);
+    test_paths_read();
+    db.clear().throw_unhandled();
 }
 
-// TEST(docs, read_n_write) {
-//     test_single_read_n_write();
-//     test_batch_read_n_write();
-// }
+TEST(docs, read_n_write) {
+    test_single_read_n_write();
+    test_batch_read_n_write();
+}
 
-// TEST(docs, gist) {
-//     test_gist();
-// }
+TEST(docs, gist) {
+    test_gist();
+}
 
-// TEST(grpah, upsert) {
-//     test_graph_single_upsert();
-//     test_graph_batch_upsert_vtx();
-//     test_graph_batch_upsert_edges();
-// }
+TEST(grpah, upsert) {
+    test_graph_single_upsert();
+    test_graph_batch_upsert_vtx();
+    test_graph_batch_upsert_edges();
+}
 
-// TEST(grpah, find) {
-//     test_graph_find();
-// }
+TEST(grpah, find) {
+    test_graph_find();
+}
 
-// TEST(grpah, remove) {
-//     test_graph_remove_edges();
-//     test_graph_remove_vertices(ustore_vertex_role_any_k);
-//     test_graph_remove_vertices(ustore_vertex_source_k);
-//     test_graph_remove_vertices(ustore_vertex_target_k);
-// }
+TEST(grpah, remove) {
+    test_graph_remove_edges();
+    test_graph_remove_vertices(ustore_vertex_role_any_k);
+    test_graph_remove_vertices(ustore_vertex_source_k);
+    test_graph_remove_vertices(ustore_vertex_target_k);
+}
 
 TEST(paths, write) {
     test_paths_write();
