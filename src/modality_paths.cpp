@@ -359,6 +359,7 @@ void ustore_paths_read(ustore_paths_read_t* c_ptr) {
     keys_str_args.lengths_begin = {c.paths_lengths, c.paths_lengths_stride};
     keys_str_args.contents_begin = {(ustore_bytes_cptr_t const*)c.paths, c.paths_stride};
     keys_str_args.count = c.tasks_count;
+    keys_str_args.separator = c.path_separator;
 
     // Getting hash-collisions is such a rare case, that we will not
     // optimize for it in the current implementation. Sorting and
