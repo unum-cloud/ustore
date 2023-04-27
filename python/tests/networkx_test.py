@@ -94,10 +94,10 @@ def test_batch_attributes():
     edge = pa.array([1, 2, 3])
     attr = pa.array([0, 1, 2])
     
-    names = ["source", "target", "edge", "attr"] 
+    names = ['source', 'target', 'edge', 'attr'] 
 
     table = pa.Table.from_arrays([source, target, edge, attr], names=names)
-    net.add_edges_from(table,"source","target","edge")
+    net.add_edges_from(table, 'source', 'target', 'edge')
 
     assert net.has_node(1) and net.has_node(2) and net.has_node(3)
     assert not 4 in net
