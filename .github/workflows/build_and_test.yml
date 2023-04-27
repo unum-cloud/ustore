@@ -1,0 +1,57 @@
+name: Build_and_test
+
+concurrency:
+  group: ${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+on: workflow_dispatch
+
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 2
+          ref: main-dev
+
+      - name: Install ubuntu packages
+        run: |
+          sudo apt-get update -y && \
+          sudo apt-get install -y apt-utils 2>&1 | grep -v "debconf: delaying package configuration, since apt-utils is not installed" && \
+          sudo apt-get install -y --no-install-recommends cmake git libssl-dev build-essential zlib1g zlib1g-dev python3 python3-dev
+      - name: Clean up
+        run: |
+          echo -e "------ \e[93mClean up\e[0m ------" && \
+          rm -rf CMakeCache.txt CMakeFiles wheelhouse Makefile bin tmp/*
+      - name: Configure cmake
+        run: cmake -DCMAKE_BUILD_TYPE=Release -DUKV_BUILD_TESTS=1 -B ./build_release -DUKV_BUILD_ENGINE_UMEM=1 -DUKV_BUILD_ENGINE_LEVELDB=1 -DUKV_BUILD_ENGINE_ROCKSDB=1 -DUKV_BUILD_API_FLIGHT=0 .
+                
+      - name: Build
+        run: make -j4 -C ./build_release
+
+      - name: Upload Binaries
+        uses: actions/upload-artifact@v3.1.1
+        with:
+          name: ubuntu_binaries
+          path: ./build_release/build/bin/*
+
+  test:
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Download a Build Artifact
+        uses: actions/download-artifact@v3.0.1
+        with:
+          name: ubuntu_binaries
+      
+      - name: Run Tests
+        run: for test in $(ls /home/runner/work/ukv/ukv/*test_units*); do
+               echo -e "------ \e[93mRunning $test\e[0m ------";
+               $test;
+             done

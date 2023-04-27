@@ -1,0 +1,38 @@
+name: Python_Java_Go_Build_Test
+
+concurrency:
+  group: ${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+on: workflow_dispatch
+
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 2
+          ref: main
+
+      - name: Install python packages
+        run: |
+          pip install cibuildwheel twine && export PATH=$PATH:~/.local/bin
+          
+      - name: Build and Test Python
+        run: |
+          CIBW_BUILD="cp39-*" cibuildwheel --platform linux && \
+          CIBW_BUILD="cp310-*" cibuildwheel --platform linux
+          
+      - name: Build and Test Java
+        run: |
+          export JAVA_HOME="/usr/lib/jvm/java-11-openjdk-amd64" && \
+          bash java/pack.sh
+          
+      - name: Build GoLang
+        run: |
+          git submodule update --init --recursive --remote go-ukv/ && \
+          bash go-ukv/pack.sh
