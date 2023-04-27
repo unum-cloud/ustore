@@ -244,7 +244,12 @@ void ustore_snapshot_export(ustore_snapshot_export_t* c_ptr) {
     Checkpoint::Create(c.db, &chp_ptr);
 
     return_error_if_m(chp_ptr, c.error, uninitialized_state_k, "Checkpoint is uninitialized");
-    chp_ptr->CreateCheckpoint(c.path, 0, c.id);
+
+    rocks_snapshot_t& snap = *reinterpret_cast<rocks_snapshot_t*>(c.id);
+    if (!snap.snapshot)
+        return;
+
+    chp_ptr->CreateCheckpoint(c.path, 0, snap.snapshot);
 }
 
 void ustore_snapshot_list(ustore_snapshot_list_t* c_ptr) {
