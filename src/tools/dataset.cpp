@@ -261,7 +261,7 @@ auto get_time_since_epoch() {
 std::string generate_file_name() {
     static std::mutex mtx;
     time_t now = time(0);
-    
+
     mtx.lock();
     ustore_char_t* out = std::ctime(&now);
     mtx.unlock();
@@ -557,7 +557,7 @@ void fields_parser( //
     ustore_size_t fields_count,
     fields_t const& fields,
     counts_t& counts,
-    tape_t& tape) {
+    tape_t& tape) noexcept {
 
     ustore_size_t counts_idx = ULLONG_MAX;
     ustore_size_t back_idx = 0;
@@ -656,7 +656,18 @@ void fields_parser( //
                 }
             }
             else {
-                auto str = fmt::format("\"{}\":{}", fields[idx] + 1, '\0');
+                std::string str;
+                try {
+                    fmt::format_to(std::back_inserter(str), "\"{}\":{}", fields[idx] + 1, '\0');
+                }
+                catch (fmt::format_error const& ex) {
+                    *error = ex.what();
+                    return_if_error_m(error);
+                }
+                catch (std::runtime_error const& ex) {
+                    *error = ex.what();
+                    return_if_error_m(error);
+                }
                 strncpy(tape.begin() + offset, str.data(), str.size());
                 offset += str.size();
                 break;
@@ -664,7 +675,18 @@ void fields_parser( //
             }
         }
         else {
-            auto str = fmt::format("\"{}\":{}", fields[idx], '\0');
+            std::string str;
+            try {
+                fmt::format_to(std::back_inserter(str), "\"{}\":{}", fields[idx], '\0');
+            }
+            catch (fmt::format_error const& ex) {
+                *error = ex.what();
+                return_if_error_m(error);
+            }
+            catch (std::runtime_error const& ex) {
+                *error = ex.what();
+                return_if_error_m(error);
+            }
             strncpy(tape.begin() + offset, str.data(), str.size());
             offset += str.size();
             ++idx;
@@ -765,7 +787,7 @@ void import_csv(import_at& c, std::shared_ptr<arrow::Table>& table) {
 }
 #pragma endregion - Files Importing
 
-#pragma region - Docs 
+#pragma region - Docs
 
 void parse_arrow_table_docs(ustore_docs_import_t& c, std::shared_ptr<arrow::Table> const& table) {
 
@@ -895,6 +917,7 @@ void import_sub_ndjson(ustore_docs_import_t& c,
     auto tape = arena.alloc<ustore_char_t>(max_size, c.error);
     return_if_error_m(c.error);
     fields_parser(c.error, arena, c.fields_count, fields, counts, tape);
+    return_if_error_m(c.error);
 
     ustore_size_t idx = 0;
     for (auto doc : docs) {
@@ -1173,6 +1196,10 @@ void end_csv( //
     return_error_if_m(status.ok(), c.error, 0, "Can't write in file");
 }
 
+void end_ndjson(int fd) {
+    close(fd);
+}
+
 void write_in_ndjson( //
     ustore_docs_export_t& c,
     linked_memory_lock_t& arena,
@@ -1273,6 +1300,7 @@ void ustore_docs_export(ustore_docs_export_t* c_ptr) {
 
         tape = arena.alloc<ustore_char_t>(max_size, c.error);
         fields_parser(c.error, arena, c.fields_count, fields, counts, tape);
+        return_if_error_m(c.error);
     }
 
     auto status = stream.seek_to_first();
@@ -1606,10 +1634,6 @@ void end_csv_graph( //
 
     status = arrow::csv::WriteCSV(*table, arrow::csv::WriteOptions::Defaults(), outstream.get());
     return_error_if_m(status.ok(), c.error, 0, "Can't write in file");
-}
-
-void end_ndjson(int fd) {
-    close(fd);
 }
 
 #pragma region - Main Functions(Graph)
