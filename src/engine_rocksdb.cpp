@@ -237,6 +237,16 @@ void ustore_database_init(ustore_database_init_t* c_ptr) {
     });
 }
 
+void ustore_snapshot_export(ustore_snapshot_export_t* c_ptr) {
+    ustore_snapshot_list_t& c = *c_ptr;
+
+    Checkpoint* chp_ptr = nullptr;
+    Checkpoint::Create(c.db, &chp_ptr);
+
+    return_error_if_m(chp_ptr, c.error, uninitialized_state_k, "Checkpoint is uninitialized");
+    chp_ptr->CreateCheckpoint(c.path, 0, c.id);
+}
+
 void ustore_snapshot_list(ustore_snapshot_list_t* c_ptr) {
 
     ustore_snapshot_list_t& c = *c_ptr;
