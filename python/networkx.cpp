@@ -298,7 +298,7 @@ py::object wrap_into_buffer(py_graph_t& g, strided_range_gt<element_at> range) {
 }
 
 template <typename array_type_at>
-void make_key_value( //
+void add_key_value( //
     py_graph_t& g,
     edges_view_t es,
     std::shared_ptr<arrow::Array> array,
@@ -313,7 +313,7 @@ void make_key_value( //
 }
 
 template <>
-void make_key_value<arrow::BinaryArray>( //
+void add_key_value<arrow::BinaryArray>( //
     py_graph_t& g,
     edges_view_t es,
     std::shared_ptr<arrow::Array> array,
