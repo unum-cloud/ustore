@@ -1090,20 +1090,20 @@ void ustore::wrap_networkx(py::module& m) {
 
                     using type = arrow::Type;
                     switch (attr_col->chunk(chunk_idx)->type_id()) {
-                    case type::HALF_FLOAT: make_key_value<arrow::HalfFloatArray>(g, edges, array, attr_name); break;
-                    case type::FLOAT: make_key_value<arrow::FloatArray>(g, edges, array, attr_name); break;
-                    case type::DOUBLE: make_key_value<arrow::DoubleArray>(g, edges, array, attr_name); break;
-                    case type::BOOL: make_key_value<arrow::BooleanArray>(g, edges, array, attr_name); break;
-                    case type::UINT8: make_key_value<arrow::UInt8Array>(g, edges, array, attr_name); break;
-                    case type::INT8: make_key_value<arrow::Int8Array>(g, edges, array, attr_name); break;
-                    case type::UINT16: make_key_value<arrow::UInt16Array>(g, edges, array, attr_name); break;
-                    case type::INT16: make_key_value<arrow::Int16Array>(g, edges, array, attr_name); break;
-                    case type::UINT32: make_key_value<arrow::UInt32Array>(g, edges, array, attr_name); break;
-                    case type::INT32: make_key_value<arrow::Int32Array>(g, edges, array, attr_name); break;
-                    case type::UINT64: make_key_value<arrow::UInt64Array>(g, edges, array, attr_name); break;
-                    case type::INT64: make_key_value<arrow::Int64Array>(g, edges, array, attr_name); break;
+                    case type::HALF_FLOAT: add_key_value<arrow::HalfFloatArray>(g, edges, array, attr_name); break;
+                    case type::FLOAT: add_key_value<arrow::FloatArray>(g, edges, array, attr_name); break;
+                    case type::DOUBLE: add_key_value<arrow::DoubleArray>(g, edges, array, attr_name); break;
+                    case type::BOOL: add_key_value<arrow::BooleanArray>(g, edges, array, attr_name); break;
+                    case type::UINT8: add_key_value<arrow::UInt8Array>(g, edges, array, attr_name); break;
+                    case type::INT8: add_key_value<arrow::Int8Array>(g, edges, array, attr_name); break;
+                    case type::UINT16: add_key_value<arrow::UInt16Array>(g, edges, array, attr_name); break;
+                    case type::INT16: add_key_value<arrow::Int16Array>(g, edges, array, attr_name); break;
+                    case type::UINT32: add_key_value<arrow::UInt32Array>(g, edges, array, attr_name); break;
+                    case type::INT32: add_key_value<arrow::Int32Array>(g, edges, array, attr_name); break;
+                    case type::UINT64: add_key_value<arrow::UInt64Array>(g, edges, array, attr_name); break;
+                    case type::INT64: add_key_value<arrow::Int64Array>(g, edges, array, attr_name); break;
                     case type::STRING:
-                    case type::BINARY: make_key_value<arrow::BinaryArray>(g, edges, array, attr_name); break;
+                    case type::BINARY: add_key_value<arrow::BinaryArray>(g, edges, array, attr_name); break;
                     }
                 }
 
