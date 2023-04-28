@@ -23,6 +23,7 @@
 
 #include <rocksdb/db.h>
 #include <rocksdb/utilities/options_util.h>
+#include <rocksdb/utilities/checkpoint.h>
 #include <rocksdb/utilities/transaction.h>
 #include <rocksdb/utilities/optimistic_transaction_db.h>
 
@@ -80,7 +81,7 @@ struct rocks_snapshot_t {
 
 struct rocks_db_t {
     std::vector<rocks_collection_t*> columns;
-    std::unordered_map<ustore_size_t, rocks_snapshot_t*> snapshots;
+    std::unordered_map<ustore_snapshot_t, rocks_snapshot_t*> snapshots;
     std::unique_ptr<rocks_native_t> native;
     std::mutex mutex;
 };
@@ -238,18 +239,21 @@ void ustore_database_init(ustore_database_init_t* c_ptr) {
 }
 
 void ustore_snapshot_export(ustore_snapshot_export_t* c_ptr) {
-    ustore_snapshot_list_t& c = *c_ptr;
+    ustore_snapshot_export_t& c = *c_ptr;
 
-    Checkpoint* chp_ptr = nullptr;
-    Checkpoint::Create(c.db, &chp_ptr);
+    rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
 
+    rocksdb::Checkpoint* chp_ptr = nullptr;
+    rocksdb::Checkpoint::Create(db.native.get(), &chp_ptr);
     return_error_if_m(chp_ptr, c.error, uninitialized_state_k, "Checkpoint is uninitialized");
 
+    auto it = db.snapshots.find(c.id);
+    return_error_if_m(it != db.snapshots.end(), c.error, args_wrong_k, "Such snapshot does not exists!");
     rocks_snapshot_t& snap = *reinterpret_cast<rocks_snapshot_t*>(c.id);
-    if (!snap.snapshot)
-        return;
+    return_error_if_m(snap.snapshot, c.error, uninitialized_state_k, "Such snapshot does not exists!");
 
-    chp_ptr->CreateCheckpoint(c.path, 0, snap.snapshot);
+    uint64_t snapshot_id = reinterpret_cast<uint64_t>(snap.snapshot);
+    chp_ptr->CreateCheckpoint(c.path, 0, &snapshot_id);
 }
 
 void ustore_snapshot_list(ustore_snapshot_list_t* c_ptr) {
