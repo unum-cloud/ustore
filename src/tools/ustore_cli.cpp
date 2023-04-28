@@ -132,10 +132,14 @@ int main(int argc, char* argv[]) {
             auto& argument = commands[1];
             if (argument == "--collections") {
                 auto context = context_t {db, nullptr};
-                auto collections = context.collections().throw_or_release();
-                while (!collections.names.is_end()) {
-                    fmt::print("{}\n", *collections.names);
-                    ++collections.names;
+                auto collections = context.collections();
+                if (!collections) {
+                    fmt::print("Failed to list collections\n");
+                    continue;
+                }
+                while (!collections->names.is_end()) {
+                    fmt::print("{}\n", *collections->names);
+                    ++collections->names;
                 }
             }
             else
