@@ -508,7 +508,7 @@ TEST(db, clear_values) {
 
     EXPECT_TRUE(col.clear_values());
     check_length(collection_ref, 0);
-    col.clear();
+    EXPECT_TRUE(col.clear());
     check_length(collection_ref, ustore_length_missing_k);
 
     EXPECT_TRUE(db.clear());
