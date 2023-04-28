@@ -49,11 +49,9 @@ int main(int argc, char* argv[]) {
     }
     if (!drop_collection.empty()) {
         close = true;
-        auto maybe_collection = db.find(drop_collection);
-        if (maybe_collection) {
-            auto collection = *maybe_collection;
-            collection.drop();
-        }
+        auto collection = db.find(drop_collection);
+        if (collection)
+            collection->drop();
     }
     if (!create_collection.empty()) {
         close = true;
@@ -90,8 +88,8 @@ int main(int argc, char* argv[]) {
             auto& argument = commands[1];
             if (argument == "--collection") {
                 auto collection_name = commands[2];
-                auto maybe_collection = db.find_or_create(collection_name.c_str());
-                if (maybe_collection)
+                auto collection = db.find_or_create(collection_name.c_str());
+                if (collection)
                     fmt::print("Succesfully created collection {}\n", collection_name);
                 else
                     fmt::print("Failed to created collection {}\n", collection_name);
@@ -108,10 +106,9 @@ int main(int argc, char* argv[]) {
             auto& argument = commands[1];
             if (argument == "--collection") {
                 auto collection_name = commands[2];
-                auto maybe_collection = db.find(collection_name);
-                if (maybe_collection) {
-                    auto collection = *maybe_collection;
-                    auto status = collection.drop();
+                auto collection = db.find(collection_name);
+                if (collection) {
+                    auto status = collection->drop();
                     if (status)
                         fmt::print("Succesfully droped collection {}\n", collection_name);
                     else
