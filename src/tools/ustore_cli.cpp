@@ -60,89 +60,90 @@ int main(int argc, char* argv[]) {
         db.find_or_create(create_collection.c_str());
     }
 
-    if (!close) {
-        std::string input;
-        std::vector<std::string> commands;
-        std::regex const reg_exp(R"(\s+)");
-        std::regex_token_iterator<std::string::iterator> const end_tokens;
+    if (close)
+        return 0;
 
-        while (true) {
-            commands.clear();
-            fmt::print(">>> ");
+    std::string input;
+    std::vector<std::string> commands;
+    std::regex const reg_exp(R"(\s+)");
+    std::regex_token_iterator<std::string::iterator> const end_tokens;
 
-            std::getline(std::cin, input);
-            std::regex_token_iterator<std::string::iterator> it(input.begin(), input.end(), reg_exp, -1);
-            while (it != end_tokens)
-                commands.emplace_back(*it++);
-            if (!commands[0].size())
-                commands.erase(commands.begin());
-            if (commands[0] == "exit" && commands.size() == 1)
-                return 0;
+    while (true) {
+        commands.clear();
+        fmt::print(">>> ");
 
-            if (commands[0] == "create") {
-                if (commands.size() != 3) {
-                    fmt::print("Invalid input\n");
-                    continue;
-                }
+        std::getline(std::cin, input);
+        std::regex_token_iterator<std::string::iterator> it(input.begin(), input.end(), reg_exp, -1);
+        while (it != end_tokens)
+            commands.emplace_back(*it++);
+        if (!commands[0].size())
+            commands.erase(commands.begin());
+        if (commands[0] == "exit" && commands.size() == 1)
+            break;
 
-                auto& argument = commands[1];
-                if (argument == "--collection") {
-                    auto collection_name = commands[2];
-                    auto maybe_collection = db.find_or_create(collection_name.c_str());
-                    if (maybe_collection)
-                        fmt::print("Succesfully created collection {}\n", collection_name);
-                    else
-                        fmt::print("Failed to created collection {}\n", collection_name);
-                }
-                else
-                    fmt::print("Invalid create argument {}\n", argument);
+        if (commands[0] == "create") {
+            if (commands.size() != 3) {
+                fmt::print("Invalid input\n");
+                continue;
             }
-            else if (commands[0] == "drop") {
-                if (commands.size() != 3) {
-                    fmt::print("Invalid input\n");
-                    continue;
-                }
 
-                auto& argument = commands[1];
-                if (argument == "--collection") {
-                    auto collection_name = commands[2];
-                    auto maybe_collection = db.find(collection_name);
-                    if (maybe_collection) {
-                        auto collection = *maybe_collection;
-                        auto status = collection.drop();
-                        if (status)
-                            fmt::print("Succesfully droped collection {}\n", collection_name);
-                        else
-                            fmt::print("Failed to drop collection {}\n", collection_name);
-                    }
-                    else
-                        fmt::print("Collection {} not found\n", collection_name);
-                }
+            auto& argument = commands[1];
+            if (argument == "--collection") {
+                auto collection_name = commands[2];
+                auto maybe_collection = db.find_or_create(collection_name.c_str());
+                if (maybe_collection)
+                    fmt::print("Succesfully created collection {}\n", collection_name);
                 else
-                    fmt::print("Invalid drop argument {}\n", argument);
-            }
-            else if (commands[0] == "list") {
-                if (commands.size() != 2) {
-                    fmt::print("Invalid input\n");
-                    continue;
-                }
-
-                auto& argument = commands[1];
-                if (argument == "--collections") {
-                    auto context = context_t {db, nullptr};
-                    auto collections = context.collections().throw_or_release();
-                    while (!collections.names.is_end()) {
-                        fmt::print("{}\n", *collections.names);
-                        ++collections.names;
-                    }
-                }
-                else
-                    fmt::print("Invalid list argument {}\n", argument);
+                    fmt::print("Failed to created collection {}\n", collection_name);
             }
             else
+                fmt::print("Invalid create argument {}\n", argument);
+        }
+        else if (commands[0] == "drop") {
+            if (commands.size() != 3) {
                 fmt::print("Invalid input\n");
-        };
-    }
+                continue;
+            }
+
+            auto& argument = commands[1];
+            if (argument == "--collection") {
+                auto collection_name = commands[2];
+                auto maybe_collection = db.find(collection_name);
+                if (maybe_collection) {
+                    auto collection = *maybe_collection;
+                    auto status = collection.drop();
+                    if (status)
+                        fmt::print("Succesfully droped collection {}\n", collection_name);
+                    else
+                        fmt::print("Failed to drop collection {}\n", collection_name);
+                }
+                else
+                    fmt::print("Collection {} not found\n", collection_name);
+            }
+            else
+                fmt::print("Invalid drop argument {}\n", argument);
+        }
+        else if (commands[0] == "list") {
+            if (commands.size() != 2) {
+                fmt::print("Invalid input\n");
+                continue;
+            }
+
+            auto& argument = commands[1];
+            if (argument == "--collections") {
+                auto context = context_t {db, nullptr};
+                auto collections = context.collections().throw_or_release();
+                while (!collections.names.is_end()) {
+                    fmt::print("{}\n", *collections.names);
+                    ++collections.names;
+                }
+            }
+            else
+                fmt::print("Invalid list argument {}\n", argument);
+        }
+        else
+            fmt::print("Invalid input\n");
+    };
 
     return 0;
 }
