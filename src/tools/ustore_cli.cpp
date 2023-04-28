@@ -9,6 +9,14 @@
 using namespace unum::ustore;
 using namespace unum;
 
+std::string& remove_quotes(std::string& str) {
+    if (str[0] == '\"' && str[str.size() - 1] == '\"') {
+        str.erase(0, 1);
+        str.erase(str.size() - 1);
+    }
+    return str;
+}
+
 int main(int argc, char* argv[]) {
     using namespace clipp;
 
@@ -63,7 +71,7 @@ int main(int argc, char* argv[]) {
 
     std::string input;
     std::vector<std::string> commands;
-    std::regex const reg_exp(R"(\s+)");
+    std::regex const reg_exp(" +(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)");
     std::regex_token_iterator<std::string::iterator> const end_tokens;
 
     while (true) {
@@ -76,9 +84,9 @@ int main(int argc, char* argv[]) {
             commands.emplace_back(*it++);
         if (!commands[0].size())
             commands.erase(commands.begin());
+
         if (commands[0] == "exit" && commands.size() == 1)
             break;
-
         if (commands[0] == "create") {
             if (commands.size() != 3) {
                 fmt::print("Invalid input\n");
@@ -87,7 +95,7 @@ int main(int argc, char* argv[]) {
 
             auto& argument = commands[1];
             if (argument == "--collection") {
-                auto collection_name = commands[2];
+                auto collection_name = remove_quotes(commands[2]);
                 auto collection = db.find_or_create(collection_name.c_str());
                 if (collection)
                     fmt::print("Succesfully created collection {}\n", collection_name);
@@ -105,7 +113,7 @@ int main(int argc, char* argv[]) {
 
             auto& argument = commands[1];
             if (argument == "--collection") {
-                auto collection_name = commands[2];
+                auto collection_name = remove_quotes(commands[2]);
                 auto collection = db.find(collection_name);
                 if (collection) {
                     auto status = collection->drop();
