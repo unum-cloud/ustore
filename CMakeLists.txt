@@ -31,6 +31,10 @@ option(USTORE_USE_UUID "Replaces default 64-bit keys with 128-bit UUID compatibl
 
 set(USTORE_ENGINE_UDISK_PATH "" CACHE STRING "Pass a path to UDisk binary to produce a full range of bindings")
 
+if(${USTORE_BUILD_CLI})
+set(USTORE_BUILD_API_FLIGHT_CLIENT ON)
+endif()
+
 if(USTORE_BUILD_API_FLIGHT)
   set(USTORE_BUILD_API_FLIGHT_SERVER ON)
   set(USTORE_BUILD_API_FLIGHT_CLIENT ON)
@@ -180,7 +184,7 @@ if(${USTORE_BUILD_API_FLIGHT_CLIENT} OR ${USTORE_BUILD_API_FLIGHT_SERVER})
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/openssl.cmake")
 endif()
 
-if(${USTORE_BUILD_API_FLIGHT_SERVER})
+if(${USTORE_BUILD_API_FLIGHT_SERVER} OR ${USTORE_BUILD_CLI})
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/clipp.cmake")
 endif()
 
@@ -281,6 +285,12 @@ if(${USTORE_BUILD_API_FLIGHT_SERVER})
       target_compile_definitions(${server_exe_name} INTERFACE USTORE_ENGINE_IS_UDISK=1)
     endif()
   endforeach()
+endif()
+
+if(${USTORE_BUILD_CLI})
+  get_target_property(flight_client_dependencies ustore_flight_client LINK_LIBRARIES)
+  add_executable(ustore src/tools/ustore_cli.cpp)
+  target_link_libraries(ustore ${flight_client_dependencies} ustore_flight_client)
 endif()
 
 # Enable warning and sanitization for our primary targets
