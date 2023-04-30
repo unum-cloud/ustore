@@ -25,6 +25,7 @@
 #include <arrow/compute/api_aggregate.h>
 #include <parquet/arrow/reader.h>
 #include <parquet/stream_writer.h>
+#include <parquet/exception.h>
 
 #include <simdjson.h>
 #include <fmt/format.h>
@@ -656,37 +657,14 @@ void fields_parser( //
                 }
             }
             else {
-                std::string str;
-                try {
-                    fmt::format_to(std::back_inserter(str), "\"{}\":{}", fields[idx] + 1, '\0');
-                }
-                catch (fmt::format_error const& ex) {
-                    *error = ex.what();
-                    return_if_error_m(error);
-                }
-                catch (std::runtime_error const& ex) {
-                    *error = ex.what();
-                    return_if_error_m(error);
-                }
+                auto str = fmt::format("\"{}\":{}", fields[idx] + 1, '\0');
                 strncpy(tape.begin() + offset, str.data(), str.size());
                 offset += str.size();
-                break;
                 ++idx;
             }
         }
         else {
-            std::string str;
-            try {
-                fmt::format_to(std::back_inserter(str), "\"{}\":{}", fields[idx], '\0');
-            }
-            catch (fmt::format_error const& ex) {
-                *error = ex.what();
-                return_if_error_m(error);
-            }
-            catch (std::runtime_error const& ex) {
-                *error = ex.what();
-                return_if_error_m(error);
-            }
+            auto str = fmt::format("\"{}\":{}", fields[idx], '\0');
             strncpy(tape.begin() + offset, str.data(), str.size());
             offset += str.size();
             ++idx;
@@ -895,9 +873,7 @@ void import_whole_ndjson(ustore_docs_import_t& c, simdjson::ondemand::document_s
         upsert_docs(c, values, idx);
 }
 
-void import_sub_ndjson(ustore_docs_import_t& c,
-                       simdjson::ondemand::document_stream& docs,
-                       ustore_size_t rows_count) noexcept {
+void import_sub_ndjson(ustore_docs_import_t& c, simdjson::ondemand::document_stream& docs, ustore_size_t rows_count) {
 
     auto arena = linked_memory(c.arena, c.options, c.error);
     auto fields = prepare_fields(c, arena);
@@ -917,19 +893,11 @@ void import_sub_ndjson(ustore_docs_import_t& c,
     auto tape = arena.alloc<ustore_char_t>(max_size, c.error);
     return_if_error_m(c.error);
     fields_parser(c.error, arena, c.fields_count, fields, counts, tape);
-    return_if_error_m(c.error);
 
     ustore_size_t idx = 0;
     for (auto doc : docs) {
         simdjson::ondemand::object object = doc.get_object().value();
-
-        try {
-            simdjson_object_parser(object, counts, fields, c.fields_count, tape, json);
-        }
-        catch (simdjson::simdjson_error const& ex) {
-            *c.error = ex.what();
-            return_if_error_m(c.error);
-        }
+        simdjson_object_parser(object, counts, fields, c.fields_count, tape, json);
 
         json.push_back('\n');
         json_cstr = arena.alloc<ustore_char_t>(json.size() + 1, c.error).begin();
@@ -1056,13 +1024,8 @@ void export_sub_docs( //
 
     for (auto doc : docs) {
         simdjson::ondemand::object obj = doc.get_object().value();
-        try {
-            simdjson_object_parser(obj, counts, fields, c.fields_count, tape, json);
-        }
-        catch (simdjson::simdjson_error const& ex) {
-            *c.error = ex.what();
-            return_if_error_m(c.error);
-        }
+        simdjson_object_parser(obj, counts, fields, c.fields_count, tape, json);
+
         if (pcn == parquet_k) {
             os << *iter << json.data();
             os << parquet::EndRow;
@@ -1234,17 +1197,39 @@ void ustore_docs_import(ustore_docs_import_t* c_ptr) {
     if (!c.arena)
         c.arena = arena_t(c.db).member_ptr();
 
-    auto ext = std::filesystem::path(c.paths_pattern).extension();
-    if (ext == ".ndjson")
-        import_ndjson_docs(c);
-    else {
-        std::shared_ptr<arrow::Table> table;
-        if (ext == ".parquet")
-            import_parquet(c, table);
-        else if (ext == ".csv")
-            import_csv(c, table);
+    try {
+        auto ext = std::filesystem::path(c.paths_pattern).extension();
+        if (ext == ".ndjson")
+            import_ndjson_docs(c);
+        else {
+            std::shared_ptr<arrow::Table> table;
+            if (ext == ".parquet")
+                import_parquet(c, table);
+            else if (ext == ".csv")
+                import_csv(c, table);
+            return_if_error_m(c.error);
+            parse_arrow_table_docs(c, table);
+        }
+    }
+    catch (fmt::format_error const& ex) {
+        *c.error = ex.what();
         return_if_error_m(c.error);
-        parse_arrow_table_docs(c, table);
+    }
+    catch (std::runtime_error const& ex) {
+        *c.error = ex.what();
+        return_if_error_m(c.error);
+    }
+    catch (std::exception const& ex) {
+        *c.error = ex.what();
+        return_if_error_m(c.error);
+    }
+    catch (simdjson::simdjson_error const& ex) {
+        *c.error = ex.what();
+        return_if_error_m(c.error);
+    }
+    catch (parquet::ParquetException const& ex) {
+        *c.error = ex.what();
+        return_if_error_m(c.error);
     }
 }
 
@@ -1268,113 +1253,134 @@ void ustore_docs_export(ustore_docs_export_t* c_ptr) {
     if (!c.arena)
         c.arena = arena_t(c.db).member_ptr();
 
-    int handle = 0;
-    parquet::StreamWriter os;
-    ptr_range_gt<ustore_char_t*> docs_vec;
-    ptr_range_gt<ustore_key_t> keys_vec;
-    arrow::StringBuilder string_builder;
-    int_builder_t int_builder;
+    try {
+        int handle = 0;
+        parquet::StreamWriter os;
+        ptr_range_gt<ustore_char_t*> docs_vec;
+        ptr_range_gt<ustore_key_t> keys_vec;
+        arrow::StringBuilder string_builder;
+        int_builder_t int_builder;
 
-    ustore_size_t task_count = 1'000'000;
-    keys_stream_t stream(c.db, c.collection, task_count);
-    auto arena = linked_memory(c.arena, c.options, c.error);
+        ustore_size_t task_count = 1'000'000;
+        keys_stream_t stream(c.db, c.collection, task_count);
+        auto arena = linked_memory(c.arena, c.options, c.error);
 
-    fields_t fields;
-    ptr_range_gt<ustore_char_t> tape;
-    auto counts = arena.alloc<ustore_size_t>(c.fields_count, c.error);
+        fields_t fields;
+        ptr_range_gt<ustore_char_t> tape;
+        auto counts = arena.alloc<ustore_size_t>(c.fields_count, c.error);
 
-    if (pcn == parquet_k)
-        make_parquet(c, os);
-    else if (pcn == csv_k) {
-        keys_vec = arena.alloc<ustore_key_t>(task_count, c.error);
-        docs_vec = arena.alloc<ustore_char_t*>(task_count, c.error);
-    }
-    else
-        handle = make_ndjson(c);
+        if (pcn == parquet_k)
+            make_parquet(c, os);
+        else if (pcn == csv_k) {
+            keys_vec = arena.alloc<ustore_key_t>(task_count, c.error);
+            docs_vec = arena.alloc<ustore_char_t*>(task_count, c.error);
+        }
+        else
+            handle = make_ndjson(c);
 
-    if (c.fields) {
-        fields = prepare_fields(c, arena);
-        ustore_size_t max_size = c.fields_count * symbols_count_k;
-        for (ustore_size_t idx = 0; idx < c.fields_count; ++idx)
-            max_size += strlen(fields[idx]);
+        if (c.fields) {
+            fields = prepare_fields(c, arena);
+            ustore_size_t max_size = c.fields_count * symbols_count_k;
+            for (ustore_size_t idx = 0; idx < c.fields_count; ++idx)
+                max_size += strlen(fields[idx]);
 
-        tape = arena.alloc<ustore_char_t>(max_size, c.error);
-        fields_parser(c.error, arena, c.fields_count, fields, counts, tape);
-        return_if_error_m(c.error);
-    }
+            tape = arena.alloc<ustore_char_t>(max_size, c.error);
+            fields_parser(c.error, arena, c.fields_count, fields, counts, tape);
+        }
 
-    auto status = stream.seek_to_first();
-    return_error_if_m(status, c.error, 0, "No batches in stream");
+        auto status = stream.seek_to_first();
+        return_error_if_m(status, c.error, 0, "No batches in stream");
 
-    while (!stream.is_end()) {
-        val_t values {nullptr, 0};
-        ustore_length_t* offsets = nullptr;
-        ustore_length_t* lengths = nullptr;
-        auto keys = stream.keys_batch();
-
-        ustore_docs_read_t docs_read {
-            .db = c.db,
-            .error = c.error,
-            .arena = c.arena,
-            .options = ustore_option_dont_discard_memory_k,
-            .tasks_count = keys.size(),
-            .collections = &c.collection,
-            .keys = keys.begin(),
-            .keys_stride = sizeof(ustore_key_t),
-            .lengths = &lengths,
-        };
-        ustore_docs_read(&docs_read);
-
-        for (ustore_size_t idx = 0; idx < keys.size(); ++idx) {
-            ustore_size_t pre_idx = idx;
-            ustore_size_t size = 0;
-
-            do {
-                size += lengths[idx];
-                ++idx;
-            } while (size < c.max_batch_size && idx < keys.size());
+        while (!stream.is_end()) {
+            val_t values {nullptr, 0};
+            ustore_length_t* offsets = nullptr;
+            ustore_length_t* lengths = nullptr;
+            auto keys = stream.keys_batch();
 
             ustore_docs_read_t docs_read {
                 .db = c.db,
                 .error = c.error,
                 .arena = c.arena,
                 .options = ustore_option_dont_discard_memory_k,
-                .tasks_count = idx - pre_idx,
+                .tasks_count = keys.size(),
                 .collections = &c.collection,
-                .keys = keys.begin() + pre_idx,
+                .keys = keys.begin(),
                 .keys_stride = sizeof(ustore_key_t),
-                .offsets = &offsets,
-                .values = &values.first,
+                .lengths = &lengths,
             };
             ustore_docs_read(&docs_read);
-            values.second = offsets[idx - pre_idx - 1] + lengths[idx - 1];
 
-            if (pcn == parquet_k)
-                write_in_parquet(c, arena, os, keys, tape, fields, counts, values);
-            else if (pcn == csv_k)
-                write_in_csv(c,
-                             arena,
-                             docs_vec,
-                             keys_vec,
-                             keys,
-                             int_builder,
-                             string_builder,
-                             tape,
-                             fields,
-                             counts,
-                             values,
-                             idx - pre_idx);
-            else
-                write_in_ndjson(c, arena, keys, tape, fields, counts, values, handle);
+            for (ustore_size_t idx = 0; idx < keys.size(); ++idx) {
+                ustore_size_t pre_idx = idx;
+                ustore_size_t size = 0;
+
+                do {
+                    size += lengths[idx];
+                    ++idx;
+                } while (size < c.max_batch_size && idx < keys.size());
+
+                ustore_docs_read_t docs_read {
+                    .db = c.db,
+                    .error = c.error,
+                    .arena = c.arena,
+                    .options = ustore_option_dont_discard_memory_k,
+                    .tasks_count = idx - pre_idx,
+                    .collections = &c.collection,
+                    .keys = keys.begin() + pre_idx,
+                    .keys_stride = sizeof(ustore_key_t),
+                    .offsets = &offsets,
+                    .values = &values.first,
+                };
+                ustore_docs_read(&docs_read);
+                values.second = offsets[idx - pre_idx - 1] + lengths[idx - 1];
+
+                if (pcn == parquet_k)
+                    write_in_parquet(c, arena, os, keys, tape, fields, counts, values);
+                else if (pcn == csv_k)
+                    write_in_csv(c,
+                                 arena,
+                                 docs_vec,
+                                 keys_vec,
+                                 keys,
+                                 int_builder,
+                                 string_builder,
+                                 tape,
+                                 fields,
+                                 counts,
+                                 values,
+                                 idx - pre_idx);
+                else
+                    write_in_ndjson(c, arena, keys, tape, fields, counts, values, handle);
+            }
+            status = stream.seek_to_next_batch();
+            return_error_if_m(status, c.error, 0, "Invalid batch");
         }
-        status = stream.seek_to_next_batch();
-        return_error_if_m(status, c.error, 0, "Invalid batch");
-    }
 
-    if (pcn == csv_k)
-        end_csv(c, string_builder, int_builder);
-    else if (pcn == ndjson_k)
-        end_ndjson(handle);
+        if (pcn == csv_k)
+            end_csv(c, string_builder, int_builder);
+        else if (pcn == ndjson_k)
+            end_ndjson(handle);
+    }
+    catch (fmt::format_error const& ex) {
+        *c.error = ex.what();
+        return_if_error_m(c.error);
+    }
+    catch (std::runtime_error const& ex) {
+        *c.error = ex.what();
+        return_if_error_m(c.error);
+    }
+    catch (std::exception const& ex) {
+        *c.error = ex.what();
+        return_if_error_m(c.error);
+    }
+    catch (simdjson::simdjson_error const& ex) {
+        *c.error = ex.what();
+        return_if_error_m(c.error);
+    }
+    catch (parquet::ParquetException const& ex) {
+        *c.error = ex.what();
+        return_if_error_m(c.error);
+    }
 }
 
 #pragma endregion - Main Functions(Docs)
@@ -1451,15 +1457,10 @@ void import_ndjson_graph(ustore_graph_import_t& c, ustore_size_t task_count) noe
     ustore_size_t idx = 0;
     for (auto doc : docs) {
         simdjson::ondemand::object data = doc.get_object().value();
-        try {
-            if (c.edge_id_field)
-                edge = get_data(data, c.edge_id_field);
-            edges[idx] = edge_t {get_data(data, c.source_id_field), get_data(data, c.target_id_field), edge};
-        }
-        catch (simdjson::simdjson_error const& ex) {
-            *c.error = ex.what();
-            return_if_error_m(c.error);
-        }
+        if (c.edge_id_field)
+            edge = get_data(data, c.edge_id_field);
+        edges[idx] = edge_t {get_data(data, c.source_id_field), get_data(data, c.target_id_field), edge};
+
         ++idx;
         if (idx == task_count) {
             upsert_graph(c, edges, idx);
@@ -1651,18 +1652,40 @@ void ustore_graph_import(ustore_graph_import_t* c_ptr) {
     if (!c.arena)
         c.arena = arena_t(c.db).member_ptr();
 
-    auto ext = std::filesystem::path(c.paths_pattern).extension();
-    ustore_size_t task_count = c.max_batch_size / sizeof(edge_t);
-    if (ext == ".ndjson")
-        import_ndjson_graph(c, task_count);
-    else {
-        std::shared_ptr<arrow::Table> table;
-        if (ext == ".parquet")
-            import_parquet(c, table);
-        else if (ext == ".csv")
-            import_csv(c, table);
+    try {
+        auto ext = std::filesystem::path(c.paths_pattern).extension();
+        ustore_size_t task_count = c.max_batch_size / sizeof(edge_t);
+        if (ext == ".ndjson")
+            import_ndjson_graph(c, task_count);
+        else {
+            std::shared_ptr<arrow::Table> table;
+            if (ext == ".parquet")
+                import_parquet(c, table);
+            else if (ext == ".csv")
+                import_csv(c, table);
+            return_if_error_m(c.error);
+            parse_arrow_table_graph(c, task_count, table);
+        }
+    }
+    catch (fmt::format_error const& ex) {
+        *c.error = ex.what();
         return_if_error_m(c.error);
-        parse_arrow_table_graph(c, task_count, table);
+    }
+    catch (std::runtime_error const& ex) {
+        *c.error = ex.what();
+        return_if_error_m(c.error);
+    }
+    catch (std::exception const& ex) {
+        *c.error = ex.what();
+        return_if_error_m(c.error);
+    }
+    catch (simdjson::simdjson_error const& ex) {
+        *c.error = ex.what();
+        return_if_error_m(c.error);
+    }
+    catch (parquet::ParquetException const& ex) {
+        *c.error = ex.what();
+        return_if_error_m(c.error);
     }
 }
 
@@ -1686,81 +1709,104 @@ void ustore_graph_export(ustore_graph_export_t* c_ptr) {
     if (!c.arena)
         c.arena = arena_t(c.db).member_ptr();
 
-    parquet::StreamWriter os;
-    int handle = 0;
+    try {
+        parquet::StreamWriter os;
+        int handle = 0;
 
-    if (pcn == parquet_k)
-        make_parquet_graph(c, os);
-    else if (pcn == ndjson_k)
-        handle = make_ndjson(c);
+        if (pcn == parquet_k)
+            make_parquet_graph(c, os);
+        else if (pcn == ndjson_k)
+            handle = make_ndjson(c);
 
-    auto arena = linked_memory(c.arena, c.options, c.error);
-    ustore_vertex_degree_t* degrees = nullptr;
-    ustore_vertex_role_t const role = ustore_vertex_source_k;
+        auto arena = linked_memory(c.arena, c.options, c.error);
+        ustore_vertex_degree_t* degrees = nullptr;
+        ustore_vertex_role_t const role = ustore_vertex_source_k;
 
-    ustore_size_t count = 0;
-    ustore_size_t batch_ids = 0;
-    ustore_size_t total_ids = 0;
-    ustore_size_t task_count = c.max_batch_size / sizeof(edge_t);
+        ustore_size_t count = 0;
+        ustore_size_t batch_ids = 0;
+        ustore_size_t total_ids = 0;
+        ustore_size_t task_count = c.max_batch_size / sizeof(edge_t);
 
-    int_builder_t sources_builder;
-    int_builder_t targets_builder;
-    int_builder_t edges_builder;
-    auto sources = arena.alloc<ustore_key_t>(task_count, c.error);
-    auto targets = arena.alloc<ustore_key_t>(task_count, c.error);
-    ptr_range_gt<ustore_key_t> edges;
-    if (c.edge_id_field)
-        edges = arena.alloc<ustore_key_t>(task_count, c.error);
+        int_builder_t sources_builder;
+        int_builder_t targets_builder;
+        int_builder_t edges_builder;
+        auto sources = arena.alloc<ustore_key_t>(task_count, c.error);
+        auto targets = arena.alloc<ustore_key_t>(task_count, c.error);
+        ptr_range_gt<ustore_key_t> edges;
+        if (c.edge_id_field)
+            edges = arena.alloc<ustore_key_t>(task_count, c.error);
 
-    keys_stream_t stream(c.db, c.collection, task_count, nullptr);
-    auto status = stream.seek_to_first();
-    return_error_if_m(status, c.error, 0, "No batches in stream");
+        keys_stream_t stream(c.db, c.collection, task_count, nullptr);
+        auto status = stream.seek_to_first();
+        return_error_if_m(status, c.error, 0, "No batches in stream");
 
-    while (!stream.is_end()) {
-        keys_length_t ids_in_edges {nullptr, 0};
-        count = stream.keys_batch().size();
+        while (!stream.is_end()) {
+            keys_length_t ids_in_edges {nullptr, 0};
+            count = stream.keys_batch().size();
 
-        ustore_graph_find_edges_t graph_find {
-            .db = c.db,
-            .error = c.error,
-            .arena = c.arena,
-            .options = ustore_option_dont_discard_memory_k,
-            .tasks_count = count,
-            .collections = &c.collection,
-            .vertices = stream.keys_batch().begin(),
-            .vertices_stride = sizeof(ustore_key_t),
-            .roles = &role,
-            .degrees_per_vertex = &degrees,
-            .edges_per_vertex = &ids_in_edges.first,
-        };
-        ustore_graph_find_edges(&graph_find);
+            ustore_graph_find_edges_t graph_find {
+                .db = c.db,
+                .error = c.error,
+                .arena = c.arena,
+                .options = ustore_option_dont_discard_memory_k,
+                .tasks_count = count,
+                .collections = &c.collection,
+                .vertices = stream.keys_batch().begin(),
+                .vertices_stride = sizeof(ustore_key_t),
+                .roles = &role,
+                .degrees_per_vertex = &degrees,
+                .edges_per_vertex = &ids_in_edges.first,
+            };
+            ustore_graph_find_edges(&graph_find);
 
-        batch_ids = std::transform_reduce(degrees, degrees + count, 0ul, std::plus {}, [](ustore_vertex_degree_t d) {
-            return d != ustore_vertex_degree_missing_k ? d : 0;
-        });
-        batch_ids *= vertices_edge_k;
-        total_ids += batch_ids;
-        ids_in_edges.second = batch_ids;
+            batch_ids =
+                std::transform_reduce(degrees, degrees + count, 0ul, std::plus {}, [](ustore_vertex_degree_t d) {
+                    return d != ustore_vertex_degree_missing_k ? d : 0;
+                });
+            batch_ids *= vertices_edge_k;
+            total_ids += batch_ids;
+            ids_in_edges.second = batch_ids;
 
-        write_in_file_graph( //
-            c,
-            ids_in_edges,
-            sources_builder,
-            targets_builder,
-            edges_builder,
-            sources,
-            targets,
-            edges,
-            os,
-            handle,
-            pcn);
-        status = stream.seek_to_next_batch();
-        return_error_if_m(status, c.error, 0, "Invalid batch");
+            write_in_file_graph( //
+                c,
+                ids_in_edges,
+                sources_builder,
+                targets_builder,
+                edges_builder,
+                sources,
+                targets,
+                edges,
+                os,
+                handle,
+                pcn);
+            status = stream.seek_to_next_batch();
+            return_error_if_m(status, c.error, 0, "Invalid batch");
+        }
+        if (pcn == csv_k)
+            end_csv_graph(c, sources_builder, targets_builder, edges_builder);
+        else if (pcn == ndjson_k)
+            end_ndjson(handle);
     }
-    if (pcn == csv_k)
-        end_csv_graph(c, sources_builder, targets_builder, edges_builder);
-    else if (pcn == ndjson_k)
-        end_ndjson(handle);
+    catch (fmt::format_error const& ex) {
+        *c.error = ex.what();
+        return_if_error_m(c.error);
+    }
+    catch (std::runtime_error const& ex) {
+        *c.error = ex.what();
+        return_if_error_m(c.error);
+    }
+    catch (std::exception const& ex) {
+        *c.error = ex.what();
+        return_if_error_m(c.error);
+    }
+    catch (simdjson::simdjson_error const& ex) {
+        *c.error = ex.what();
+        return_if_error_m(c.error);
+    }
+    catch (parquet::ParquetException const& ex) {
+        *c.error = ex.what();
+        return_if_error_m(c.error);
+    }
 }
 
 #pragma endregion - Main Functions(Graph)
