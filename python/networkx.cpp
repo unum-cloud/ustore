@@ -305,11 +305,23 @@ void add_key_value( //
     std::string_view column_name) {
     auto numeric_array = std::static_pointer_cast<array_type_at>(array);
 
-    std::string json_str;
+    std::string jsons_str;
+    jsons_str.reserve(es.size() * (column_name.size() + 2));
+    std::vector<ustore_length_t> offsets(es.size() + 1);
+
     for (size_t idx = 0; idx != es.size(); idx++) {
-        json_str = fmt::format("{{\"{}\": {}}}", column_name, numeric_array->Value(idx));
-        g.relations_attrs[es[idx].id].assign(value_view_t(json_str)).throw_unhandled();
+        offsets[idx] = jsons_str.size();
+        jsons_str += fmt::format("{{\"{}\": {}}}", column_name.data(), numeric_array->Value(idx));
     }
+
+    offsets.back() = jsons_str.size();
+
+    contents_arg_t values {};
+    values.offsets_begin = {offsets.data(), sizeof(ustore_length_t)};
+    auto vals_begin = reinterpret_cast<ustore_bytes_ptr_t>(jsons_str.data());
+    values.contents_begin = {&vals_begin, 0};
+
+    g.relations_attrs[es.edge_ids].assign(values).throw_unhandled();
 }
 
 template <>
@@ -320,12 +332,24 @@ void add_key_value<arrow::BinaryArray>( //
     std::string_view column_name) {
     auto binary_array = std::static_pointer_cast<arrow::BinaryArray>(array);
 
-    std::string json_str;
+    std::string jsons_str;
+    jsons_str.reserve(es.size() * (column_name.size() + 2));
+    std::vector<ustore_length_t> offsets(es.size() + 1);
+
     for (size_t idx = 0; idx != es.size(); idx++) {
+        offsets[idx] = jsons_str.size();
         auto value = binary_array->Value(idx);
-        json_str = fmt::format("{\"{}\":\"{}\"}", column_name.data(), std::string_view(value.data(), value.size()));
-        g.relations_attrs[es[idx].id].assign(value_view_t(json_str)).throw_unhandled();
+        jsons_str += fmt::format("{\"{}\":\"{}\"}", column_name.data(), std::string_view(value.data(), value.size()));
     }
+
+    offsets.back() = jsons_str.size();
+
+    contents_arg_t values {};
+    values.offsets_begin = {offsets.data(), sizeof(ustore_length_t)};
+    auto vals_begin = reinterpret_cast<ustore_bytes_ptr_t>(jsons_str.data());
+    values.contents_begin = {&vals_begin, 0};
+
+    g.relations_attrs[es.edge_ids].assign(values).throw_unhandled();
 }
 
 void ustore::wrap_networkx(py::module& m) {
