@@ -309,6 +309,63 @@ void test_gist() {
     db.clear().throw_unhandled();
 }
 
+void test_gather() {
+    status_t status;
+    arena_t arena(db);
+    ustore_collection_t collection = db.main();
+
+    ustore_docs_write_t write {};
+    write.db = db;
+    write.error = status.member_ptr();
+    write.arena = arena.member_ptr();
+    write.collections = &collection;
+    write.options = ustore_options_default_k;
+    write.tasks_count = keys.size();
+    write.type = ustore_doc_field_json_k;
+    write.modification = ustore_doc_modify_upsert_k;
+    write.keys = keys.data();
+    write.keys_stride = sizeof(ustore_key_t);
+    write.lengths = docs.front().member_length();
+    write.lengths_stride = sizeof(value_view_t);
+    write.values = docs.front().member_ptr();
+    write.values_stride = sizeof(value_view_t);
+    ustore_docs_write(&write);
+    EXPECT_TRUE(status);
+
+    ustore_str_view_t fields_[fields.size()];
+    for (size_t idx = 0; idx < fields.size(); ++idx)
+        fields_[idx] = fields[idx].data();
+
+    ustore_octet_t** validities = nullptr;
+    ustore_byte_t** scalars = nullptr;
+    ustore_length_t** offsets = nullptr;
+    ustore_length_t** lengths = nullptr;
+    ustore_byte_t* strings = nullptr;
+
+    ustore_docs_gather_t gather {};
+    gather.db = db;
+    gather.error = status.member_ptr();
+    gather.arena = arena.member_ptr();
+    gather.docs_count = keys.size();
+    gather.fields_count = fields.size();
+    gather.collections = &collection;
+    gather.keys = keys.data();
+    gather.keys_stride = sizeof(ustore_key_t);
+    gather.fields = fields_;
+    gather.fields_stride = sizeof(ustore_str_view_t);
+    gather.types = types.data();
+    gather.types_stride = sizeof(ustore_doc_field_type_t);
+    gather.columns_validities = &validities;
+    gather.columns_scalars = &scalars;
+    gather.columns_offsets = &offsets;
+    gather.columns_lengths = &lengths;
+    gather.joined_strings = &strings;
+    ustore_docs_gather(&gather);
+    EXPECT_TRUE(status);
+
+    db.clear().throw_unhandled();
+}
+
 void test_graph_single_upsert() {
     status_t status;
     arena_t arena(db);
@@ -971,6 +1028,11 @@ TEST(docs, read_n_write) {
 TEST(docs, gist) {
     test_gist();
 }
+
+// TEST(docs, gather) {
+    // TODO: Fix ustore_docs_gather(): output values are wrong
+    // test_gather();
+// }
 
 TEST(grpah, upsert) {
     test_graph_single_upsert();
