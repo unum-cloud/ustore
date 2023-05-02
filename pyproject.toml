@@ -30,7 +30,7 @@ before-build = [
     "mkdir -p build/ustore",
 ]
 
-skip = ["*musllinux*", "*i686*", "pp*", "cp36-*", "cp311-*"]
+skip = ["*musllinux*", "*i686*", "pp*", "cp36-*"]
 
 # test-command = "pytest {project}/python/tests/"
 # test-requires = ["pandas"]
