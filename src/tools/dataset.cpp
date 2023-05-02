@@ -767,7 +767,7 @@ void import_csv(import_at& c, std::shared_ptr<arrow::Table>& table) {
 
 #pragma region - Docs
 
-void parse_arrow_table_docs(ustore_docs_import_t& c, std::shared_ptr<arrow::Table> const& table) {
+void parse_arrow_table_docs(ustore_docs_import_t& c, std::shared_ptr<arrow::Table> const& table, linked_memory_lock_t& arena) {
 
     fields_t fields;
     ustore_size_t used_mem = 0;
@@ -775,7 +775,6 @@ void parse_arrow_table_docs(ustore_docs_import_t& c, std::shared_ptr<arrow::Tabl
     std::string json = "{";
     ustore_char_t* json_cstr = nullptr;
     arrow_visitor_t visitor(json);
-    auto arena = linked_memory(c.arena, c.options, c.error);
 
     if (!c.fields) {
         auto clmn_names = table->ColumnNames();
@@ -851,12 +850,14 @@ void parse_arrow_table_docs(ustore_docs_import_t& c, std::shared_ptr<arrow::Tabl
         upsert_docs(c, values, idx);
 }
 
-void import_whole_ndjson(ustore_docs_import_t& c, simdjson::ondemand::document_stream& docs, ustore_size_t rows_count) {
+void import_whole_ndjson(ustore_docs_import_t& c,
+                         simdjson::ondemand::document_stream& docs,
+                         ustore_size_t rows_count,
+                         linked_memory_lock_t& arena) {
 
     ustore_size_t idx = 0;
     ustore_size_t used_mem = 0;
 
-    auto arena = linked_memory(c.arena, c.options, c.error);
     auto values = arena.alloc<value_view_t>(rows_count, c.error);
 
     for (auto doc : docs) {
@@ -873,9 +874,11 @@ void import_whole_ndjson(ustore_docs_import_t& c, simdjson::ondemand::document_s
         upsert_docs(c, values, idx);
 }
 
-void import_sub_ndjson(ustore_docs_import_t& c, simdjson::ondemand::document_stream& docs, ustore_size_t rows_count) {
+void import_sub_ndjson(ustore_docs_import_t& c,
+                       simdjson::ondemand::document_stream& docs,
+                       ustore_size_t rows_count,
+                       linked_memory_lock_t& arena) {
 
-    auto arena = linked_memory(c.arena, c.options, c.error);
     auto fields = prepare_fields(c, arena);
     ustore_size_t max_size = c.fields_count * symbols_count_k;
     for (ustore_size_t idx = 0; idx < c.fields_count; ++idx)
@@ -917,7 +920,7 @@ void import_sub_ndjson(ustore_docs_import_t& c, simdjson::ondemand::document_str
         upsert_docs(c, values, idx);
 }
 
-void import_ndjson_docs(ustore_docs_import_t& c) {
+void import_ndjson_docs(ustore_docs_import_t& c, linked_memory_lock_t& arena) {
 
     auto handle = open(c.paths_pattern, O_RDONLY);
     return_error_if_m(handle != -1, c.error, 0, "Can't open file");
@@ -938,9 +941,9 @@ void import_ndjson_docs(ustore_docs_import_t& c) {
         1000000ul);
 
     if (!c.fields)
-        import_whole_ndjson(c, docs, rows_count);
+        import_whole_ndjson(c, docs, rows_count, arena);
     else
-        import_sub_ndjson(c, docs, rows_count);
+        import_sub_ndjson(c, docs, rows_count, arena);
 
     munmap((void*)mapped_content.data(), mapped_content.size());
     close(handle);
@@ -1197,10 +1200,19 @@ void ustore_docs_import(ustore_docs_import_t* c_ptr) {
     if (!c.arena)
         c.arena = arena_t(c.db).member_ptr();
 
+    auto arena = linked_memory(c.arena, c.options, c.error);
+    return_if_error_m(c.error);
+
+    auto handle_exception = [&](char const* ex) {
+        auto ptr = arena.alloc<char>(strlen(ex), c.error);
+        std::memcpy(ptr.data(), ex, strlen(ex) + 1);
+        *c.error = ptr.data();
+    };
+
     try {
         auto ext = std::filesystem::path(c.paths_pattern).extension();
         if (ext == ".ndjson")
-            import_ndjson_docs(c);
+            import_ndjson_docs(c, arena);
         else {
             std::shared_ptr<arrow::Table> table;
             if (ext == ".parquet")
@@ -1208,27 +1220,27 @@ void ustore_docs_import(ustore_docs_import_t* c_ptr) {
             else if (ext == ".csv")
                 import_csv(c, table);
             return_if_error_m(c.error);
-            parse_arrow_table_docs(c, table);
+            parse_arrow_table_docs(c, table, arena);
         }
     }
     catch (fmt::format_error const& ex) {
-        *c.error = ex.what();
+        handle_exception(ex.what());
         return_if_error_m(c.error);
     }
     catch (std::runtime_error const& ex) {
-        *c.error = ex.what();
+        handle_exception(ex.what());
         return_if_error_m(c.error);
     }
     catch (std::exception const& ex) {
-        *c.error = ex.what();
+        handle_exception(ex.what());
         return_if_error_m(c.error);
     }
     catch (simdjson::simdjson_error const& ex) {
-        *c.error = ex.what();
+        handle_exception(ex.what());
         return_if_error_m(c.error);
     }
     catch (parquet::ParquetException const& ex) {
-        *c.error = ex.what();
+        handle_exception(ex.what());
         return_if_error_m(c.error);
     }
 }
@@ -1252,6 +1264,14 @@ void ustore_docs_export(ustore_docs_export_t* c_ptr) {
 
     if (!c.arena)
         c.arena = arena_t(c.db).member_ptr();
+    auto arena = linked_memory(c.arena, c.options, c.error);
+    return_if_error_m(c.error);
+
+    auto handle_exception = [&](char const* ex) {
+        auto ptr = arena.alloc<char>(strlen(ex), c.error);
+        std::memcpy(ptr.data(), ex, strlen(ex) + 1);
+        *c.error = ptr.data();
+    };
 
     try {
         int handle = 0;
@@ -1263,7 +1283,6 @@ void ustore_docs_export(ustore_docs_export_t* c_ptr) {
 
         ustore_size_t task_count = 1'000'000;
         keys_stream_t stream(c.db, c.collection, task_count);
-        auto arena = linked_memory(c.arena, c.options, c.error);
 
         fields_t fields;
         ptr_range_gt<ustore_char_t> tape;
@@ -1362,23 +1381,23 @@ void ustore_docs_export(ustore_docs_export_t* c_ptr) {
             end_ndjson(handle);
     }
     catch (fmt::format_error const& ex) {
-        *c.error = ex.what();
+        handle_exception(ex.what());
         return_if_error_m(c.error);
     }
     catch (std::runtime_error const& ex) {
-        *c.error = ex.what();
+        handle_exception(ex.what());
         return_if_error_m(c.error);
     }
     catch (std::exception const& ex) {
-        *c.error = ex.what();
+        handle_exception(ex.what());
         return_if_error_m(c.error);
     }
     catch (simdjson::simdjson_error const& ex) {
-        *c.error = ex.what();
+        handle_exception(ex.what());
         return_if_error_m(c.error);
     }
     catch (parquet::ParquetException const& ex) {
-        *c.error = ex.what();
+        handle_exception(ex.what());
         return_if_error_m(c.error);
     }
 }
@@ -1390,7 +1409,8 @@ void ustore_docs_export(ustore_docs_export_t* c_ptr) {
 
 void parse_arrow_table_graph(ustore_graph_import_t& c,
                              ustore_size_t task_count,
-                             std::shared_ptr<arrow::Table> const& table) {
+                             std::shared_ptr<arrow::Table> const& table,
+                             linked_memory_lock_t& arena) {
 
     auto sources = table->GetColumnByName(c.source_id_field);
     return_error_if_m(sources, c.error, 0, "The source field does not exist");
@@ -1401,7 +1421,6 @@ void parse_arrow_table_graph(ustore_graph_import_t& c,
     ustore_size_t count = sources->num_chunks();
     return_error_if_m(count > 0, c.error, 0, "Empty Input");
 
-    auto arena = linked_memory(c.arena, c.options, c.error);
     auto vertices_edges = arena.alloc<edge_t>(table->num_rows(), c.error);
     ustore_size_t idx = 0;
 
@@ -1430,9 +1449,8 @@ void parse_arrow_table_graph(ustore_graph_import_t& c,
         upsert_graph(c, vertices_edges, idx);
 }
 
-void import_ndjson_graph(ustore_graph_import_t& c, ustore_size_t task_count) noexcept {
+void import_ndjson_graph(ustore_graph_import_t& c, ustore_size_t task_count, linked_memory_lock_t& arena) noexcept {
 
-    auto arena = linked_memory(c.arena, c.options, c.error);
     auto edges = arena.alloc<edge_t>(task_count, c.error);
 
     auto handle = open(c.paths_pattern, O_RDONLY);
@@ -1652,11 +1670,20 @@ void ustore_graph_import(ustore_graph_import_t* c_ptr) {
     if (!c.arena)
         c.arena = arena_t(c.db).member_ptr();
 
+    auto arena = linked_memory(c.arena, c.options, c.error);
+    return_if_error_m(c.error);
+
+    auto handle_exception = [&](char const* ex) {
+        auto ptr = arena.alloc<char>(strlen(ex), c.error);
+        std::memcpy(ptr.data(), ex, strlen(ex) + 1);
+        *c.error = ptr.data();
+    };
+
     try {
         auto ext = std::filesystem::path(c.paths_pattern).extension();
         ustore_size_t task_count = c.max_batch_size / sizeof(edge_t);
         if (ext == ".ndjson")
-            import_ndjson_graph(c, task_count);
+            import_ndjson_graph(c, task_count, arena);
         else {
             std::shared_ptr<arrow::Table> table;
             if (ext == ".parquet")
@@ -1664,27 +1691,27 @@ void ustore_graph_import(ustore_graph_import_t* c_ptr) {
             else if (ext == ".csv")
                 import_csv(c, table);
             return_if_error_m(c.error);
-            parse_arrow_table_graph(c, task_count, table);
+            parse_arrow_table_graph(c, task_count, table, arena);
         }
     }
     catch (fmt::format_error const& ex) {
-        *c.error = ex.what();
+        handle_exception(ex.what());
         return_if_error_m(c.error);
     }
     catch (std::runtime_error const& ex) {
-        *c.error = ex.what();
+        handle_exception(ex.what());
         return_if_error_m(c.error);
     }
     catch (std::exception const& ex) {
-        *c.error = ex.what();
+        handle_exception(ex.what());
         return_if_error_m(c.error);
     }
     catch (simdjson::simdjson_error const& ex) {
-        *c.error = ex.what();
+        handle_exception(ex.what());
         return_if_error_m(c.error);
     }
     catch (parquet::ParquetException const& ex) {
-        *c.error = ex.what();
+        handle_exception(ex.what());
         return_if_error_m(c.error);
     }
 }
@@ -1708,6 +1735,14 @@ void ustore_graph_export(ustore_graph_export_t* c_ptr) {
 
     if (!c.arena)
         c.arena = arena_t(c.db).member_ptr();
+    auto arena = linked_memory(c.arena, c.options, c.error);
+    return_if_error_m(c.error);
+
+    auto handle_exception = [&](char const* ex) {
+        auto ptr = arena.alloc<char>(strlen(ex), c.error);
+        std::memcpy(ptr.data(), ex, strlen(ex) + 1);
+        *c.error = ptr.data();
+    };
 
     try {
         parquet::StreamWriter os;
@@ -1718,7 +1753,6 @@ void ustore_graph_export(ustore_graph_export_t* c_ptr) {
         else if (pcn == ndjson_k)
             handle = make_ndjson(c);
 
-        auto arena = linked_memory(c.arena, c.options, c.error);
         ustore_vertex_degree_t* degrees = nullptr;
         ustore_vertex_role_t const role = ustore_vertex_source_k;
 
@@ -1788,23 +1822,23 @@ void ustore_graph_export(ustore_graph_export_t* c_ptr) {
             end_ndjson(handle);
     }
     catch (fmt::format_error const& ex) {
-        *c.error = ex.what();
+        handle_exception(ex.what());
         return_if_error_m(c.error);
     }
     catch (std::runtime_error const& ex) {
-        *c.error = ex.what();
+        handle_exception(ex.what());
         return_if_error_m(c.error);
     }
     catch (std::exception const& ex) {
-        *c.error = ex.what();
+        handle_exception(ex.what());
         return_if_error_m(c.error);
     }
     catch (simdjson::simdjson_error const& ex) {
-        *c.error = ex.what();
+        handle_exception(ex.what());
         return_if_error_m(c.error);
     }
     catch (parquet::ParquetException const& ex) {
-        *c.error = ex.what();
+        handle_exception(ex.what());
         return_if_error_m(c.error);
     }
 }
