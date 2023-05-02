@@ -21,9 +21,13 @@
 #pragma GCC diagnostic pop
 
 #include "linked_memory.hpp"       // `linked_memory_lock_t`
-#include "ukv/cpp/ranges_args.hpp" // `contents_arg_t`
+#include "ustore/cpp/ranges_args.hpp" // `contents_arg_t`
 
-namespace unum::ukv {
+namespace unum::ustore {
+
+/// This is the "Arrow way" of dealing with empty values in the last buffer.
+/// https://github.com/apache/arrow/blob/2078af7c710d688c14313b9486b99c981550a7b7/cpp/src/arrow/memory_pool_internal.h#L34
+static std::int64_t zero_size_data_k[1] = {0};
 
 constexpr std::size_t arrow_extra_offsets_k = 1;
 constexpr std::size_t arrow_bytes_alignment_k = 64;
@@ -94,6 +98,13 @@ class arrow_mem_pool_t final : public ar::MemoryPool {
     ~arrow_mem_pool_t() {}
 
     ar::Status Allocate(int64_t size, uint8_t** ptr) override {
+        if (size < 0)
+            return ar::Status::Invalid("negative malloc size");
+
+        if (size == 0) {
+            *ptr = reinterpret_cast<uint8_t*>(&zero_size_data_k);
+            return ar::Status::OK();
+        }
         auto new_ptr = resource_.alloc(size, alignment_);
         if (!new_ptr)
             return ar::Status::OutOfMemory("");
@@ -103,6 +114,15 @@ class arrow_mem_pool_t final : public ar::MemoryPool {
         return ar::Status::OK();
     }
     ar::Status Reallocate(int64_t old_size, int64_t new_size, uint8_t** ptr) override {
+        if (new_size < 0)
+            return ar::Status::Invalid("negative malloc size");
+        if (*ptr == reinterpret_cast<uint8_t*>(&zero_size_data_k))
+            return Allocate(new_size, ptr);
+        if (new_size == 0) {
+            *ptr = reinterpret_cast<uint8_t*>(&zero_size_data_k);
+            bytes_allocated_ -= old_size;
+            return ar::Status::OK();
+        }
         auto new_ptr = resource_.alloc(new_size, alignment_);
         if (!new_ptr)
             return ar::Status::OutOfMemory("");
@@ -113,6 +133,7 @@ class arrow_mem_pool_t final : public ar::MemoryPool {
         bytes_allocated_ += new_size - old_size;
         return ar::Status::OK();
     }
+
     void Free(uint8_t* buffer, int64_t size) override {
         // resource_.deallocate(buffer, size); // deallocation is no-op
         bytes_allocated_ -= size;
@@ -120,7 +141,7 @@ class arrow_mem_pool_t final : public ar::MemoryPool {
     void ReleaseUnused() override {}
     int64_t bytes_allocated() const override { return bytes_allocated_; }
     int64_t max_memory() const override { return INT64_MAX; }
-    std::string backend_name() const override { return "ukv"; }
+    std::string backend_name() const override { return "ustore"; }
 };
 
 ar::ipc::IpcReadOptions arrow_read_options(arrow_mem_pool_t& pool) {
@@ -139,30 +160,28 @@ ar::ipc::IpcWriteOptions arrow_write_options(arrow_mem_pool_t& pool) {
     return options;
 }
 
-ar::Result<std::shared_ptr<ar::RecordBatch>> combined_batch(std::shared_ptr<ar::Table> table) {
-    return table->num_rows() ? table->CombineChunksToBatch() : ar::RecordBatch::MakeEmpty(table->schema());
+ar::Result<std::shared_ptr<ar::RecordBatch>> combined_batch(std::shared_ptr<ar::Table> table,
+                                                            ar::MemoryPool* pool = ar::default_memory_pool()) {
+    return table->num_rows() ? table->CombineChunksToBatch(pool) : ar::RecordBatch::MakeEmpty(table->schema(), pool);
 }
 
 ar::Status unpack_table( //
     ar::Result<std::shared_ptr<ar::Table>> const& maybe_table,
     ArrowSchema& schema_c,
-    ArrowArray& batch_c) {
+    ArrowArray& batch_c,
+    ar::MemoryPool* pool = ar::default_memory_pool()) {
 
     if (!maybe_table.ok())
         return maybe_table.status();
-
     std::shared_ptr<ar::Table> const& table = maybe_table.ValueUnsafe();
-    ar::Status ar_status = ar::ExportSchema(*table->schema(), &schema_c);
-    if (!ar_status.ok())
-        return ar_status;
 
     // Join all the chunks to form a single table
-    auto maybe_batch = combined_batch(table);
+    auto maybe_batch = combined_batch(table, pool);
     if (!maybe_batch.ok())
         return maybe_batch.status();
 
     std::shared_ptr<ar::RecordBatch> const& batch_ptr = maybe_batch.ValueUnsafe();
-    ar_status = ar::ExportRecordBatch(*batch_ptr, &batch_c, nullptr);
+    ar::Status ar_status = ar::ExportRecordBatch(*batch_ptr, &batch_c, &schema_c);
     return ar_status;
 }
 
@@ -182,11 +201,11 @@ inline expected_gt<std::size_t> column_idx(ArrowSchema const& schema_c, std::str
  * We can reuse the `column_lengths` to put-in some NULL markers.
  * Bitmask would use 32x less memory.
  */
-inline ukv_octet_t* convert_lengths_into_bitmap(ukv_length_t* lengths, ukv_size_t n) {
+inline ustore_octet_t* convert_lengths_into_bitmap(ustore_length_t* lengths, ustore_size_t n) {
     size_t count_slots = (n + (CHAR_BIT - 1)) / CHAR_BIT;
-    ukv_octet_t* slots = (ukv_octet_t*)lengths;
+    ustore_octet_t* slots = (ustore_octet_t*)lengths;
     for (size_t slot_idx = 0; slot_idx != count_slots; ++slot_idx) {
-        ukv_octet_t slot_value = 0;
+        ustore_octet_t slot_value = 0;
         size_t first_idx = slot_idx * CHAR_BIT;
         size_t remaining_count = count_slots - first_idx;
         size_t remaining_in_slot = remaining_count > CHAR_BIT ? CHAR_BIT : remaining_count;
@@ -196,17 +215,17 @@ inline ukv_octet_t* convert_lengths_into_bitmap(ukv_length_t* lengths, ukv_size_
         slots[slot_idx] = slot_value;
     }
     // Cleanup the following memory
-    std::memset(slots + count_slots + 1, 0, n * sizeof(ukv_length_t) - count_slots);
+    std::memset(slots + count_slots + 1, 0, n * sizeof(ustore_length_t) - count_slots);
     return slots;
 }
 
 /**
- * @brief Replaces "lengths" with `::ukv_length_missing_k` if matching NULL indicator is set.
+ * @brief Replaces "lengths" with `::ustore_length_missing_k` if matching NULL indicator is set.
  */
 template <typename scalar_at>
-inline scalar_at* arrow_replace_missing_scalars(ukv_octet_t const* slots,
+inline scalar_at* arrow_replace_missing_scalars(ustore_octet_t const* slots,
                                                 scalar_at* scalars,
-                                                ukv_size_t n,
+                                                ustore_size_t n,
                                                 scalar_at missing) {
     size_t count_slots = (n + (CHAR_BIT - 1)) / CHAR_BIT;
     for (size_t slot_idx = 0; slot_idx != count_slots; ++slot_idx) {
@@ -221,7 +240,7 @@ inline scalar_at* arrow_replace_missing_scalars(ukv_octet_t const* slots,
     return scalars;
 }
 
-inline strided_iterator_gt<ukv_key_t> get_keys( //
+inline strided_iterator_gt<ustore_key_t> get_keys( //
     ArrowSchema const& schema_c,
     ArrowArray const& batch_c,
     std::string_view arg_name) {
@@ -229,14 +248,14 @@ inline strided_iterator_gt<ukv_key_t> get_keys( //
     if (!maybe_idx)
         return {};
 
-    ukv_key_t* begin = nullptr;
+    ustore_key_t* begin = nullptr;
     auto& array = *batch_c.children[*maybe_idx];
-    begin = (ukv_key_t*)array.buffers[1];
+    begin = (ustore_key_t*)array.buffers[1];
     // Make sure there are no NULL entries.
-    return {begin, sizeof(ukv_key_t)};
+    return {begin, sizeof(ustore_key_t)};
 }
 
-inline strided_iterator_gt<ukv_collection_t> get_collections( //
+inline strided_iterator_gt<ustore_collection_t> get_collections( //
     ArrowSchema const& schema_c,
     ArrowArray const& batch_c,
     std::string_view arg_name) {
@@ -244,16 +263,16 @@ inline strided_iterator_gt<ukv_collection_t> get_collections( //
     if (!maybe_idx)
         return {};
 
-    ukv_collection_t* begin = nullptr;
+    ustore_collection_t* begin = nullptr;
     auto& array = *batch_c.children[*maybe_idx];
-    auto bitmasks = (ukv_octet_t const*)array.buffers[0];
-    begin = (ukv_collection_t*)array.buffers[1];
+    auto bitmasks = (ustore_octet_t const*)array.buffers[0];
+    begin = (ustore_collection_t*)array.buffers[1];
     if (bitmasks && array.null_count != 0)
-        arrow_replace_missing_scalars(bitmasks, begin, array.length, ukv_collection_main_k);
-    return {begin, sizeof(ukv_collection_t)};
+        arrow_replace_missing_scalars(bitmasks, begin, array.length, ustore_collection_main_k);
+    return {begin, sizeof(ustore_collection_t)};
 }
 
-inline strided_iterator_gt<ukv_length_t> get_lengths( //
+inline strided_iterator_gt<ustore_length_t> get_lengths( //
     ArrowSchema const& schema_c,
     ArrowArray const& batch_c,
     std::string_view arg_name) {
@@ -261,13 +280,13 @@ inline strided_iterator_gt<ukv_length_t> get_lengths( //
     if (!maybe_idx)
         return {};
 
-    ukv_length_t* begin = nullptr;
+    ustore_length_t* begin = nullptr;
     auto& array = *batch_c.children[*maybe_idx];
-    auto bitmasks = (ukv_octet_t const*)array.buffers[0];
-    begin = (ukv_length_t*)array.buffers[1];
+    auto bitmasks = (ustore_octet_t const*)array.buffers[0];
+    begin = (ustore_length_t*)array.buffers[1];
     if (bitmasks && array.null_count != 0)
-        arrow_replace_missing_scalars(bitmasks, begin, array.length, ukv_length_missing_k);
-    return {begin, sizeof(ukv_length_t)};
+        arrow_replace_missing_scalars(bitmasks, begin, array.length, ustore_length_missing_k);
+    return {begin, sizeof(ustore_length_t)};
 }
 
 inline contents_arg_t get_contents( //
@@ -281,22 +300,22 @@ inline contents_arg_t get_contents( //
 
     auto& array = *batch_c.children[*maybe_idx];
     contents_arg_t result;
-    result.contents_begin = {(ukv_bytes_cptr_t const*)&array.buffers[2], 0};
-    result.offsets_begin = {(ukv_length_t const*)array.buffers[1], sizeof(ukv_length_t)};
+    result.contents_begin = {(ustore_bytes_cptr_t const*)&array.buffers[2], 0};
+    result.offsets_begin = {(ustore_length_t const*)array.buffers[1], sizeof(ustore_length_t)};
     if (array.buffers[0] && array.null_count != 0)
-        result.presences_begin = {(ukv_octet_t const*)array.buffers[0]};
-    result.count = static_cast<ukv_size_t>(batch_c.length);
+        result.presences_begin = {(ustore_octet_t const*)array.buffers[0]};
+    result.count = static_cast<ustore_size_t>(batch_c.length);
     return result;
 }
 
-void ukv_to_continuous_bin( //
+void ustore_to_continuous_bin( //
     contents_arg_t& contents,
     size_t places_count,
     size_t c_tasks_count,
-    ukv_bytes_cptr_t* continuous_bin,
-    ptr_range_gt<ukv_length_t> continuous_bin_offs,
+    ustore_bytes_cptr_t* continuous_bin,
+    ptr_range_gt<ustore_length_t> continuous_bin_offs,
     linked_memory_lock_t& arena,
-    ukv_error_t* c_error) {
+    ustore_error_t* c_error) {
 
     // Check if the paths are continuous and are already in an Arrow-compatible form
     if (!contents.is_continuous()) {
@@ -306,7 +325,7 @@ void ukv_to_continuous_bin( //
         size_t slots_count = divide_round_up<std::size_t>(places_count, CHAR_BIT);
 
         // Exports into the Arrow-compatible form
-        ukv_length_t exported_bytes = 0;
+        ustore_length_t exported_bytes = 0;
         for (std::size_t i = 0; i != c_tasks_count; ++i) {
             auto path = contents[i];
             continuous_bin_offs[i] = exported_bytes;
@@ -315,7 +334,7 @@ void ukv_to_continuous_bin( //
         }
         continuous_bin_offs[places_count] = exported_bytes;
 
-        *continuous_bin = (ukv_bytes_cptr_t)joined_paths.begin();
+        *continuous_bin = (ustore_bytes_cptr_t)joined_paths.begin();
     }
     // It may be the case, that we only have `c_tasks_count` offsets instead of `c_tasks_count+1`,
     // which won't be enough for Arrow.
@@ -323,7 +342,7 @@ void ukv_to_continuous_bin( //
         size_t slots_count = divide_round_up<std::size_t>(places_count, CHAR_BIT);
 
         // Exports into the Arrow-compatible form
-        ukv_length_t exported_bytes = 0;
+        ustore_length_t exported_bytes = 0;
         for (std::size_t i = 0; i != c_tasks_count; ++i) {
             auto path = contents[i];
             continuous_bin_offs[i] = exported_bytes;
@@ -332,4 +351,4 @@ void ukv_to_continuous_bin( //
         continuous_bin_offs[places_count] = exported_bytes;
     }
 }
-} // namespace unum::ukv
+} // namespace unum::ustore

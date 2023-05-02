@@ -59,7 +59,7 @@ jobs:
       - name: Install UKV from PyPi
         run: pip install ukv
       - name: Fetch GoLang repo
-        run: git submodule update --init --recursive --remote go-ukv/
+        run: git submodule update --init --recursive --remote go-ustore/
       - name: Build documentation
         run: cd docs && doxygen conf.dox && make html
       - name: Copy assets
