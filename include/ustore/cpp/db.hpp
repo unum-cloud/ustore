@@ -256,7 +256,7 @@ class context_t : public std::enable_shared_from_this<context_t> {
     }
 
     /**
-     * @brief Exports the snapshot as a new database into the specifed path
+     * @brief Exports the snapshot as a new database into the specified path
      */
     status_t export_to(ustore_str_view_t path) noexcept {
         status_t status;
