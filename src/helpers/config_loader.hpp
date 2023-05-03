@@ -7,8 +7,9 @@
 #pragma once
 
 #include <limits>            // `std::numeric_limit`
-#include <string>            // `std::string`
 #include <vector>            // `std::vector`
+#include <string>            // `std::string`
+#include <sstream>           // `std::stringstream`
 #include <nlohmann/json.hpp> // `nlohmann::json`
 #include <fmt/format.h>      // `fmt::format`
 
