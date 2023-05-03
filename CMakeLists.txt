@@ -72,6 +72,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wgnu-zero-variadic-macro-arguments")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wformat-pedantic")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wextra-semi")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wunused-result")
 
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-builtin-memcmp -fPIC")
