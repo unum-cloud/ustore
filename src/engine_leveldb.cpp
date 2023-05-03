@@ -69,7 +69,7 @@ struct level_snapshot_t {
 };
 
 struct level_db_t {
-    std::unordered_map<ustore_size_t, level_snapshot_t*> snapshots;
+    std::unordered_map<ustore_snapshot_t, level_snapshot_t*> snapshots;
     std::unique_ptr<level_native_t> native;
     std::mutex mutex;
 };
@@ -230,7 +230,7 @@ void ustore_snapshot_create(ustore_snapshot_create_t* c_ptr) {
     if (!level_snapshot->snapshot)
         *c.error = "Couldn't get a snapshot!";
 
-    *c.id = reinterpret_cast<std::size_t>(level_snapshot);
+    *c.id = reinterpret_cast<ustore_snapshot_t>(level_snapshot);
     db.snapshots[*c.id] = level_snapshot;
 }
 
@@ -250,9 +250,8 @@ void ustore_snapshot_drop(ustore_snapshot_drop_t* c_ptr) {
     db.native->ReleaseSnapshot(snap.snapshot);
     snap.snapshot = nullptr;
 
-    auto id = reinterpret_cast<std::size_t>(c.id);
     db.mutex.lock();
-    db.snapshots.erase(id);
+    db.snapshots.erase(c.id);
     db.mutex.unlock();
 }
 
