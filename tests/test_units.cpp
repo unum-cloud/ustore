@@ -713,6 +713,7 @@ TEST(db, transaction_snapshot_isolation) {
 
     EXPECT_TRUE(db.clear());
 }
+
 TEST(db, snapshots_list) {
     if (!ustore_supports_snapshots_k)
         return;
@@ -829,6 +830,79 @@ TEST(db, set_wrong_snapshot) {
     EXPECT_TRUE(right_snap_ref.value());
 
     EXPECT_TRUE(db.clear());
+}
+
+/**
+ * Exports snapshot as a database, loads and checks contents
+ */
+TEST(db, export_snapshot) {
+    if (!ustore_supports_snapshots_k)
+        return;
+
+    clear_environment();
+    std::string dir = fmt::format("{}/original/", path());
+    std::string dir1 = fmt::format("{}/export1/", path());
+    std::string dir2 = fmt::format("{}/export2/", path());
+    std::filesystem::create_directory(dir);
+    std::filesystem::create_directory(dir1);
+    std::filesystem::create_directory(dir2);
+
+    database_t db;
+    auto config = fmt::format(R"({{"version": "1.0", "directory": "{}"}})", dir);
+    EXPECT_TRUE(db.open(config.c_str()));
+
+    triplet_t triplet;
+    triplet_t triplet_same_v;
+    triplet_same_v.vals = {'D', 'D', 'D'};
+
+    blobs_collection_t collection = db.main();
+    auto collection_ref = collection[triplet.keys];
+    round_trip(collection_ref, triplet);
+
+    // Export snapshot
+    auto snap1 = *db.snapshot();
+    EXPECT_TRUE(snap1.export_to(dir1.c_str()));
+    check_equalities(collection_ref, triplet);
+
+    // Load exported snapshot
+    database_t db1;
+    config = fmt::format(R"({{"version": "1.0", "directory": "{}"}})", dir1);
+    EXPECT_TRUE(db1.open(config.c_str()));
+    // Check values
+    auto collection1 = db1.main();
+    auto collection_ref1 = collection1[triplet.keys];
+    check_equalities(collection_ref1, triplet);
+
+    // Change original
+    round_trip(collection_ref, triplet_same_v);
+
+    // Export one more snapshot
+    auto snap2 = *db.snapshot();
+    EXPECT_TRUE(snap2.export_to(dir2.c_str()));
+    check_equalities(collection_ref, triplet_same_v);
+
+    // Load second exported snapshot
+    database_t db2;
+    config = fmt::format(R"({{"version": "1.0", "directory": "{}"}})", dir2);
+    EXPECT_TRUE(db2.open(config.c_str()));
+    // Check values
+    auto collection2 = db2.main();
+    auto collection_ref2 = collection2[triplet_same_v.keys];
+    check_equalities(collection_ref2, triplet_same_v);
+
+    // Check snapshots
+    check_equalities(collection_ref1, triplet);
+    check_equalities(collection_ref2, triplet_same_v);
+    // Change snapshots
+    round_trip(collection_ref1, triplet_same_v);
+    round_trip(collection_ref2, triplet);
+    // Check snapshots
+    check_equalities(collection_ref1, triplet_same_v);
+    check_equalities(collection_ref2, triplet);
+
+    EXPECT_TRUE(db.clear());
+    EXPECT_TRUE(db1.clear());
+    EXPECT_TRUE(db2.clear());
 }
 
 /**
