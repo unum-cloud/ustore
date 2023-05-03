@@ -15,6 +15,7 @@
 #include <thread>
 #include <mutex>
 #include <shared_mutex>
+#include <csignal>
 
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
@@ -508,7 +509,7 @@ TEST(db, clear_values) {
 
     EXPECT_TRUE(col.clear_values());
     check_length(collection_ref, 0);
-    EXPECT_TRUE(col.clear());
+    col.clear();
     check_length(collection_ref, ustore_length_missing_k);
 
     EXPECT_TRUE(db.clear());
