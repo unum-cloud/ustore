@@ -720,7 +720,8 @@ void parse_arrow_table(ustore_docs_import_t& c, std::shared_ptr<arrow::Table> co
             for (auto it = fields; g_idx < c.fields_count; ++g_idx, ++it) {
                 fmt::format_to(std::back_inserter(json), "\"{}\":", *it);
                 visitor.idx = value_idx;
-                arrow::VisitArrayInline(*chunks[g_idx].get(), &visitor);
+                // TODO: handle return status of function
+                auto _ = arrow::VisitArrayInline(*chunks[g_idx].get(), &visitor);
             }
 
             json[json.size() - 1] = '}';
