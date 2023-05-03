@@ -127,28 +127,23 @@ class arrow_visitor_t {
         return arrow::Status::OK();
     }
     arrow::Status Visit(arrow::ListArray const& arr) {
-        arrow::VisitArrayInline(*arr.values().get(), this);
-        return arrow::Status::OK();
+        return arrow::VisitArrayInline(*arr.values().get(), this);
     }
     arrow::Status Visit(arrow::LargeListArray const& arr) {
-        arrow::VisitArrayInline(*arr.values().get(), this);
-        return arrow::Status::OK();
+        return arrow::VisitArrayInline(*arr.values().get(), this);
     }
     arrow::Status Visit(arrow::MapArray const& arr) {
-        arrow::VisitArrayInline(*arr.values().get(), this);
-        return arrow::Status::OK();
+        return arrow::VisitArrayInline(*arr.values().get(), this);
     }
     arrow::Status Visit(arrow::FixedSizeListArray const& arr) {
-        arrow::VisitArrayInline(*arr.values().get(), this);
-        return arrow::Status::OK();
+        return arrow::VisitArrayInline(*arr.values().get(), this);
     }
     arrow::Status Visit(arrow::DictionaryArray const& arr) {
         fmt::format_to(std::back_inserter(json), "{},", arr.GetValueIndex(idx));
         return arrow::Status::OK();
     }
     arrow::Status Visit(arrow::ExtensionArray const& arr) {
-        arrow::VisitArrayInline(*arr.storage().get(), this);
-        return arrow::Status::OK();
+        return arrow::VisitArrayInline(*arr.storage().get(), this);
     }
     arrow::Status Visit(arrow::StructArray const& arr) {
         return arrow::Status(arrow::StatusCode::TypeError, "Not supported type");

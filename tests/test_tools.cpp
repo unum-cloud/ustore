@@ -206,28 +206,23 @@ class arrow_visitor_at {
         return arrow::Status::OK();
     }
     arrow::Status Visit(arrow::ListArray const& arr) {
-        arrow::VisitArrayInline(*arr.values().get(), this);
-        return arrow::Status::OK();
+        return arrow::VisitArrayInline(*arr.values().get(), this);
     }
     arrow::Status Visit(arrow::LargeListArray const& arr) {
-        arrow::VisitArrayInline(*arr.values().get(), this);
-        return arrow::Status::OK();
+        return arrow::VisitArrayInline(*arr.values().get(), this);
     }
     arrow::Status Visit(arrow::MapArray const& arr) {
-        arrow::VisitArrayInline(*arr.values().get(), this);
-        return arrow::Status::OK();
+        return arrow::VisitArrayInline(*arr.values().get(), this);
     }
     arrow::Status Visit(arrow::FixedSizeListArray const& arr) {
-        arrow::VisitArrayInline(*arr.values().get(), this);
-        return arrow::Status::OK();
+        return arrow::VisitArrayInline(*arr.values().get(), this);
     }
     arrow::Status Visit(arrow::DictionaryArray const& arr) {
         fmt::format_to(std::back_inserter(json), "{},", arr.GetValueIndex(idx));
         return arrow::Status::OK();
     }
     arrow::Status Visit(arrow::ExtensionArray const& arr) {
-        arrow::VisitArrayInline(*arr.storage().get(), this);
-        return arrow::Status::OK();
+        return arrow::VisitArrayInline(*arr.storage().get(), this);
     }
     arrow::Status Visit(arrow::StructArray const& arr) {
         return arrow::Status(arrow::StatusCode::TypeError, "Not supported type");
@@ -1128,7 +1123,8 @@ int main(int argc, char** argv) {
 
     db.open().throw_unhandled();
     ::testing::InitGoogleTest(&argc, argv);
-    RUN_ALL_TESTS();
+    int result = RUN_ALL_TESTS();
+    
     delete_test_file();
-    return 0;
+    return result;
 }
