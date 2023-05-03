@@ -28,17 +28,17 @@
 #include <ucset/consistent_set.hpp> // `ucset::consistent_set_gt`
 #include <ucset/locked.hpp>         // `ucset::locked_gt`
 
-#include <nlohmann/json.hpp>       // `nlohmann::json`
-#include <arrow/io/file.h>         // `arrow::io::ReadableFile`
-#include <parquet/stream_reader.h> // `parquet::StreamReader`
-#include <parquet/stream_writer.h> // `parquet::StreamWriter`
+#include <nlohmann/json.hpp>        // `nlohmann::json`
+#include <arrow/io/file.h>          // `arrow::io::ReadableFile`
+#include <parquet/stream_reader.h>  // `parquet::StreamReader`
+#include <parquet/stream_writer.h>  // `parquet::StreamWriter`
 
 #include "ustore/db.h"
 #include "helpers/file.hpp"
-#include "helpers/linked_memory.hpp" // `linked_memory_t`
-#include "helpers/linked_array.hpp"  // `unintialized_vector_gt`
-#include "helpers/config_loader.hpp" // `config_loader_t`
-#include "ustore/cpp/ranges_args.hpp"   // `places_arg_t`
+#include "helpers/linked_memory.hpp"  // `linked_memory_t`
+#include "helpers/linked_array.hpp"   // `unintialized_vector_gt`
+#include "helpers/config_loader.hpp"  // `config_loader_t`
+#include "ustore/cpp/ranges_args.hpp" // `places_arg_t`
 
 /*********************************************************/
 /*****************   Structures & Consts  ****************/
@@ -692,7 +692,7 @@ struct key_from_pair_t {
     key_from_pair_t& operator=(pair_t const& pair) {
         *key_ptr = pair.collection_key.key;
         return *this;
-    };
+    }
 };
 
 struct key_iterator_t {
@@ -704,7 +704,7 @@ struct key_iterator_t {
 
     ustore_key_t* begin_;
     key_iterator_t(ustore_key_t* key) : begin_(key) {}
-    key_from_pair_t operator[](std::size_t idx) { return &begin_[idx]; };
+    key_from_pair_t operator[](std::size_t idx) { return &begin_[idx]; }
 };
 
 void ustore_sample(ustore_sample_t* c_ptr) {
