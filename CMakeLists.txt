@@ -289,8 +289,8 @@ endif()
 
 if(${USTORE_BUILD_CLI})
   get_target_property(flight_client_dependencies ustore_flight_client LINK_LIBRARIES)
-  add_executable(ustore src/tools/ustore_cli.cpp)
-  target_link_libraries(ustore ${flight_client_dependencies} ustore_flight_client)
+  add_executable(ustore src/tools/ustore_cli.cpp src/tools/dataset.cpp)
+  target_link_libraries(ustore ${flight_client_dependencies} simdjson fmt::fmt arrow::flight arrow::parquet arrow::arrow arrow::bundled ustore_flight_client)
 endif()
 
 # Enable warning and sanitization for our primary targets
