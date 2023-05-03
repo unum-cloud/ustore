@@ -15,10 +15,10 @@
 #include <nlohmann/json.hpp>
 
 #include "ustore/db.h"
-#include "ustore/cpp/ranges_args.hpp"   // `places_arg_t`
-#include "helpers/linked_array.hpp"  // `uninitialized_array_gt`
-#include "helpers/full_scan.hpp"     // `reservoir_sample_iterator`
-#include "helpers/config_loader.hpp" // `config_loader_t`
+#include "ustore/cpp/ranges_args.hpp" // `places_arg_t`
+#include "helpers/linked_array.hpp"   // `uninitialized_array_gt`
+#include "helpers/full_scan.hpp"      // `reservoir_sample_iterator`
+#include "helpers/config_loader.hpp"  // `config_loader_t`
 
 using namespace unum::ustore;
 using namespace unum;
@@ -232,6 +232,10 @@ void ustore_snapshot_create(ustore_snapshot_create_t* c_ptr) {
 
     *c.id = reinterpret_cast<std::size_t>(level_snapshot);
     db.snapshots[*c.id] = level_snapshot;
+}
+
+void ustore_snapshot_export(ustore_snapshot_export_t*) {
+    // TODO
 }
 
 void ustore_snapshot_drop(ustore_snapshot_drop_t* c_ptr) {

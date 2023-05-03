@@ -11,7 +11,7 @@
 #include <mutex>       // `std::mutex`
 #include <string_view> // `std::string_view`
 
-#include <fmt/core.h> // `fmt::format_to`
+#include <fmt/core.h>  // `fmt::format_to`
 #include <arrow/c/abi.h>
 #include <arrow/flight/client.h>
 #include <arrow/array/array_binary.h>
@@ -117,7 +117,7 @@ void ustore_read(ustore_read_t* c_ptr) {
     bool const same_named_collection = same_collection && same_collections_are_named(places.collections_begin);
     bool const request_only_presences = c.presences && !c.lengths && !c.values;
     bool const request_only_lengths = c.lengths && !c.values;
-    char const* partial_mode = request_only_presences //
+    char const* partial_mode = request_only_presences     //
                                    ? kParamReadPartPresences.c_str()
                                    : request_only_lengths //
                                          ? kParamReadPartLengths.c_str()
@@ -843,7 +843,7 @@ void ustore_paths_read(ustore_paths_read_t* c_ptr) {
     bool const same_named_collection = same_collection && same_collections_are_named(places.collections_begin);
     bool const request_only_presences = c.presences && !c.lengths && !c.values;
     bool const request_only_lengths = c.lengths && !c.values;
-    char const* partial_mode = request_only_presences //
+    char const* partial_mode = request_only_presences     //
                                    ? kParamReadPartPresences.c_str()
                                    : request_only_lengths //
                                          ? kParamReadPartLengths.c_str()
@@ -1492,6 +1492,28 @@ void ustore_snapshot_create(ustore_snapshot_create_t* c_ptr) {
     std::memcpy(c.id, id_ptr->body->data(), sizeof(ustore_snapshot_t));
 }
 
+void ustore_snapshot_export(ustore_snapshot_export_t* c_ptr) {
+    ustore_snapshot_export_t& c = *c_ptr;
+    return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+
+    rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
+
+    arf::Action action;
+    fmt::format_to(std::back_inserter(action.type),
+                   "{}?{}={}{}={}",
+                   kFlightSnapExport,
+                   kParamSnapshotID,
+                   c.id,
+                   kParamSnapshotExportPath,
+                   c.path);
+
+    std::lock_guard<std::mutex> lk(db.arena_lock);
+    arrow_mem_pool_t pool(db.arena);
+    arf::FlightCallOptions options = arrow_call_options(pool);
+    ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream = db.flight->DoAction(options, action);
+    return_error_if_m(maybe_stream.ok(), c.error, network_k, "Failed to act on Arrow server");
+}
+
 void ustore_snapshot_drop(ustore_snapshot_drop_t* c_ptr) {
     ustore_snapshot_drop_t& c = *c_ptr;
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
@@ -1499,7 +1521,7 @@ void ustore_snapshot_drop(ustore_snapshot_drop_t* c_ptr) {
     rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
 
     arf::Action action;
-    fmt::format_to(std::back_inserter(action.type), "{}?{}={}", kFlightSnapCreate, kParamSnapshotID, c.id);
+    fmt::format_to(std::back_inserter(action.type), "{}?{}={}", kFlightSnapDrop, kParamSnapshotID, c.id);
 
     std::lock_guard<std::mutex> lk(db.arena_lock);
     arrow_mem_pool_t pool(db.arena);

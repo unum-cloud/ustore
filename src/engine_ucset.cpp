@@ -28,17 +28,17 @@
 #include <ucset/consistent_set.hpp> // `ucset::consistent_set_gt`
 #include <ucset/locked.hpp>         // `ucset::locked_gt`
 
-#include <nlohmann/json.hpp>       // `nlohmann::json`
-#include <arrow/io/file.h>         // `arrow::io::ReadableFile`
-#include <parquet/stream_reader.h> // `parquet::StreamReader`
-#include <parquet/stream_writer.h> // `parquet::StreamWriter`
+#include <nlohmann/json.hpp>        // `nlohmann::json`
+#include <arrow/io/file.h>          // `arrow::io::ReadableFile`
+#include <parquet/stream_reader.h>  // `parquet::StreamReader`
+#include <parquet/stream_writer.h>  // `parquet::StreamWriter`
 
 #include "ustore/db.h"
 #include "helpers/file.hpp"
-#include "helpers/linked_memory.hpp" // `linked_memory_t`
-#include "helpers/linked_array.hpp"  // `unintialized_vector_gt`
-#include "helpers/config_loader.hpp" // `config_loader_t`
-#include "ustore/cpp/ranges_args.hpp"   // `places_arg_t`
+#include "helpers/linked_memory.hpp"  // `linked_memory_t`
+#include "helpers/linked_array.hpp"   // `unintialized_vector_gt`
+#include "helpers/config_loader.hpp"  // `config_loader_t`
+#include "ustore/cpp/ranges_args.hpp" // `places_arg_t`
 
 /*********************************************************/
 /*****************   Structures & Consts  ****************/
@@ -489,6 +489,10 @@ void ustore_snapshot_list(ustore_snapshot_list_t* c_ptr) {
 }
 
 void ustore_snapshot_create(ustore_snapshot_create_t*) {
+    // TODO
+}
+
+void ustore_snapshot_export(ustore_snapshot_export_t*) {
     // TODO
 }
 

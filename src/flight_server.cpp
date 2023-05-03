@@ -39,6 +39,7 @@ using sys_time_t = std::chrono::time_point<sys_clock_t>;
 inline static arf::ActionType const kActionColOpen {kFlightColCreate, "Find a collection descriptor by name."};
 inline static arf::ActionType const kActionColDrop {kFlightColDrop, "Delete a named collection."};
 inline static arf::ActionType const kActionSnapOpen {kFlightSnapCreate, "Find a snapshot descriptor by name."};
+inline static arf::ActionType const kActionSnapExport {kFlightSnapExport, "Snapshot export."};
 inline static arf::ActionType const kActionSnapDrop {kFlightSnapDrop, "Delete a named snapshot."};
 inline static arf::ActionType const kActionTxnBegin {kFlightTxnBegin, "Starts an ACID transaction and returns its ID."};
 inline static arf::ActionType const kActionTxnCommit {kFlightTxnCommit, "Commit a previously started transaction."};
@@ -522,8 +523,13 @@ class UStoreService : public arf::FlightServerBase {
     ar::Status ListActions( //
         arf::ServerCallContext const&,
         std::vector<arf::ActionType>* actions) override {
-        *actions =
-            {kActionColOpen, kActionColDrop, kActionSnapOpen, kActionSnapDrop, kActionTxnBegin, kActionTxnCommit};
+        *actions = {kActionColOpen,
+                    kActionColDrop,
+                    kActionSnapOpen,
+                    kActionSnapExport,
+                    kActionSnapDrop,
+                    kActionTxnBegin,
+                    kActionTxnCommit};
         return ar::Status::OK();
     }
 
@@ -593,8 +599,8 @@ class UStoreService : public arf::FlightServerBase {
             if (!params.collection_id)
                 return ar::Status::Invalid("Missing collection ID argument");
 
-            ustore_drop_mode_t mode =                               //
-                params.collection_drop_mode == kParamDropModeValues //
+            ustore_drop_mode_t mode =                                       //
+                params.collection_drop_mode == kParamDropModeValues         //
                     ? ustore_drop_vals_k
                     : params.collection_drop_mode == kParamDropModeContents //
                           ? ustore_drop_keys_vals_k
@@ -634,6 +640,29 @@ class UStoreService : public arf::FlightServerBase {
                 return ar::Status::ExecutionError(status.message());
 
             *results_ptr = return_scalar<ustore_snapshot_t>(snapshot_id);
+            return ar::Status::OK();
+        }
+
+        // Export a snapshot
+        if (is_query(action.type, kActionSnapExport.type)) {
+            if (params.snapshot_id)
+                return ar::Status::Invalid("Missing snapshot ID argument");
+
+            ustore_str_span_t c_export_path = nullptr;
+            ustore_snapshot_t c_snapshot_id = 0;
+            if (params.snapshot_id)
+                c_snapshot_id = parse_snap_id(*params.snapshot_id);
+
+            ustore_snapshot_export_t snapshot_export {.db = db_,
+                                                      .error = status.member_ptr(),
+                                                      .id = c_snapshot_id,
+                                                      .path = c_export_path};
+
+            ustore_snapshot_export(&snapshot_export);
+            if (!status)
+                return ar::Status::ExecutionError(status.message());
+
+            *results_ptr = return_empty();
             return ar::Status::OK();
         }
 
