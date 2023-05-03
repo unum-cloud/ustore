@@ -69,7 +69,7 @@ struct level_snapshot_t {
 };
 
 struct level_db_t {
-    std::unordered_map<ustore_snapshot_t, level_snapshot_t*> snapshots;
+    std::unordered_map<ustore_size_t, level_snapshot_t*> snapshots;
     std::unique_ptr<level_native_t> native;
     std::mutex mutex;
 };
@@ -250,8 +250,9 @@ void ustore_snapshot_drop(ustore_snapshot_drop_t* c_ptr) {
     db.native->ReleaseSnapshot(snap.snapshot);
     snap.snapshot = nullptr;
 
+    auto id = reinterpret_cast<ustore_size_t>(c.id);
     db.mutex.lock();
-    db.snapshots.erase(c.id);
+    db.snapshots.erase(id);
     db.mutex.unlock();
 }
 
