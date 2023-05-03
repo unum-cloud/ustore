@@ -767,7 +767,9 @@ void import_csv(import_at& c, std::shared_ptr<arrow::Table>& table) {
 
 #pragma region - Docs
 
-void parse_arrow_table_docs(ustore_docs_import_t& c, std::shared_ptr<arrow::Table> const& table, linked_memory_lock_t& arena) {
+void parse_arrow_table_docs(ustore_docs_import_t& c,
+                            std::shared_ptr<arrow::Table> const& table,
+                            linked_memory_lock_t& arena) {
 
     fields_t fields;
     ustore_size_t used_mem = 0;
@@ -1223,23 +1225,7 @@ void ustore_docs_import(ustore_docs_import_t* c_ptr) {
             parse_arrow_table_docs(c, table, arena);
         }
     }
-    catch (fmt::format_error const& ex) {
-        handle_exception(ex.what());
-        return_if_error_m(c.error);
-    }
-    catch (std::runtime_error const& ex) {
-        handle_exception(ex.what());
-        return_if_error_m(c.error);
-    }
     catch (std::exception const& ex) {
-        handle_exception(ex.what());
-        return_if_error_m(c.error);
-    }
-    catch (simdjson::simdjson_error const& ex) {
-        handle_exception(ex.what());
-        return_if_error_m(c.error);
-    }
-    catch (parquet::ParquetException const& ex) {
         handle_exception(ex.what());
         return_if_error_m(c.error);
     }
@@ -1380,23 +1366,7 @@ void ustore_docs_export(ustore_docs_export_t* c_ptr) {
         else if (pcn == ndjson_k)
             end_ndjson(handle);
     }
-    catch (fmt::format_error const& ex) {
-        handle_exception(ex.what());
-        return_if_error_m(c.error);
-    }
-    catch (std::runtime_error const& ex) {
-        handle_exception(ex.what());
-        return_if_error_m(c.error);
-    }
     catch (std::exception const& ex) {
-        handle_exception(ex.what());
-        return_if_error_m(c.error);
-    }
-    catch (simdjson::simdjson_error const& ex) {
-        handle_exception(ex.what());
-        return_if_error_m(c.error);
-    }
-    catch (parquet::ParquetException const& ex) {
         handle_exception(ex.what());
         return_if_error_m(c.error);
     }
@@ -1694,23 +1664,7 @@ void ustore_graph_import(ustore_graph_import_t* c_ptr) {
             parse_arrow_table_graph(c, task_count, table, arena);
         }
     }
-    catch (fmt::format_error const& ex) {
-        handle_exception(ex.what());
-        return_if_error_m(c.error);
-    }
-    catch (std::runtime_error const& ex) {
-        handle_exception(ex.what());
-        return_if_error_m(c.error);
-    }
     catch (std::exception const& ex) {
-        handle_exception(ex.what());
-        return_if_error_m(c.error);
-    }
-    catch (simdjson::simdjson_error const& ex) {
-        handle_exception(ex.what());
-        return_if_error_m(c.error);
-    }
-    catch (parquet::ParquetException const& ex) {
         handle_exception(ex.what());
         return_if_error_m(c.error);
     }
@@ -1821,23 +1775,7 @@ void ustore_graph_export(ustore_graph_export_t* c_ptr) {
         else if (pcn == ndjson_k)
             end_ndjson(handle);
     }
-    catch (fmt::format_error const& ex) {
-        handle_exception(ex.what());
-        return_if_error_m(c.error);
-    }
-    catch (std::runtime_error const& ex) {
-        handle_exception(ex.what());
-        return_if_error_m(c.error);
-    }
     catch (std::exception const& ex) {
-        handle_exception(ex.what());
-        return_if_error_m(c.error);
-    }
-    catch (simdjson::simdjson_error const& ex) {
-        handle_exception(ex.what());
-        return_if_error_m(c.error);
-    }
-    catch (parquet::ParquetException const& ex) {
         handle_exception(ex.what());
         return_if_error_m(c.error);
     }
