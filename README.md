@@ -89,7 +89,7 @@ Java
 
 <a href="https://www.youtube.com/watch?v=ybWeUf_hC7o">Youtube</a> intro • 
 <a href="https://discord.gg/4mxGrenbNt">Discord</a> chat • 
-Full <a href="https://unum.cloud/ustore">documentation</a>
+Full <a href="https://unum-cloud.github.io/ustore">documentation</a>
 
 <a href="https://discord.gg/4mxGrenbNt"><img src="https://img.shields.io/discord/1063947616615923875?label=discord"></a>
 &nbsp;&nbsp;
