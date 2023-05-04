@@ -1,108 +1,96 @@
-<h1 align="center">Universal Keys & Values</h1>
+<h1 align="center">UStore</h1>
 <h3 align="center">
-Modular Transactional NoSQL Database<br/>
-Bringing Zero-Copy Semantics into Storage<br/>
+Modular <sup>1</sup> Multi-Modal <sup>2</sup> Transactional <sup>3</sup> Database<br/>
+For Artificial Intelligence <sup>4</sup> and Semantic Search <sup>5</sup><br/>
 </h3>
 <br/>
 
 <p align="center">
-<a href="https://www.youtube.com/watch?v=ybWeUf_hC7o"><img height="25" src="https://github.com/unum-cloud/ukv/raw/main/assets/icons/youtube.svg" alt="Youtube"></a>
+<a href="https://www.youtube.com/watch?v=ybWeUf_hC7o"><img height="25" src="assets/icons/youtube.svg" alt="Youtube"></a>
 &nbsp;&nbsp;&nbsp;
-<a href="https://discord.gg/4mxGrenbNt"><img height="25" src="https://github.com/unum-cloud/ukv/raw/main/assets/icons/discord.svg" alt="Discord"></a>
+<a href="https://discord.gg/4mxGrenbNt"><img height="25" src="assets/icons/discord.svg" alt="Discord"></a>
 &nbsp;&nbsp;&nbsp;
-<a href="https://www.linkedin.com/company/unum-cloud/"><img height="25" src="https://github.com/unum-cloud/ukv/raw/main/assets/icons/linkedin.svg" alt="LinkedIn"></a>
+<a href="https://www.linkedin.com/company/unum-cloud/"><img height="25" src="assets/icons/linkedin.svg" alt="LinkedIn"></a>
 &nbsp;&nbsp;&nbsp;
-<a href="https://twitter.com/unum_cloud"><img height="25" src="https://github.com/unum-cloud/ukv/raw/main/assets/icons/twitter.svg" alt="Twitter"></a>
+<a href="https://twitter.com/unum_cloud"><img height="25" src="assets/icons/twitter.svg" alt="Twitter"></a>
 &nbsp;&nbsp;&nbsp;
-<a href="https://unum.cloud/post"><img height="25" src="https://github.com/unum-cloud/ukv/raw/main/assets/icons/blog.svg" alt="Blog"></a>
+<a href="https://unum.cloud/post"><img height="25" src="assets/icons/blog.svg" alt="Blog"></a>
 &nbsp;&nbsp;&nbsp;
-<a href="https://github.com/unum-cloud/ukv"><img height="25" src="https://github.com/unum-cloud/ukv/raw/main/assets/icons/github.svg" alt="GitHub"></a>
+<a href="https://github.com/unum-cloud/ustore"><img height="25" src="assets/icons/github.svg" alt="GitHub"></a>
 </p>
 
 <div align="center">
-<b>choose either</b>:
+1. supports:
 <a href="https://github.com/facebook/rocksdb">RocksDB</a>
 •
 <a href="https://github.com/google/leveldb">LevelDB</a>
 •
-UDisk
+<a href="https://github.com/unum-cloud/udisk">UDisk</a>
 •
-<a href="https://github.com/unum-cloud/ucset">UMem</a>
+<a href="https://github.com/unum-cloud/ucset">UCSet</a>
+<a href="backends">backends</a>
 <br/>
-<b>to store</b>:
-Blobs
+2. can store:
+<a href="#Blobs">Blobs</a>
 •
-Documents
+<a href="#Documents">Documents</a>
 •
-Graphs
+<a href="#Graphs">Graphs</a>
 •
-Vectors
+🔜 Features
 •
-Texts
+🔜 Texts
 <br/>
-<b>with drivers for</b>:
-C
+3: guarantees
+<a href="#Atomicity">Atomicity</a>
 •
-C++
+<a href="#Consistency">Consistency</a>
 •
-Python
+<a href="#Isolation">Isolation</a>
 •
-Java
-•
-GoLang
-•
-<a href="https://arrow.apache.org/">Apache Arrow</a>
+<a href="#Durability">Durability</a>
 <br/>
-<b>available through</b>:
-<a href="#installation">CMake</a>
-•
-<a href="https://pypi.org/project/ukv/">PyPI</a>
-•
-<a href="https://hub.docker.com/repository/docker/unum/ukv">Docker Hub</a>
+4: comes with
+Pandas
+and
+NetworkX
+API
+and 🔜
+PyTorch data-loaders
+<br/>
+5: brings
+vector-search
+integrated with
+<a href="https://github.com/unum-cloud/usearch">USearch</a>
+and
+<a href="https://github.com/unum-cloud/uform">UForm</a>
 </div>
 
 ---
 
-UKV is more than a database.
-It is a "build your database" toolkit and an open standard for NoSQL potentially-transactional databases, defining zero-copy binary interfaces for "Create, Read, Update, Delete" operations, or CRUD for short.
+<div align="center">
+<b>drivers</b>:
+Python
+•
+C
+•
+C++
+•
+GoLang
+•
+Java
+<br/>
+<b>packages</b>:
+<a href="https://pypi.org/project/ustore/">PyPI</a>
+•
+<a href="#cmake">CMake</a>
+•
+<a href="https://hub.docker.com/repository/docker/unum/ustore">Docker Hub</a>
 
-A [few simple C99 headers][ukv-c-headers] can link almost any underlying storage [engine](#engines) to many high-level language [bindings](#frontends), extending their support for binary string values to graphs, flexible-schema documents, and other [modalities](#modalities), aiming to replace MongoDB, Neo4J, Pinecone, and ElasticSearch with a single ACID-transactional system.
+<a href="https://www.youtube.com/watch?v=ybWeUf_hC7o">Youtube</a> intro • 
+<a href="https://discord.gg/4mxGrenbNt">Discord</a> chat • 
+Full <a href="https://unum.cloud/ustore">documentation</a>
 
-![UKV: Small Map](https://github.com/unum-cloud/ukv/raw/main/assets/charts/Intro.png)
-
-[Redis][redis], for example, provides RediSearch, RedisJSON, and RedisGraph with similar objectives.
-UKV does it better, allowing you to add your favorite Key-Value Stores (KVS), embedded, standalone, or sharded, such as [FoundationDB][foundationdb], multiplying its functionality.
-
----
-
-In the same way, you can add SDKs for other high-level languages or support for data types specific to your application that we haven't considered.
-This gives you the flexibility to iterate on different parts of this modular data lake without changing the business logic of your application, decoupling it from the underlying storage technology.
-
-![Documents Processing Performance Chart for UKV and MongoDB](https://github.com/unum-cloud/ukv/raw/main/assets/charts/PerformanceDocs.png)
-
-**Flexibility is essential, but so is performance**.
-We prefer to avoid dynamic memory allocations across all modalities and choose libraries that share that mindset.
-For instance, the reference implementation of Document collections uses `simdjson` to read and `yyjson` to update docs, storing them in RocksDB and serving them through Apache Arrow Flight RPC.
-Even such a surprisingly obvious combination often outperforms commercial DBMS products.
-The UDisk-based version obliterates them.
-
-![Binary Processing Performance Chart for UKV and MongoDB](https://github.com/unum-cloud/ukv/raw/main/assets/charts/PerformanceBinary.png)
-
-Modern persistent IO on high-end servers can exceed 120 GB/s per socket when built on user-space drivers like [SPDK][spdk].
-This is close to the real-world throughput of eight-channel DDR4 memory.
-Making even a single copy of data on the hot path would slash that performance.
-Processing hundreds of terabytes per node, we couldn't have used LevelDB, RocksDB, or even their interfaces for our purposes to avoid dynamic polymorphism and any constraints on memory allocation strategies.
-That is how UKV began, but hopefully, it can grow further, advancing the storage ecosystem the same way the standardization of [BLAS][blas] has pushed the frontiers of numerical compute and, later, AI.
-
----
-
-<p align="center">
-Video intro on <a href="https://www.youtube.com/watch?v=ybWeUf_hC7o">Youtube</a> • 
-Communications on <a href="https://discord.gg/4mxGrenbNt">Discord</a> • 
-Full <a href="https://unum.cloud/ukv">documentation</a>
-</a>
-
-<p align="center">
 <a href="https://discord.gg/4mxGrenbNt"><img src="https://img.shields.io/discord/1063947616615923875?label=discord"></a>
 &nbsp;&nbsp;
 <a href="https://www.linkedin.com/company/unum-cloud/"><img src="https://img.shields.io/badge/linkedin-connect_with_us-0a66c2.svg?"/></a>
@@ -111,124 +99,265 @@ Full <a href="https://unum.cloud/ukv">documentation</a>
 &nbsp;&nbsp;
 <a href="https://zenodo.org/badge/latestdoi/502647695"><img src="https://zenodo.org/badge/502647695.svg" alt="DOI"></a>
 &nbsp;&nbsp;
-<a href="https://www.github.com/unum-cloud/"><img src="https://img.shields.io/github/issues-closed-raw/unum-cloud/ukv?"/></a>
+<a href="https://www.github.com/unum-cloud/"><img src="https://img.shields.io/github/issues-closed-raw/unum-cloud/ustore?"/></a>
 &nbsp;&nbsp;
-<a href="https://www.github.com/unum-cloud/"><img src="https://img.shields.io/github/stars/unum-cloud/ukv?"/></a>
+<a href="https://www.github.com/unum-cloud/"><img src="https://img.shields.io/github/stars/unum-cloud/ustore?"/></a>
 &nbsp;&nbsp;
-<a href="#"><img src="https://img.shields.io/github/workflow/status/unum-cloud/ukv/Build"/></a>
-</p>
+<a href="#"><img src="https://img.shields.io/github/workflow/status/unum-cloud/ustore/Build"/></a>
+</div>
 
----
+## Quickstart
 
-- [Basic Use Cases](#basic-use-cases)
-- [Features](#features)
-- [Available Backends](#available-backends)
-  - [Engines](#engines)
-  - [Modalities](#modalities)
-- [Available Frontends](#available-frontends)
-- [Documentation](#documentation)
-- [Installation](#installation)
-- [Getting Started](#getting-started)
-- [Testing](#testing)
-- [Benchmarks](#benchmarks)
-- [Tooling](#tooling)
-- [Roadmap](#roadmap)
-- [Contributing](#contributing)
-- [Frequently Asked Questions](#frequently-asked-questions)
-
----
-
-## Basic Use Cases
-
-1. Getting a Python, GoLang, or Java wrapper for vanilla RocksDB or LevelDB.
-2. Serving them via Apache Arrow Flight RPC to Spark, Kafka, or PyTorch.
-3. Embedded Document and Graph DB that will avoid networking overheads.
-4. Tiering DBMS between in-memory and persistent backends under one API.
-
-Already excited?
-Give it a try.
-It is as easy as using `dict` in Python.
+Installing UStore is a breeze, and the usage is about as simple as a Python `dict`.
 
 ```python
 $ pip install ukv
 $ python
 
->>> import ukv.umem as embedded
->>> db = embedded.DataBase()
->>> db.main[42] = 'Hi'
+from ustore import ucset
+
+db = ucset.DataBase()
+db.main[42] = 'Hi'
 ```
 
-<details>
-  <summary>Same with persisted RocksDB</summary>
-  
-  ```python
-  >>> import ukv.rocksdb as embedded
-  >>> db = embedded.DataBase('/tmp/ukv/rocksdb/')
-  ```
-</details>
-
-<details>
-  <summary>Same with an arbitrary standalone UKV distribution</summary>
-  
-  ```python
-  >>> import ukv.flight_client as remote
-  >>> db = remote.DataBase('grpc://0.0.0.0:38709')
-  ```
-</details>
-
-Tabular, graph and other operations should also be familiar to anyone using [Pandas][pandas] or [NetworkX][networkx].
-Function calls would look identical, but the underlying implementation may be addressing hundreds of terabytes of data placed somewhere in persistent memory on a remote machine.
+We have just create an in-memory embedded transactional database and added one entry in its `main` collection.
+Would you prefer that data on disk?
+Change one line.
 
 ```python
->>> db = ukv.DataBase()
->>> net = db.main.graph
->>> net.add_edge(1, 2)
->>> assert net.has_edge(1, 2)
->>> assert net.has_node(1) and net.has_node(2)
->>> assert net.number_of_edges(1, 2) == 1
+from ustore import rocksdb
+
+db = rocksdb.DataBase('/some-folder/')
 ```
 
-## Features
+Would you prefer to connect to a remote UStore server?
+UStore comes with an Apache Arrow Flight RPC interface!
 
-A Key Value Store is generally an associative container with sub-linear search time.
-Every DBMS uses such abstractions for primary keys in each collection and indexes.
-But UKV has more to offer.
-Especially to Machine Learning practitioners.
+```python
+from ustore import flight_client
 
-<table width="100%">
-<td style="text-align: center">
+db = flight_client.DataBase('grpc://0.0.0.0:38709')
+```
 
-<ul>
-<li> <b>ACID Transactions</b> across collections  </li>
-<li> Persistent <b>Snapshots</b> 🔜 v0.5</li>
-<li> Operation-level <b>WATCH</b>-es  </li>
-<li> <b>BSON, JSON, MessagePack</b> support  </li>
-<li> <b>JSON Patches</b> & Merge-Patches  </li>
-<li> <b>JSON Pointers</b> Addressing  </li>
-</ul>
+Are you storing [NetworkX][networkx]-like `MultiDiGraph`?
+Or [Pandas][pandas]-like `DataFrame`?
 
-</td>
-<td style="text-align: center">
+```python
+db = rocksdb.DataBase()
 
-<ul>
-<li> Native Apache <b>Arrow</b> format support </li>
-<li> <b>Arrow Flight RPC</b> server implementation </li>
-<li> <b>Bulk Scans</b>, Random <b>Sampling</b> </li>
-<li> <b>Pandas</b> Tabular interface </li>
-<li> <b>NetworkX</b> Graph interface </li>
-<li> <b>PyTorch</b> & <b>TensorFlow</b> Data-Loaders 🔜 v0.6</li>
-</ul>
-</td>
-</table>
+users_table = db['users'].table
+users_table.merge(pd.DataFrame([
+    {'id': 1, 'name': 'Lex', 'lastname': 'Fridman'},
+    {'id': 2, 'name': 'Joe', 'lastname': 'Rogan'},
+]))
 
-## Available Backends
+friends_graph = db['friends'].graph
+friends_graph.add_edge(1, 2)
 
-Any backend can be defined by three parameters.
-First, the Engine, being a Key-Value Store for the serialized representations.
-Second, implementations of Modalities, being various serialization and indexing approaches for structured data.
-Third, a Distribution form, such as the implementation of some web-protocol for communication with the outside world.
+assert friends_graph.has_edge(1, 2) and \
+    friends_graph.has_node(1) and \
+    friends_graph.number_of_edges(1, 2) == 1
+```
 
-![UKV: Backend](https://github.com/unum-cloud/ukv/raw/main/assets/charts/Backend.png)
+Function calls may look identical, but the underlying implementation can be addressing hundreds of terabytes of data placed somewhere in persistent memory on a remote machine.
+
+---
+
+Is someone else concurrently updating those collections?
+Bundle your operations to guarantee consistency!
+
+```python
+db = rocksdb.DataBase()
+with db.transact() as txn:
+    txn['users'].table.merge(...)
+    txn['friends'].graph.add_edge(1, 2)
+```
+
+So far we have only covered the tip of the UStore.
+You may use it to...
+
+1. Get C99, Python, GoLang, or Java wrappers for RocksDB or LevelDB.
+2. Serve them via Apache Arrow Flight RPC to Spark, Kafka, or PyTorch.
+3. Store Document and Graphs in embedded DB, avoiding networking overheads.
+4. Tier DBMS between in-memory and persistent backends under one API.
+
+But UStore can more.
+Here is the map:
+
+- [Basic Usage](#basic-usage):
+  - [Modalities](#modalities)
+    - Storing [Blobs](#blobs)
+    - Storing [Documents](#documents)
+    - Storing [Graphs](#graphs)
+    - Storing [Vectors](#vectors)
+  - [Drivers](#drivers)
+    - For [Python ∆][ustore-python]
+    - For [C ∆][ustore-c]
+    - For [C++ ∆][ustore-cpp]
+    - For [GoLang ∆][ustore-golang]
+    - For [Java ∆][ustore-java]
+  - [AI Usecases ∆][ustore-ai]
+  - [Frequently Questioned Answers](#frequently-questioned-answers)
+  - [Frequently Asked Questions](#frequently-asked-questions)
+- [Advanced Usage](#advanced-usage) for production, performance tuning, and administration:
+  - [Engines](#engines)
+  - [Transactions](#transactions)
+    - [Atomicity](#atomicity)
+    - [Consistency](#consistency)
+    - [Isolation](#isolation)
+    - [Durability](#durability)
+  - [Containers and Cloud Deployments](#containers-and-cloud-deployments)
+  - [Configuration](#configuration)
+    - [Key Sizes](#key-sizes)
+    - [Value Sizes](#value-sizes)
+  - [Tools ∆][ustore-tools]
+  - [Tests ∆][ustore-tests]
+  - [Benchmarks ∆][ustore-benchmarks]
+- For contributors and advanced users looking to fork, extend, wrap, or distribute and, potentially, monetize alternative builds of UStore:
+  - [Architecture and Dependencies ∆][ustore-architecture]
+  - [Roadmap ∆][ustore-roadmap]
+  - [Contributing ∆][ustore-contributing]
+
+[ustore-c]: https://unum.cloud/docs/ustore/c
+[ustore-cpp]: https://unum.cloud/docs/ustore/cpp
+[ustore-python]: https://unum.cloud/docs/ustore/python
+[ustore-java]: https://unum.cloud/docs/ustore/java
+[ustore-golang]: https://unum.cloud/docs/ustore/golang
+
+[ustore-tests]: https://unum.cloud/docs/ustore/tests
+[ustore-benchmarks]: https://unum.cloud/docs/ustore/benchmarks
+[ustore-tools]: https://unum.cloud/docs/ustore/tools
+
+[ustore-ai]: https://unum.cloud/docs/ustore/ai
+[ustore-flight]: https://unum.cloud/docs/ustore/flight
+
+[ustore-architecture]: https://unum.cloud/docs/ustore/architecture
+[ustore-roadmap]: https://github.com/orgs/unum-cloud/projects/2
+[ustore-contributing]: https://unum.cloud/docs/ustore/contributing
+
+[ustore-c-headers]: https://github.com/unum-cloud/ustore/tree/main/include/ustore
+[ustore-new-drivers]: https://github.com/unum-cloud/ustore/c#implementing-a-new-language-binding
+[ustore-new-engine]: https://github.com/unum-cloud/ustore/c#implementing-a-new-engine
+
+
+---
+
+## Basic Usage
+
+UStore is intended not just as database, but as "build your database" toolkit and an open standard for NoSQL potentially-transactional databases, defining zero-copy binary interfaces for "Create, Read, Update, Delete" operations, or CRUD for short.
+
+A [few simple C99 headers][ustore-c-headers] can link almost any underlying storage [engine](#engines) to numerous high-level language [drivers](#drivers), extending their support for binary string values to graphs, flexible-schema documents, and other [modalities](#modalities), aiming to replace MongoDB, Neo4J, Pinecone, and ElasticSearch with a single ACID-transactional system.
+
+![UStore: Small Map](assets/charts/Intro.png)
+
+[Redis][redis], for example, provides RediSearch, RedisJSON, and RedisGraph with similar objectives.
+UStore does it better, allowing you to add your favorite Key-Value Stores (KVS), embedded, standalone, or sharded, such as [FoundationDB][foundationdb], multiplying its functionality.
+
+### Modalities
+
+#### Blobs
+
+Binary Large Objects can be placed inside UStore.
+The performance will vastly vary depending on the used underlying technology.
+The in-memory UCSet will be the fastest, but the least suited for larger objects.
+The persistent UDisk, when properly configured, can entirely bypass the the Linux kernel, including the filesystem layer, directly addressing block devices.
+
+![Binary Processing Performance Chart for UDisk and RocksDB](assets/charts/PerformanceBinary.png)
+
+Modern persistent IO on high-end servers can exceed 100 GB/s per socket when built on user-space drivers like [SPDK][spdk].
+This is close to the real-world throughput of high-end RAM and unlocks new, uncommon to databases use cases.
+One may now put a Gigabyte-sized video file in an ACID-transactional database, right next to its metadata, instead of using a separate object store, like MinIO.
+
+#### Documents
+
+JSON is the most commonly used document format these days.
+UStore document collections support JSON, as well as MessagePack, and BSON, used by MongoDB.
+
+![Documents Processing Performance Chart for UStore and MongoDB](assets/charts/PerformanceDocs.png)
+
+UStore doesn't scale horizontally yet, but provides much higher single-node performance, and has almost linear vertical scalability on many-core systems thanks to the open-source `simdjson` and `yyjson` libraries.
+Moreover, to interact with data, you don't need a custom query language like MQL.
+Instead we prioritize open RFC standards to truly avoid vendor locks:
+
+- [JSON Pointer: RFC 6901][pointer] to address nested fields.
+- [JSON Patch: RFC 6902][patch] for field-level updates.
+- [JSON MergePatch: RFC 7386][merge-patch] for document-level updates.
+
+[pointer]: https://datatracker.ietf.org/doc/html/rfc6901
+[patch]: https://datatracker.ietf.org/doc/html/rfc6902
+[merge-patch]: https://datatracker.ietf.org/doc/html/rfc7386
+
+#### Graphs
+
+Modern Graph databases, like Neo4J, struggle with large workloads.
+They require too much RAM, and their algorithms observe data one entry at a time.
+We optimize on both fronts:
+
+- Using delta-coding to compress inverted indexes.
+- Updating classical graph algorithms for high-latency storage to process graphs in Batch-like or Edge-centric fashion.
+
+#### Vectors
+
+Feature Stores and Vector Databases, like Pinecone, Milvus, and USearch provide standalone indexes for vector search.
+UStore implements it as a separate modality, on par with Documents and Graphs.
+Features:
+
+- 8-bit integer quantization.
+- 16-bit floating-point quantization.
+- Cosine, Inner Product, and Euclidean metrics.
+
+### Drivers
+
+UStore for Python and for C++ look very different.
+Our Python SDK mimics other Python libraries - [Pandas][pandas] and [NetworkX][networkx].
+Similarly, C++ library provides the interface C++ developers expect.
+
+![UStore: Frontends](assets/charts/Frontend.png)
+
+As we know, people use different languages for different purposes.
+Some C-level functionality isn't implemented for some languages.
+Either because there was no demand for it, or as we haven't gotten to it yet.
+
+| Name                        | Transact | Collections | Batches | Docs  | Graphs | Copies |
+| :-------------------------- | :------: | :---------: | :-----: | :---: | :----: | :----: |
+| [C99 Standard][ustore-c]    |    ✓     |      ✓      |    ✓    |   ✓   |   ✓    |   0    |
+|                             |          |             |         |       |        |        |
+| [C++ SDK][ustore-cpp]       |    ✓     |      ✓      |    ✓    |   ✓   |   ✓    |   0    |
+| [Python SDK][ustore-python] |    ✓     |      ✓      |    ✓    |   ✓   |   ✓    |  0-1   |
+| [GoLang SDK][ustore-golang] |    ✓     |      ✓      |    ✓    |   ✗   |   ✗    |   1    |
+| [Java SDK][ustore-java]     |    ✓     |      ✓      |    ✗    |   ✗   |   ✗    |   1    |
+|                             |          |             |         |       |        |        |
+| Arrow Flight API            |    ✓     |      ✓      |    ✓    |   ✓   |   ✓    |  0-2   |
+
+Some frontends here have entire ecosystems around them!
+[Apache Arrow Flight][flight] API, for instance, has its own drivers for  C, C++, C#, Go, Java, JavaScript, Julia, MATLAB, Python, R, Ruby and Rust.
+
+![UStore: Frontends](assets/charts/Arrow.png)
+
+### Frequently Questioned Answers
+
+- Keys are 64-bit integers, by default. [Why?](#key-sizes)
+- Values are binary strings under 4 GB long. [Why?](#value-sizes)
+
+### Frequently Asked Questions
+
+- Transactions are ACI(D) by-default. [What does it mean?](#transactions)
+- Why not use LevelDB or RocksDB interface? [Answered][ustore-vs-rocks]
+- Why not use SQL, MQL or CYPHER? [Answered][ustore-vs-sql]
+- Does UStore support Time-To-Live? [Answered][ustore-ttl]
+- Does UStore support compression? [Answered][ustore-compression]
+- Does UStore support queues? [Answered][ustore-queues]
+- How can I add drivers for language X? [Answered][ustore-new-drivers]
+- How can I add database X as an engine? [Answered][ustore-new-engine]
+
+[ustore-vs-rocks]: https://unum.cloud/docs/ustore/related#leveldb-rocksdb
+[ustore-vs-sql]: https://unum.cloud/docs/ustore/related#sql-mql-cypher
+
+[ustore-ttl]: https://github.com/unum-cloud/ustore/discussions/230
+[ustore-compression]: https://github.com/unum-cloud/ustore/discussions/232
+[ustore-queues]: https://github.com/unum-cloud/ustore/discussions/228
+
+## Advanced Usage
 
 ### Engines
 
@@ -237,7 +366,7 @@ Historically, LevelDB was the first one.
 RocksDB then improved on functionality and performance.
 Now it serves as the foundation for half of the DBMS startups.
 
-|                          | LevelDB | RocksDB  |  UDisk  |  UMem   |
+|                          | LevelDB | RocksDB  |  UDisk  |  UCSet  |
 | :----------------------- | :-----: | :------: | :-----: | :-----: |
 | **Speed**                |   1x    |    2x    | **10x** | **30x** |
 | **Persistent**           |    ✓    |    ✓     |    ✓    |    ✗    |
@@ -253,225 +382,185 @@ Now it serves as the foundation for half of the DBMS startups.
 | Compatibility            |   Any   |   Any    |  Linux  |   Any   |
 | Maintainer               | Google  | Facebook |  Unum   |  Unum   |
 
-UMem and UDisk are both designed and maintained by Unum.
+UCSet and UDisk are both designed and maintained by Unum.
 Both are feature-complete, but the most crucial feature our alternatives provide is performance.
 Being fast in memory is easy.
-The core logic of UMem can be found in the templated header-only <code class="docutils literal notranslate"><a href="https://github.com/unum-cloud/ucset" class="pre">ucset</a></code> library.
+The core logic of UCSet can be found in the templated header-only <code class="docutils literal notranslate"><a href="https://github.com/unum-cloud/ucset" class="pre">ucset</a></code> library.
 
 Designing UDisk was a much more challenging 7-year long endeavour.
-It included inventing new tree-like structures, implementing partial kernel bypass with `io_uring`, complete bypass with `SPDK`, GPU acceleration, and even a custom internal filesystem.
+It included inventing new tree-like structures, implementing partial kernel bypass with `io_uring`, complete bypass with `SPDK`, CUDA GPU acceleration, and even a custom internal filesystem.
 **UDisk is the first engine to be designed from scratch with parallel architectures and kernel-bypass in mind**.
 
-> [Jump to Benchmarks](#benchmarks).
+### Transactions
 
-### Modalities
+#### Atomicity
 
-The same DBMS can contain multiple collections.
-Each collection can store BLOBs or any modality of structured data.
-Data of different modalities can't be stored in the same collection.
-ACID transactions across modalities are supported.
+Atomicity is always guaranteed.
+Even on non-transactional writes - either all updates pass or all fail.
 
-|                           |                     Documents                      |                 Graphs                 |                       Vectors                        |
-| :------------------------ | :------------------------------------------------: | :------------------------------------: | :--------------------------------------------------: |
-| Values                    |           JSON-like Hierarchical Objects           |       Labeled Directed Relations       |             High-Dimensional Embeddings              |
-| Specialized Functionality | JSON ⇔ BSON ⇔ MessagePack, Sub-Document Operations | Gather Neighbors, Count Vertex Degrees | Quantization, K-Approximate Nearest-Neighbors Search |
-| Examples                  |              MongoDB, Postgres, MySQL              |           Neo4J, TigerGraph            |               Elastic Search, Pinecone               |
+#### Consistency
 
-One of our core objectives was to select the minimal core set of functions for each modality.
-In that case, implementing them can be easy for any passionate developer.
-If the low-level interfaces are flexible, making the high-level interfaces rich is easy.
+Consistency is implemented in the strictest possible form - ["Strict Serializability"][ss] meaning that:
 
-## Available Frontends
+- reads are ["Serializable"][s],
+- writes are ["Linearizable"][l].
 
-UKV for Python and for C++ look very different.
-Our Python SDK mimics other Python libraries - [Pandas][pandas] and [NetworkX][networkx].
-Similarly, C++ library provides the interface C++ developers expect.
+The default behavior, however, can be tweaked at the level of specific operations.
+For that the `::ustore_option_transaction_dont_watch_k` can be passed to `ustore_transaction_init()` or any transactional read/write operation, to control the consistency checks during staging.
 
-![UKV: Frontends](https://github.com/unum-cloud/ukv/raw/main/assets/charts/Frontend.png)
+|                                      |     Reads     |    Writes     |
+| :----------------------------------- | :-----------: | :-----------: |
+| Head                                 | Strict Serial | Strict Serial |
+| Transactions over [Snapshots][snap]  |    Serial     | Strict Serial |
+| Transactions w/out [Snapshots][snap] | Strict Serial | Strict Serial |
+| Transactions w/out Watches           | Strict Serial |  Sequential   |
 
-As we know, people use different languages for different purposes.
-Some C-level functionality isn't implemented for some languages.
-Either because there was no demand for it, or as we haven't gotten to it yet.
+If this topic is new to you, please check out the [Jepsen.io][jepsen] blog on consistency.
 
-| Name             | Transact | Collections | Batches | Docs  | Graphs | Copies |
-| :--------------- | :------: | :---------: | :-----: | :---: | :----: | :----: |
-| C Standard       |    ✓     |      ✓      |    ✓    |   ✓   |   ✓    |   0    |
-|                  |          |             |         |       |        |        |
-| C++ SDK          |    ✓     |      ✓      |    ✓    |   ✓   |   ✓    |   0    |
-| Python SDK       |    ✓     |      ✓      |    ✓    |   ✓   |   ✓    |  0-1   |
-| GoLang SDK       |    ✓     |      ✓      |    ✓    |   ✗   |   ✗    |   1    |
-| Java SDK         |    ✓     |      ✓      |    ✗    |   ✗   |   ✗    |   1    |
-|                  |          |             |         |       |        |        |
-| Arrow Flight API |    ✓     |      ✓      |    ✓    |   ✓   |   ✓    |  0-2   |
+[ss]: https://jepsen.io/consistency/models/strict-serializable
+[s]: https://jepsen.io/consistency/models/serializable
+[l]: https://jepsen.io/consistency/models/linearizable
+[jepsen]: https://jepsen.io/consistency
+[snap]: #snapshots
 
-Some frontends here have entire ecosystems around them!
-[Apache Arrow Flight][flight] API, for instance, has its own bindings for  C, C++, C#, Go, Java, JavaScript, Julia, MATLAB, Python, R, Ruby and Rust.
+#### Isolation
 
-![UKV: Frontends](https://github.com/unum-cloud/ukv/raw/main/assets/charts/Arrow.png)
+|                                      | Reads | Writes |
+| :----------------------------------- | :---: | :----: |
+| Transactions over [Snapshots][snap]  |   ✓   |   ✓    |
+| Transactions w/out [Snapshots][snap] |   ✗   |   ✓    |
 
-## Documentation
+#### Durability
 
-For guidance on installation, development, deployment, and administration, see our [documentation](https://unum.cloud/ukv).
+Durability doesn't apply to in-memory systems by definition.
+In hybrid or persistent systems we prefer to disable it by default.
+Almost every DBMS that builds on top of KVS prefers to implement its own durability mechanism.
+Even more so in distributed databases, where three separate Write Ahead Logs may exist:
 
-## Installation
+- in KVS,
+- in DBMS,
+- in Distributed Consensus implementation.
+
+If you still need durability, flush writes on commits with an optional flag.
+In the [C driver][ustore-c] you would call `ustore_transaction_commit()` with the `::ustore_option_write_flush_k` flag.
+
+### Containers and Cloud Deployments
 
 The entire DBMS fits into a sub 100 MB Docker image.
 Run the following script to pull and run the container, exposing [Apache Arrow Flight][flight] server on the port `38709`.
 Client SDKs will also communicate through that same port, by default.
 
 ```sh
-docker run -d --rm --name ukv-test -p 38709:38709 unum/ukv
+docker run -d --rm --name ustore-test -p 38709:38709 unum/ustore
 ```
 
-For C/C++ clients and for the embedded distribution of UKV, CMake is the default form of installation.
-It may require installing Arrow separately, if you want client-server communication.
-
-```cmake
-FetchContent_Declare(
-    ukv
-    GIT_REPOSITORY https://github.com/unum-cloud/ukv.git
-    GIT_SHALLOW TRUE
-)
-FetchContent_MakeAvailable(ukv)
-include_directories(${ukv_SOURCE_DIR}/include)
-```
-
-After that, you only need to choose linking target, such as `ukv_embedded_rocksdb`, `ukv_embedded_umem`, `ukv_flight_client`, or something else.
-
-For Python users, it is the classical:
+The default configuration file can be retrieved with:
 
 ```sh
-pip install ukv
+cat /var/lib/ustore/config.json
 ```
 
-Which will bring all the libraries packed into a single wheel: `ukv.umem`, `ukv.rocksdb`, `ukv.leveldb`, `ukv.flight_client`.
+The simplest way to connect and test would be the following command:
 
-> [Read full installation guide in our docs here][ukv-install].
+```sh
+python ...
+```
 
-## Getting Started
+Pre-packaged UStore images are available on multiple platforms:
 
-- [Using the C Standard Directly][ukv-c-tutor]
-  - Most Flexible!
-  - Most Performant!
-  - Comparatively verbose.
-- [Using C++ SDK][ukv-cpp-tutor]
-- [Using Python SDK][ukv-python-tutor]
-- [Using Java SDK][ukv-java-tutor]
-- [Using GoLang SDK][ukv-golang-tutor]
-- [Using Arrow Flight API][ukv-flight-tutor]
+- Docker Hub image: [v0.7](https://hub.docker.com/r/unum/ustore).
+- RedHat OpenShift operator: [v0.7](https://github.com/itroyano/ustore-operator).
+- Amazon AWS Marketplace images:
+  - Free Community Edition: [v0.4](https://aws.amazon.com/marketplace/pp/prodview-ls2zmt5jkhipc?sr=0-1&ref_=beagle&applicationId=AWSMPContessa).
+  - In-Memory Edition: 🔜
+  - Performance Edition: 🔜
 
-## Testing
+Don't hesitate to commercialize and redistribute UStore.
 
-We split tests into 4 categories:
+### Configuration
 
-1. Compilation: Validate meta-programming.
-2. API: Prevent passing incompatible function arguments.
-3. Unit: Short and cover most of the functionality.
-4. **Stress**: Very long and multithreaded.
+Tuning databases is as much art as it is science.
+Projects like RocksDB provide dozens of knobs to optimize the behavior.
+We allow forwarding specialized configuration files to the underlying engine.
 
-All unit tests are packed into a single executable to simplify running it during development.
-Every backend produces one such executable.
-The in-memory embedded variant is generally used for debugging any non-engine level logic.
+```json
+{
+    "version": "1.0",
+    "directory": "./tmp/"
+}
+```
 
-The stress tests, on the other hand, can run for days and simulate millions of concurrent transactions, ensuring the data remains intact.
-Any additions, especially to the stress tests, will be highly welcomed!
+We also have a simpler procedure, which would be enough for 80% of users.
+That can be extended to utilize multiple devices or directories, or to forward a specialized engine config.
 
-> [Read full testing guide in our docs here][ukv-tests].
+```json
+{
+    "version": "1.0",
+    "directory": "/var/lib/ustore",
+    "data_directories": [
+        {
+            "path": "/dev/nvme0p0/",
+            "max_size": "100GB"
+        },
+        {
+            "path": "/dev/nvme1p0/",
+            "max_size": "100GB"
+        }
+    ],
+    "engine": {
+        "config_file_path": "./engine_rocksdb.ini",
+    }
+}
+```
 
-## Benchmarks
+Database collections can also be configured with JSON files.
 
-It is always best to implement an application-specific benchmark, as every use case is different.
-Still, for the binary layer logic, we have built a dedicated project to evaluate persistent data structures - [UCSB][ucsb].
-It doesn't depend on UKV and uses native interfaces of all the engines to put everyone in the same shoes.
+#### Key Sizes
 
-All engines were benchmarked for weeks using [UCSB][ucsb].
-We have already published the results for BLOB-layer abstractions for [10 TB][ucsb-10], and, previously, [1 TB][ucsb-1] collections.
+As of the current version, 64-bit signed integers are used.
+It allows unique keys in the range from `[0, 2^63)`.
+128-bit builds with UUIDs are coming, but variable-length keys are highly discouraged.
+Why so?
 
-For more advanced modality-specific workloads, we have the following benchmarks provided in this repo:
+Using variable length keys forces numerous limitations on the design of a Key-Value store.
+Firstly, it implies slow character-wise comparisons — a performance killer on modern hyperscalar CPUs.
+Secondly, it forces keys and values to be joined on a disk to minimize the needed metadata for navigation.
+Lastly, it violates our simple logical view of KVS as a "persistent memory allocator", putting a lot more responsibility on it.
 
-- **Twitter**. It takes the `.ndjson` dump of their <code class="docutils literal notranslate"><a href="https://developer.twitter.com/en/docs/twitter-api/v1/tweets/sample-realtime/overview" class="pre">GET statuses/sample</a></code> API and imports it into the Documents collection. We then measure random-gathers' speed at document-level, field-level, and multi-field tabular exports. We also construct a graph from the same data in a separate collection. And evaluate Graph construction time and traversals from random starting points.
-- **Tabular**. Similar to the previous benchmark, but generalizes it to arbitrary datasets with some additional context. It supports Parquet and CSV input files. 🔜
-- **Vector**. Given a memory-mapped file with a big matrix, builds an Approximate Nearest Neighbors Search index from the rows of that matrix. Evaluates both construction and query time. 🔜
+---
 
-We are working hard to prepare a comprehensive overview of different parts of UKV compared to industry-standard tools.
-On both our hardware and most common instances across public clouds.
+The recommended approach to dealing with string keys is:
 
-> [Read full benchmarking guide in our docs here][ukv-benchmarks].
+1. Choose a mechanism to generate unique integer keys (UID). Ex: monotonically increasing values.
+2. Use ["paths"](#paths) modality build up a persistent hash map of strings to UIDs.
+3. Use those UIDs to address the rest of the data in binary, document and graph modalities.
 
-## Tooling
+This will result in a single conversion point from string to integer representations and will keep most of the system snappy and the C-level interfaces simpler than they could have been.
 
-Tools are built on top of the UKV interface and aren't familiar with the underlying backend implementation.
-They are meant to simplify DevOps and DBMS management.
-Following tools are currently in the works.
+#### Value Sizes
 
-- Bulk dataset imports and exports for industry-standard Parquet, NDJSON and CSV files. 🔜
-- Rolling backups and replication. 🔜
-- Visualization tools and dashboards. 🔜
-
-> [Read full tooling guide in our docs here][ukv-tools].
+We can only address 4 GB values or smaller as of the current now.
+Why?
+Key-Value Stores are generally intended for high-frequency operations.
+Frequently (thousands of times each second), accessing and modifying 4 GB and larger files is impossible on modern hardware.
+So we stick to smaller length types, making using Apache Arrow representation slightly easier and allowing the KVS to compress indexes better.
 
 ## Roadmap
 
-Our [development roadmap][ukv-roadmap] is public and is hosted within the GitHub repository.
+Our [development roadmap][ustore-roadmap] is public and is hosted within the GitHub repository.
 Upcoming tasks include:
 
-- Builds for Arm, MacOS, Windows.
-- Richer bindings for GoLang, Java, JavaScript.
-- Improved Vector Search.
-- Collection-level configuration.
-- Owning and non-owning C++ wrappers.
-- Document-schema validation.
-- Persistent Snapshots.
-- Continuous Replication.
-- Horizontal Scaling.
+- [x] Builds for Arm, MacOS.
+- [x] Persistent Snapshots.
+- [ ] Continuous Replication.
+- [ ] Document-schema validation.
+- [ ] Richer drivers for GoLang, Java, JavaScript.
+- [ ] Improved Vector Search.
+- [ ] Collection-level configuration.
+- [ ] Owning and non-owning C++ wrappers.
+- [ ] Horizontal Scaling.
 
-> [Read full roadmap in our docs here][ukv-details].
-
-## Contributing
-
-UKV is an umbrella project for many FOSS libraries.
-So any work on libraries like `simdjson`, `yyjson`, RocksDB, or Apache Arrow, indirectly benefits UKV.
-To participate in the UKV directly, please check out the guide and implementation details.
-Thank you!
-
-> [Read full development and contribution guide in our docs here][ukv-details].
-
-## Frequently Asked Questions
-
-- Keys are 64-bit integers, by default. [Why?][ukv-keys-size]
-- Values are binary strings under 4 GB long. [Why?][ukv-values-size]
-- Transactions are ACI(D) by-default. [What does it mean?][ukv-acid]
-- Why not use LevelDB or RocksDB interface? [Answered][ukv-vs-rocks]
-- Why not use SQL, MQL or Cypher? [Answered][ukv-vs-sql]
-- Does UKV support Time-To-Live? [Answered][ukv-ttl]
-- Does UKV support compression? [Answered][ukv-compression]
-- Does UKV support queues? [Answered][ukv-queues]
-- How can I add Bindings for language X? [Answered][ukv-new-bindings]
-- How can I add database X as an Engine? [Answered][ukv-new-engine]
-
-[ukv-c-tutor]: https://unum.cloud/ukv/c
-[ukv-cpp-tutor]: https://unum.cloud/ukv/cpp
-[ukv-python-tutor]: https://unum.cloud/ukv/python
-[ukv-java-tutor]: https://unum.cloud/ukv/java
-[ukv-golang-tutor]: https://unum.cloud/ukv/golang
-[ukv-flight-tutor]: https://unum.cloud/ukv/flight
-[ukv-tests]: https://unum.cloud/ukv/tests
-[ukv-benchmarks]: https://unum.cloud/ukv/benchmarks
-[ukv-tools]: https://unum.cloud/ukv/tools
-[ukv-install]: https://unum.cloud/ukv/install
-[ukv-details]: https://unum.cloud/ukv/details
-[ukv-keys-size]: https://unum.cloud/ukv/c#integer-keys
-[ukv-values-size]: https://unum.cloud/ukv/c#smallish-values
-[ukv-acid]: https://unum.cloud/ukv/c#acid-transactions
-[ukv-vs-rocks]: https://unum.cloud/ukv/related#leveldb-rocksdb
-[ukv-vs-sql]: https://unum.cloud/ukv/related#sql-mql-cypher
-[ukv-c-headers]: https://github.com/unum-cloud/ukv/tree/main/include/ukv
-[ukv-roadmap]: https://github.com/orgs/unum-cloud/projects/2
-[ukv-compression]: https://github.com/unum-cloud/ukv/discussions/232
-[ukv-ttl]: https://github.com/unum-cloud/ukv/discussions/230
-[ukv-queues]: https://github.com/unum-cloud/ukv/discussions/228
-[ukv-new-bindings]: https://github.com/unum-cloud/ukv/c#implementing-a-new-language-binding
-[ukv-new-engine]: https://github.com/unum-cloud/ukv/c#implementing-a-new-engine
+> [Read full roadmap in our docs here][ustore-architecture].
 
 [ucsb-10]: https://unum.cloud/post/2022-03-22-ucsb
 [ucsb-1]: https://unum.cloud/post/2021-11-25-ycsb
