@@ -1637,7 +1637,7 @@ TEST(db, docs_table) {
 
 #pragma region Graph Modality
 
-edge_t make_edge(ukv_key_t edge_id, ukv_key_t v1, ukv_key_t v2) {
+edge_t make_edge(ustore_key_t edge_id, ustore_key_t v1, ustore_key_t v2) {
     return {v1, v2};
 }
 
@@ -1738,11 +1738,11 @@ TEST(db, graph_triangle) {
     EXPECT_EQ(net.edges_containing(1, ustore_vertex_source_k)->size(), 1ul);
     EXPECT_EQ(net.edges_containing(1, ustore_vertex_target_k)->size(), 1ul);
 
-    EXPECT_EQ(net.edges_containing(3, ukv_vertex_target_k)->size(), 1ul);
-    EXPECT_EQ(net.edges_containing(2, ukv_vertex_source_k)->size(), 1ul);
-    EXPECT_EQ((*net.edges_containing(3, ukv_vertex_target_k))[0].source_id, 2);
-    EXPECT_EQ((*net.edges_containing(3, ukv_vertex_target_k))[0].target_id, 3);
-    // EXPECT_EQ((*net.edges_containing(3, ukv_vertex_target_k))[0].id, 10);
+    EXPECT_EQ(net.edges_containing(3, ustore_vertex_target_k)->size(), 1ul);
+    EXPECT_EQ(net.edges_containing(2, ustore_vertex_source_k)->size(), 1ul);
+    EXPECT_EQ((*net.edges_containing(3, ustore_vertex_target_k))[0].source_id, 2);
+    EXPECT_EQ((*net.edges_containing(3, ustore_vertex_target_k))[0].target_id, 3);
+    // EXPECT_EQ((*net.edges_containing(3, ustore_vertex_target_k))[0].id, 10);
     EXPECT_EQ(net.edges_between(3, 1)->size(), 1ul);
     EXPECT_EQ(net.edges_between(1, 3)->size(), 0ul);
 
@@ -1840,11 +1840,11 @@ TEST(db, graph_triangle_batch) {
     EXPECT_EQ(net.edges_containing(1, ustore_vertex_source_k)->size(), 1ul);
     EXPECT_EQ(net.edges_containing(1, ustore_vertex_target_k)->size(), 1ul);
 
-    EXPECT_EQ(net.edges_containing(3, ukv_vertex_target_k)->size(), 1ul);
-    EXPECT_EQ(net.edges_containing(2, ukv_vertex_source_k)->size(), 1ul);
-    EXPECT_EQ((*net.edges_containing(3, ukv_vertex_target_k))[0].source_id, 2);
-    EXPECT_EQ((*net.edges_containing(3, ukv_vertex_target_k))[0].target_id, 3);
-    // EXPECT_EQ((*net.edges_containing(3, ukv_vertex_target_k))[0].id, 10);
+    EXPECT_EQ(net.edges_containing(3, ustore_vertex_target_k)->size(), 1ul);
+    EXPECT_EQ(net.edges_containing(2, ustore_vertex_source_k)->size(), 1ul);
+    EXPECT_EQ((*net.edges_containing(3, ustore_vertex_target_k))[0].source_id, 2);
+    EXPECT_EQ((*net.edges_containing(3, ustore_vertex_target_k))[0].target_id, 3);
+    // EXPECT_EQ((*net.edges_containing(3, ustore_vertex_target_k))[0].id, 10);
     EXPECT_EQ(net.edges_between(3, 1)->size(), 1ul);
     EXPECT_EQ(net.edges_between(1, 3)->size(), 0ul);
 
