@@ -263,7 +263,7 @@ if(${USTORE_BUILD_API_FLIGHT_SERVER})
 
     string(CONCAT server_exe_name "ustore_flight_server_" ${engine_name})
     add_executable(${server_exe_name} src/flight_server.cpp)
-    target_link_libraries(${server_exe_name} pthread yyjson simdjson bson arrow::flight arrow::bundled arrow::dataset arrow::arrow openssl::ssl openssl::crypto crypto ${embedded_lib_name} ${embedded_dependencies})
+    target_link_libraries(${server_exe_name} pthread yyjson simdjson bson arrow::flight arrow::bundled arrow::dataset arrow::arrow openssl::ssl openssl::crypto ${embedded_lib_name} ${embedded_dependencies})
     target_compile_definitions(${server_exe_name} INTERFACE USTORE_ENGINE_NAME=${engine_name})
 
     if(${engine_name} STREQUAL "ucset")
