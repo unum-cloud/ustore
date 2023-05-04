@@ -14,7 +14,7 @@ ExternalProject_Add(
   openssl-external
   SOURCE_DIR ${OPENSSL_SOURCE_DIR}
   GIT_REPOSITORY https://github.com/openssl/openssl.git
-  GIT_TAG openssl-3.1.0
+  GIT_TAG OpenSSL_1_1_1-stable
   CONFIGURE_COMMAND ${OPENSSL_CONFIGURE_COMMAND}
   --prefix=${OPENSSL_INSTALL_DIR}
   --openssldir=${OPENSSL_INSTALL_DIR}
