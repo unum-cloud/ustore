@@ -483,21 +483,22 @@ void ustore_database_init(ustore_database_init_t* c_ptr) {
 
 void ustore_snapshot_list(ustore_snapshot_list_t* c_ptr) {
     ustore_snapshot_list_t& c = *c_ptr;
-    *c.count = 0;
-    if (c.ids)
-        *c.ids = nullptr;
+    *c.error = "Snapshots not supported by UCSet!";
 }
 
-void ustore_snapshot_create(ustore_snapshot_create_t*) {
-    // TODO
+void ustore_snapshot_create(ustore_snapshot_create_t* c_ptr) {
+    ustore_snapshot_create_t& c = *c_ptr;
+    *c.error = "Snapshots not supported by UCSet!";
 }
 
-void ustore_snapshot_export(ustore_snapshot_export_t*) {
-    // TODO
+void ustore_snapshot_export(ustore_snapshot_export_t* c_ptr) {
+    ustore_snapshot_export_t& c = *c_ptr;
+    *c.error = "Snapshots not supported by UCSet!";
 }
 
-void ustore_snapshot_drop(ustore_snapshot_drop_t*) {
-    // TODO
+void ustore_snapshot_drop(ustore_snapshot_drop_t* c_ptr) {
+    ustore_snapshot_drop_t& c = *c_ptr;
+    *c.error = "Snapshots not supported by UCSet!";
 }
 
 void ustore_read(ustore_read_t* c_ptr) {
