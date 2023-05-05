@@ -17,6 +17,7 @@ option(USTORE_BUILD_TESTS "Building C/C++ native tests" ON)
 option(USTORE_BUILD_SANITIZE "Use memory sanitizers for debug builds" ON)
 option(USTORE_BUILD_BENCHMARKS "Building C/C++ native benchmarks")
 
+option(USTORE_BUILD_CLI "Building CLI for UStore")
 option(USTORE_BUILD_TOOLS "Building tools for UStore")
 option(USTORE_BUILD_BUNDLES "Building bundles libraries for GoLang and Java SDKs")
 option(USTORE_BUILD_SDK_PYTHON "Building Python bidings for all SDKs")
@@ -32,7 +33,7 @@ option(USTORE_USE_UUID "Replaces default 64-bit keys with 128-bit UUID compatibl
 set(USTORE_ENGINE_UDISK_PATH "" CACHE STRING "Pass a path to UDisk binary to produce a full range of bindings")
 
 if(${USTORE_BUILD_CLI})
-set(USTORE_BUILD_API_FLIGHT_CLIENT ON)
+  set(USTORE_BUILD_API_FLIGHT_CLIENT ON)
 endif()
 
 if(USTORE_BUILD_API_FLIGHT)
