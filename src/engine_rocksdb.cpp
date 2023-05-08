@@ -288,18 +288,22 @@ void ustore_snapshot_export(ustore_snapshot_export_t* c_ptr) {
     ustore_snapshot_export_t& c = *c_ptr;
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
-    
+
     rocksdb::Checkpoint* chp_ptr = nullptr;
     rocksdb::Checkpoint::Create(db.native.get(), &chp_ptr);
     return_error_if_m(chp_ptr, c.error, uninitialized_state_k, "Checkpoint is uninitialized");
 
     auto it = db.snapshots.find(c.id);
-    return_error_if_m(it != db.snapshots.end(), c.error, args_wrong_k, "Such snapshot does not exists!");
+    return_error_if_m(it != db.snapshots.end(), c.error, args_wrong_k, "The snapshot does'nt exist!");
     rocks_snapshot_t& snap = *reinterpret_cast<rocks_snapshot_t*>(c.id);
-    return_error_if_m(snap.snapshot, c.error, uninitialized_state_k, "Such snapshot does not exists!");
+    return_error_if_m(snap.snapshot, c.error, uninitialized_state_k, "The snapshot does'nt exist!");
 
+    if (std::filesystem::is_empty(c.path))
+        std::filesystem::remove(c.path);
     uint64_t snapshot_id = reinterpret_cast<uint64_t>(snap.snapshot);
-    chp_ptr->CreateCheckpoint(c.path, 0, &snapshot_id);
+    rocks_status_t status = chp_ptr->CreateCheckpoint(c.path, 0, &snapshot_id);
+
+    export_error(status, c.error);
 }
 
 void ustore_snapshot_drop(ustore_snapshot_drop_t* c_ptr) {
