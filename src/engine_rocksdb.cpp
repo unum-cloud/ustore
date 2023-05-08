@@ -279,7 +279,7 @@ void ustore_snapshot_create(ustore_snapshot_create_t* c_ptr) {
     if (!rocks_snapshot->snapshot)
         *c.error = "Couldn't get a snapshot!";
 
-    *c.id = reinterpret_cast<std::size_t>(rocks_snapshot);
+    *c.id = reinterpret_cast<ustore_snapshot_t>(rocks_snapshot);
     db.snapshots[*c.id] = rocks_snapshot;
 }
 
@@ -300,7 +300,7 @@ void ustore_snapshot_drop(ustore_snapshot_drop_t* c_ptr) {
     db.native->ReleaseSnapshot(snap.snapshot);
     snap.snapshot = nullptr;
 
-    auto id = reinterpret_cast<std::size_t>(c.id);
+    auto id = reinterpret_cast<ustore_size_t>(c.id);
     db.mutex.lock();
     db.snapshots.erase(id);
     db.mutex.unlock();
@@ -436,7 +436,7 @@ void read_one( //
 
     rocksdb::ReadOptions options;
     if (snap_ptr) {
-        auto it = db.snapshots.find(reinterpret_cast<std::size_t>(snap_ptr));
+        auto it = db.snapshots.find(reinterpret_cast<ustore_size_t>(snap_ptr));
         return_error_if_m(it != db.snapshots.end(), c_error, args_wrong_k, "The snapshot does'nt exist!");
         options.snapshot = snap_ptr->snapshot;
     }
@@ -479,7 +479,7 @@ void read_many( //
 
     rocksdb::ReadOptions options;
     if (snap_ptr) {
-        auto it = db.snapshots.find(reinterpret_cast<std::size_t>(snap_ptr));
+        auto it = db.snapshots.find(reinterpret_cast<ustore_size_t>(snap_ptr));
         return_error_if_m(it != db.snapshots.end(), c_error, args_wrong_k, "The snapshot does'nt exist!");
         options.snapshot = snap_ptr->snapshot;
     }
