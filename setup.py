@@ -13,7 +13,7 @@ from setuptools import setup, Extension
 from setuptools.command.build_ext import build_ext
 
 __version__ = open('VERSION', 'r').read().strip()
-__lib_name__ = 'ustore'
+__lib_name__ = 'ukv'
 
 
 this_directory = os.path.abspath(dirname(__file__))
@@ -151,7 +151,7 @@ setup(
     author='Ashot Vardanian',
     author_email='info@unum.cloud',
     url='https://github.com/unum-cloud/ustore',
-    description='Python bindings for Unum\'s Universal Key-Value store.',
+    description='Python bindings for Unum\'s UStore.',
     long_description=long_description,
     long_description_content_type='text/markdown',
     license='Apache-2.0',
@@ -190,7 +190,8 @@ setup(
     ],
     cmdclass={
         'build_ext': CMakeBuild,
-        'build_pyi': BuildPyi},
+        'build_pyi': BuildPyi,
+    },
     zip_safe=False,
     install_requires=[
         'numpy>=1.16',

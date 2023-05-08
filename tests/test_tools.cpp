@@ -213,28 +213,23 @@ class arrow_visitor_at {
         return arrow::Status::OK();
     }
     arrow::Status Visit(arrow::ListArray const& arr) {
-        arrow::VisitArrayInline(*arr.values().get(), this);
-        return arrow::Status::OK();
+        return arrow::VisitArrayInline(*arr.values().get(), this);
     }
     arrow::Status Visit(arrow::LargeListArray const& arr) {
-        arrow::VisitArrayInline(*arr.values().get(), this);
-        return arrow::Status::OK();
+        return arrow::VisitArrayInline(*arr.values().get(), this);
     }
     arrow::Status Visit(arrow::MapArray const& arr) {
-        arrow::VisitArrayInline(*arr.values().get(), this);
-        return arrow::Status::OK();
+        return arrow::VisitArrayInline(*arr.values().get(), this);
     }
     arrow::Status Visit(arrow::FixedSizeListArray const& arr) {
-        arrow::VisitArrayInline(*arr.values().get(), this);
-        return arrow::Status::OK();
+        return arrow::VisitArrayInline(*arr.values().get(), this);
     }
     arrow::Status Visit(arrow::DictionaryArray const& arr) {
         fmt::format_to(std::back_inserter(json), "{},", arr.GetValueIndex(idx));
         return arrow::Status::OK();
     }
     arrow::Status Visit(arrow::ExtensionArray const& arr) {
-        arrow::VisitArrayInline(*arr.storage().get(), this);
-        return arrow::Status::OK();
+        return arrow::VisitArrayInline(*arr.storage().get(), this);
     }
     arrow::Status Visit(arrow::StructArray const& arr) {
         return arrow::Status(arrow::StatusCode::TypeError, "Not supported type");
@@ -690,8 +685,8 @@ void fill_docs_w_keys(ustore_str_view_t file_name) {
             arrow::MemoryPool* pool = arrow::default_memory_pool();
             auto input = *arrow::io::ReadableFile::Open(file_name);
             std::unique_ptr<parquet::arrow::FileReader> arrow_reader;
-            parquet::arrow::OpenFile(input, pool, &arrow_reader);
-            arrow_reader->ReadTable(&table);
+            auto _ = parquet::arrow::OpenFile(input, pool, &arrow_reader);
+            _ = arrow_reader->ReadTable(&table);
         }
         else if (ext == ".csv") {
             std::shared_ptr<arrow::io::InputStream> input = *arrow::io::ReadableFile::Open(file_name);
@@ -834,8 +829,8 @@ bool cmp_table_docs_whole(ustore_str_view_t lhs, ustore_str_view_t rhs) {
         arrow::MemoryPool* pool = arrow::default_memory_pool();
         auto input = *arrow::io::ReadableFile::Open(lhs);
         std::unique_ptr<parquet::arrow::FileReader> arrow_reader;
-        parquet::arrow::OpenFile(input, pool, &arrow_reader);
-        arrow_reader->ReadTable(&table);
+        auto _ = parquet::arrow::OpenFile(input, pool, &arrow_reader);
+        _ = arrow_reader->ReadTable(&table);
     }
     fill_docs_w_keys(rhs);
 
@@ -857,7 +852,7 @@ bool cmp_table_docs_whole(ustore_str_view_t lhs, ustore_str_view_t rhs) {
             for (auto field : fields) {
                 fmt::format_to(std::back_inserter(json), "\"{}\":", field);
                 visitor.idx = value_idx;
-                arrow::VisitArrayInline(*chunks[g_idx].get(), &visitor);
+                auto _ = arrow::VisitArrayInline(*chunks[g_idx].get(), &visitor);
                 ++g_idx;
             }
             json[json.size() - 1] = '}';
@@ -898,8 +893,8 @@ bool cmp_table_docs_sub(ustore_str_view_t lhs, ustore_str_view_t rhs) {
         arrow::MemoryPool* pool = arrow::default_memory_pool();
         auto input = *arrow::io::ReadableFile::Open(lhs);
         std::unique_ptr<parquet::arrow::FileReader> arrow_reader;
-        parquet::arrow::OpenFile(input, pool, &arrow_reader);
-        arrow_reader->ReadTable(&table);
+        auto _ = parquet::arrow::OpenFile(input, pool, &arrow_reader);
+        _ = arrow_reader->ReadTable(&table);
     }
     fill_docs_w_keys(rhs);
 
@@ -918,7 +913,7 @@ bool cmp_table_docs_sub(ustore_str_view_t lhs, ustore_str_view_t rhs) {
             for (auto it = fields_columns_ak; g_idx < fields_columns_count_k; ++g_idx, ++it) {
                 fmt::format_to(std::back_inserter(json), "\"{}\":", *it);
                 visitor.idx = value_idx;
-                arrow::VisitArrayInline(*chunks[g_idx].get(), &visitor);
+                auto _ = arrow::VisitArrayInline(*chunks[g_idx].get(), &visitor);
             }
             json[json.size() - 1] = '}';
             docs_w_keys_[visitor.key] = json;
@@ -1593,7 +1588,8 @@ int main(int argc, char** argv) {
 
     db.open().throw_unhandled();
     ::testing::InitGoogleTest(&argc, argv);
-    RUN_ALL_TESTS();
+    int result = RUN_ALL_TESTS();
+    
     delete_test_file();
-    return 0;
+    return result;
 }
