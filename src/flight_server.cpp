@@ -524,13 +524,15 @@ class UStoreService : public arf::FlightServerBase {
     ar::Status ListActions( //
         arf::ServerCallContext const&,
         std::vector<arf::ActionType>* actions) override {
-        *actions = {kActionColOpen,
-                    kActionColDrop,
-                    kActionSnapOpen,
-                    kActionSnapExport,
-                    kActionSnapDrop,
-                    kActionTxnBegin,
-                    kActionTxnCommit};
+        *actions = {
+            kActionColOpen,
+            kActionColDrop,
+            kActionSnapOpen,
+            kActionSnapExport,
+            kActionSnapDrop,
+            kActionTxnBegin,
+            kActionTxnCommit,
+        };
         return ar::Status::OK();
     }
 
@@ -654,10 +656,12 @@ class UStoreService : public arf::FlightServerBase {
             if (params.snapshot_id)
                 c_snapshot_id = parse_snap_id(*params.snapshot_id);
 
-            ustore_snapshot_export_t snapshot_export {.db = db_,
-                                                      .error = status.member_ptr(),
-                                                      .id = c_snapshot_id,
-                                                      .path = c_export_path};
+            ustore_snapshot_export_t snapshot_export {
+                .db = db_,
+                .error = status.member_ptr(),
+                .id = c_snapshot_id,
+                .path = c_export_path,
+            };
 
             ustore_snapshot_export(&snapshot_export);
             if (!status)

@@ -1496,22 +1496,27 @@ void ustore_snapshot_export(ustore_snapshot_export_t* c_ptr) {
     ustore_snapshot_export_t& c = *c_ptr;
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
+    try {
+        rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
 
-    arf::Action action;
-    fmt::format_to(std::back_inserter(action.type),
-                   "{}?{}={}{}={}",
-                   kFlightSnapExport,
-                   kParamSnapshotID,
-                   c.id,
-                   kParamSnapshotExportPath,
-                   c.path);
+        arf::Action action;
+        fmt::format_to(std::back_inserter(action.type),
+                       "{}?{}={}{}={}",
+                       kFlightSnapExport,
+                       kParamSnapshotID,
+                       c.id,
+                       kParamSnapshotExportPath,
+                       c.path);
 
-    std::lock_guard<std::mutex> lk(db.arena_lock);
-    arrow_mem_pool_t pool(db.arena);
-    arf::FlightCallOptions options = arrow_call_options(pool);
-    ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream = db.flight->DoAction(options, action);
-    return_error_if_m(maybe_stream.ok(), c.error, network_k, "Failed to act on Arrow server");
+        std::lock_guard<std::mutex> lk(db.arena_lock);
+        arrow_mem_pool_t pool(db.arena);
+        arf::FlightCallOptions options = arrow_call_options(pool);
+        ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream = db.flight->DoAction(options, action);
+        return_error_if_m(maybe_stream.ok(), c.error, network_k, "Failed to act on Arrow server");
+    }
+    catch (...) {
+        *c.error = "Snapshot Export Failure";
+    }
 }
 
 void ustore_snapshot_drop(ustore_snapshot_drop_t* c_ptr) {
