@@ -697,7 +697,7 @@ struct key_from_pair_t {
     key_from_pair_t& operator=(pair_t const& pair) {
         *key_ptr = pair.collection_key.key;
         return *this;
-    };
+    }
 };
 
 struct key_iterator_t {
@@ -709,7 +709,7 @@ struct key_iterator_t {
 
     ustore_key_t* begin_;
     key_iterator_t(ustore_key_t* key) : begin_(key) {}
-    key_from_pair_t operator[](std::size_t idx) { return &begin_[idx]; };
+    key_from_pair_t operator[](std::size_t idx) { return &begin_[idx]; }
 };
 
 void ustore_sample(ustore_sample_t* c_ptr) {

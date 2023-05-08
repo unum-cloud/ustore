@@ -8,7 +8,7 @@
  * Links:
  * https://arrow.apache.org/cookbook/cpp/flight.html
  */
-
+#include <csignal>
 #include <mutex>
 #include <fstream>    // `std::ifstream`
 #include <charconv>   // `std::from_chars`
@@ -519,6 +519,7 @@ class UStoreService : public arf::FlightServerBase {
 
   public:
     UStoreService(database_t&& db, std::size_t capacity = 4096) : db_(std::move(db)), sessions_(db_, capacity) {}
+    ~UStoreService() { db_.close(); }
 
     ar::Status ListActions( //
         arf::ServerCallContext const&,
@@ -1506,6 +1507,9 @@ ar::Status run_server(ustore_str_view_t config, int port, bool quiet) {
 
     auto server = std::make_unique<UStoreService>(std::move(db));
     ARROW_RETURN_NOT_OK(server->Init(options));
+
+    server->SetShutdownOnSignals({SIGINT});
+
     if (!quiet)
         std::printf("Listening on port: %i\n", server->port());
     return server->Serve();
