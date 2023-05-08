@@ -185,6 +185,10 @@ if(${USTORE_BUILD_API_FLIGHT_CLIENT} OR ${USTORE_BUILD_API_FLIGHT_SERVER})
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/openssl.cmake")
 endif()
 
+if(${USTORE_BUILD_CLI})
+  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/readline.cmake")
+endif()
+
 if(${USTORE_BUILD_API_FLIGHT_SERVER} OR ${USTORE_BUILD_CLI})
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/clipp.cmake")
 endif()
@@ -291,7 +295,7 @@ endif()
 if(${USTORE_BUILD_CLI})
   get_target_property(flight_client_dependencies ustore_flight_client LINK_LIBRARIES)
   add_executable(ustore src/tools/ustore_cli.cpp src/tools/dataset.cpp)
-  target_link_libraries(ustore ${flight_client_dependencies} simdjson fmt::fmt arrow::flight arrow::parquet arrow::arrow arrow::bundled ustore_flight_client)
+  target_link_libraries(ustore ${flight_client_dependencies} simdjson fmt::fmt arrow::flight arrow::parquet arrow::arrow arrow::bundled ustore_flight_client readline::readline readline::history ncurses)
 endif()
 
 # Enable warning and sanitization for our primary targets
