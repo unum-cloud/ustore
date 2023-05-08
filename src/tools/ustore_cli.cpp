@@ -130,10 +130,14 @@ int main(int argc, char* argv[]) {
         close = true;
         db.find_or_create(create_collection.c_str());
     }
-    if (!imp.empty())
+    if (!imp.empty()){
+        close = true;
         docs_import(db, coll_name, imp, id_field, max_batch_size);
-    if (!exp.empty())
+    }
+    if (!exp.empty()){
+        close = true;
         docs_export(db, coll_name, exp, max_batch_size);
+    }
 
     if (close)
         return 0;
