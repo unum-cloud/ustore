@@ -331,7 +331,6 @@ typedef struct ustore_snapshot_export_t {
     ustore_snapshot_t id;
     /** @brief The specified directory path. */
     ustore_str_view_t path;
-    /// @}
 } ustore_snapshot_export_t;
 
 void ustore_snapshot_export(ustore_snapshot_export_t*);
