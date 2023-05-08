@@ -1,8 +1,11 @@
 #include <iostream>
 #include <regex>
 
-#include <clipp.h>
 #include <fmt/format.h>
+
+#include <clipp.h>
+#include "readline/readline.h"
+#include "readline/history.h"
 
 #include "ustore/cpp/db.hpp"
 #include "dataset.h"
@@ -142,9 +145,8 @@ int main(int argc, char* argv[]) {
 
     while (true) {
         commands.clear();
-        fmt::print(">>> ");
-
-        std::getline(std::cin, input);
+        input = readline(">>> ");
+        add_history(input.c_str());
         std::regex_token_iterator<std::string::iterator> it(input.begin(), input.end(), reg_exp, -1);
         while (it != end_tokens)
             commands.emplace_back(*it++);
