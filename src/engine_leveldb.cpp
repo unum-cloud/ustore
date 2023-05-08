@@ -248,30 +248,22 @@ void ustore_snapshot_export(ustore_snapshot_export_t* c_ptr) {
         scan_options.snapshot = snap.snapshot;
     }
 
-    // Get iterator
-    level_iter_uptr_t it;
-    try {
-        it = level_iter_uptr_t(db.native->NewIterator(scan_options));
-    }
-    catch (...) {
-        *c.error = "Fail To Create Iterator";
-        return;
-    }
-
     // Create new DB
     level_native_t* native_db = nullptr;
     level_status_t status = leveldb::DB::Open(db.options, c.path, &native_db);
     return_error_if_m(status.ok(), c.error, args_wrong_k, "Couldn't create a new database");
 
     // Copy all data into new DB
-    leveldb::WriteBatch batch;
-    for (it->SeekToFirst(); it->Valid(); it->Next())
-        batch.Put(it->key(), it->value());
+    try {
+        auto it = level_iter_uptr_t(db.native->NewIterator(scan_options));
+        for (it->SeekToFirst(); it->Valid() & status.ok(); it->Next())
+            status = native_db->Put(leveldb::WriteOptions(), it->key(), it->value());
+    }
+    catch (...) {
+        *c.error = "Fail To Copy Database";
+    }
 
-    // Flush
-    leveldb::WriteOptions write_options;
-    write_options.sync = true;
-    status = native_db->Write(write_options, &batch);
+    // Close
     delete native_db;
 
     if (!status.ok())
