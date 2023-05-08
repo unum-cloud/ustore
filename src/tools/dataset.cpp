@@ -267,11 +267,11 @@ std::string generate_file_name() {
     ustore_char_t* out = std::ctime(&now);
     mtx.unlock();
 
-    for (ustore_size_t idx = 0; idx < strlen(out); ++idx) {
+    for (ustore_size_t idx = 0; idx < std::strlen(out); ++idx) {
         if ((out[idx] == ' ') | (out[idx] == ':'))
             out[idx] = '_';
     }
-    out[strlen(out) - 1] = '\0';
+    out[std::strlen(out) - 1] = '\0';
 
     return fmt::format("{}_{}", out, get_time_since_epoch());
 }
@@ -321,7 +321,7 @@ bool validate_graph_fields(task_at& imp_exp, bool is_exp = false) {
         };
 
         auto validate_field = [=](ustore_str_view_t field) {
-            for (ustore_size_t idx = 1; idx < strlen(field); ++idx) {
+            for (ustore_size_t idx = 1; idx < std::strlen(field); ++idx) {
                 if (check_char(field[idx]))
                     continue;
 
@@ -382,14 +382,18 @@ void check_for_id_field(ustore_docs_import_t& imp) {
 }
 
 template <typename ustore_docs_task_at>
-fields_t prepare_fields(ustore_docs_task_at& c, linked_memory_lock_t& arena) {
+void prepare_fields(ustore_docs_task_at& c, linked_memory_lock_t& arena, fields_t& fields_output) {
 
-    if (c.fields_count == 1)
-        return {c.fields, c.fields_stride};
+    if (c.fields_count == 1) {
+        fields_output = {c.fields, c.fields_stride};
+        return;
+    }
     fields_t fields {c.fields, c.fields_stride};
     ustore_size_t next_idx = 0;
 
     auto bitmask = arena.alloc<ustore_octet_t>(c.fields_count, c.error);
+    return_if_error_m(c.error);
+
     for (auto& bit : bitmask)
         bit = 1;
 
@@ -399,8 +403,8 @@ fields_t prepare_fields(ustore_docs_task_at& c, linked_memory_lock_t& arena) {
 
         next_idx = idx + 1;
         if (chrcmp_(fields[idx][0], '/')) {
-            while (next_idx < c.fields_count && strncmp_(fields[idx], fields[next_idx], strlen(fields[idx])) &&
-                   chrcmp_(fields[next_idx][strlen(fields[idx])], '/') && bitmask[next_idx]) {
+            while (next_idx < c.fields_count && strncmp_(fields[idx], fields[next_idx], std::strlen(fields[idx])) &&
+                   chrcmp_(fields[next_idx][std::strlen(fields[idx])], '/') && bitmask[next_idx]) {
                 bitmask[next_idx] = 0;
                 ++next_idx;
             }
@@ -416,8 +420,8 @@ fields_t prepare_fields(ustore_docs_task_at& c, linked_memory_lock_t& arena) {
                 ++ptr_idx;
 
             while (ptr_idx < c.fields_count) {
-                if (strncmp_(fields[idx], &fields[ptr_idx][1], strlen(fields[idx])) &&
-                    chrcmp_(fields[ptr_idx][strlen(fields[idx]) + 1], '/'))
+                if (strncmp_(fields[idx], &fields[ptr_idx][1], std::strlen(fields[idx])) &&
+                    chrcmp_(fields[ptr_idx][std::strlen(fields[idx]) + 1], '/'))
                     bitmask[ptr_idx] = 0;
                 ++ptr_idx;
             }
@@ -431,19 +435,21 @@ fields_t prepare_fields(ustore_docs_task_at& c, linked_memory_lock_t& arena) {
             ++count;
     }
     auto prepared_fields = arena.alloc<ustore_str_view_t>(count, c.error);
+    return_if_error_m(c.error);
 
     for (ustore_size_t idx = 0, pos = 0; idx < c.fields_count; ++idx) {
         if (!bitmask[idx])
             continue;
 
-        ustore_size_t len = strlen(fields[idx]);
+        ustore_size_t len = std::strlen(fields[idx]);
         auto field = arena.alloc<ustore_char_t>(len + 1, c.error);
+        return_if_error_m(c.error);
         std::memcpy(field.begin(), fields[idx], len + 1);
         prepared_fields[pos] = field.begin();
         ++pos;
     }
     c.fields_count = count;
-    return {prepared_fields.begin(), sizeof(ustore_str_view_t)};
+    fields_output = {prepared_fields.begin(), sizeof(ustore_str_view_t)};
 }
 
 simdjson::ondemand::object& rewinded(simdjson::ondemand::object& doc) noexcept {
@@ -534,7 +540,7 @@ void simdjson_object_parser( //
         try_close();
         if (is_json_ptr(fields[idx])) {
             if (strchr(fields[idx] + 1, '/') != nullptr) {
-                while ((*iter)[strlen(*iter) - 1] == '{') {
+                while ((*iter)[std::strlen(*iter) - 1] == '{') {
                     fmt::format_to(std::back_inserter(json), "{}", *iter);
                     ++iter;
                 }
@@ -571,7 +577,7 @@ void fields_parser( //
         pos = 1;
         if (is_json_ptr(fields[idx])) {
             pos = strchr(fields[idx] + pos, '/') - fields[idx];
-            while (pos <= strlen(fields[idx])) {
+            while (pos <= std::strlen(fields[idx])) {
                 ++size;
                 pos = strchr(fields[idx] + pos + 1, '/') - fields[idx];
             }
@@ -579,6 +585,7 @@ void fields_parser( //
     }
 
     auto prefixes = arena.alloc<ustore_char_t*>(size, error);
+    return_if_error_m(error);
 
     auto close_bracket = [&]() {
         --back_idx;
@@ -588,16 +595,18 @@ void fields_parser( //
     };
 
     auto fill_prefixes = [&](ustore_str_view_t field) {
-        while (pos <= strlen(field)) {
+        while (pos <= std::strlen(field)) {
             prefixes[back_idx] = arena.alloc<ustore_char_t>(pos + 2, error).begin();
+            return_if_error_m(error);
             ++back_idx;
             std::memcpy(prefixes[back_idx - 1], field, pos + 1);
             prefixes[back_idx - 1][pos + 1] = '\0';
             auto substr = arena.alloc<ustore_char_t>(pos - pre_idx + 2, error);
+            return_if_error_m(error);
             std::memcpy(substr.begin(), field + pre_idx, pos - pre_idx);
             substr[substr.size() - 2] = '\0';
             auto str = fmt::format("\"{}\":{{{}", substr.begin(), '\0');
-            strncpy(tape.begin() + offset, str.data(), str.size());
+            std::strncpy(tape.begin() + offset, str.data(), str.size());
             offset += str.size();
             pre_idx = pos + 1;
             pos = strchr(field + pre_idx, '/') - field;
@@ -609,19 +618,20 @@ void fields_parser( //
             pre_idx = 1;
 
             pos = strchr(fields[idx] + pre_idx, '/') - fields[idx];
-            if (pos <= strlen(fields[idx])) {
+            if (pos <= std::strlen(fields[idx])) {
                 fill_prefixes(fields[idx]);
                 while (back_idx) {
                     ++counts_idx;
                     counts[counts_idx] = 0;
-                    while (strncmp_(prefixes[back_idx - 1], fields[idx], strlen(prefixes[back_idx - 1]))) {
-                        pre_idx = strlen(prefixes[back_idx - 1]) + 1;
-                        ustore_size_t length = strlen(fields[idx]) - pre_idx + 2;
+                    while (strncmp_(prefixes[back_idx - 1], fields[idx], std::strlen(prefixes[back_idx - 1]))) {
+                        pre_idx = std::strlen(prefixes[back_idx - 1]) + 1;
+                        ustore_size_t length = std::strlen(fields[idx]) - pre_idx + 2;
                         auto substr = arena.alloc<ustore_char_t>(length, error);
+                        return_if_error_m(error);
                         std::memcpy(substr.begin(), fields[idx] + pre_idx - 1, length);
                         substr[substr.size() - 1] = '\0';
                         auto str = fmt::format("\"{}\":{}", substr.begin(), '\0');
-                        strncpy(tape.begin() + offset, str.data(), str.size());
+                        std::strncpy(tape.begin() + offset, str.data(), str.size());
                         offset += str.size();
                         ++counts[counts_idx];
                         ++idx;
@@ -634,20 +644,20 @@ void fields_parser( //
                         while (back_idx && !strncmp_( //
                                                prefixes[back_idx - 1],
                                                fields[idx],
-                                               strlen(prefixes[back_idx - 1]))) {
+                                               std::strlen(prefixes[back_idx - 1]))) {
                             close_bracket();
                         }
 
                         if (back_idx == 0)
                             break;
                         else if (sz > back_idx) {
-                            pre_idx = strlen(prefixes[back_idx - 1]) + 1;
+                            pre_idx = std::strlen(prefixes[back_idx - 1]) + 1;
                             ++counts_idx;
                             counts[counts_idx] = 0;
                         }
 
                         pos = strchr(fields[idx] + pre_idx, '/') - fields[idx];
-                        if (pos <= strlen(fields[idx])) {
+                        if (pos <= std::strlen(fields[idx])) {
                             --pre_idx;
                             fill_prefixes(fields[idx]);
                             ++counts_idx;
@@ -658,14 +668,14 @@ void fields_parser( //
             }
             else {
                 auto str = fmt::format("\"{}\":{}", fields[idx] + 1, '\0');
-                strncpy(tape.begin() + offset, str.data(), str.size());
+                std::strncpy(tape.begin() + offset, str.data(), str.size());
                 offset += str.size();
                 ++idx;
             }
         }
         else {
             auto str = fmt::format("\"{}\":{}", fields[idx], '\0');
-            strncpy(tape.begin() + offset, str.data(), str.size());
+            std::strncpy(tape.begin() + offset, str.data(), str.size());
             offset += str.size();
             ++idx;
         }
@@ -782,9 +792,11 @@ void parse_arrow_table_docs(ustore_docs_import_t& c,
         auto clmn_names = table->ColumnNames();
         c.fields_count = clmn_names.size();
         auto names = arena.alloc<ustore_str_view_t>(c.fields_count, c.error);
+        return_if_error_m(c.error);
 
         for (ustore_size_t idx = 0; idx < c.fields_count; ++idx) {
             field = arena.alloc<ustore_char_t>(clmn_names[idx].size() + 1, c.error).begin();
+            return_if_error_m(c.error);
             std::memcpy(field, clmn_names[idx].data(), clmn_names[idx].size() + 1);
             names[idx] = field;
         }
@@ -798,7 +810,9 @@ void parse_arrow_table_docs(ustore_docs_import_t& c,
     }
 
     auto columns = arena.alloc<chunked_array_t>(c.fields_count, c.error);
+    return_if_error_m(c.error);
     auto chunks = arena.alloc<array_t>(c.fields_count, c.error);
+    return_if_error_m(c.error);
 
     auto columns_begin = columns.begin();
     auto chunks_begin = chunks.begin();
@@ -813,6 +827,7 @@ void parse_arrow_table_docs(ustore_docs_import_t& c,
 
     ustore_size_t count = columns[0]->num_chunks();
     auto values = arena.alloc<value_view_t>(table->num_rows(), c.error);
+    return_if_error_m(c.error);
 
     ustore_size_t idx = 0;
     for (ustore_size_t chunk_idx = 0, g_idx = 0; chunk_idx != count; ++chunk_idx, g_idx = 0) {
@@ -834,6 +849,7 @@ void parse_arrow_table_docs(ustore_docs_import_t& c,
             json[json.size() - 1] = '}';
             json.push_back('\n');
             json_cstr = arena.alloc<ustore_char_t>(json.size() + 1, c.error).begin();
+            return_if_error_m(c.error);
             std::memcpy(json_cstr, json.data(), json.size() + 1);
 
             values[idx] = json_cstr;
@@ -861,6 +877,7 @@ void import_whole_ndjson(ustore_docs_import_t& c,
     ustore_size_t used_mem = 0;
 
     auto values = arena.alloc<value_view_t>(rows_count, c.error);
+    return_if_error_m(c.error);
 
     for (auto doc : docs) {
         simdjson::ondemand::object object = doc.get_object().value();
@@ -881,12 +898,14 @@ void import_sub_ndjson(ustore_docs_import_t& c,
                        ustore_size_t rows_count,
                        linked_memory_lock_t& arena) {
 
-    auto fields = prepare_fields(c, arena);
+    fields_t fields;
+    prepare_fields(c, arena, fields);
     ustore_size_t max_size = c.fields_count * symbols_count_k;
     for (ustore_size_t idx = 0; idx < c.fields_count; ++idx)
-        max_size += strlen(fields[idx]);
+        max_size += std::strlen(fields[idx]);
 
     auto values = arena.alloc<value_view_t>(rows_count, c.error);
+    return_if_error_m(c.error);
 
     ustore_size_t used_mem = 0;
     std::string json = "{";
@@ -906,6 +925,7 @@ void import_sub_ndjson(ustore_docs_import_t& c,
 
         json.push_back('\n');
         json_cstr = arena.alloc<ustore_char_t>(json.size() + 1, c.error).begin();
+        return_if_error_m(c.error);
         std::memcpy(json_cstr, json.data(), json.size() + 1);
 
         values[idx] = json_cstr;
@@ -929,8 +949,10 @@ void import_ndjson_docs(ustore_docs_import_t& c, linked_memory_lock_t& arena) {
 
     ustore_size_t file_size = std::filesystem::file_size(std::filesystem::path(c.paths_pattern));
     auto begin = mmap(nullptr, file_size, PROT_READ, MAP_PRIVATE, handle, 0);
+    return_error_if_m(begin != MAP_FAILED, c.error, 0, "Failed to mmap content");
     std::string_view mapped_content = std::string_view(reinterpret_cast<ustore_char_t const*>(begin), file_size);
-    madvise(begin, file_size, MADV_SEQUENTIAL);
+    auto res = madvise(begin, file_size, MADV_SEQUENTIAL);
+    return_error_if_m(res == 0, c.error, 0, "Failed to madvise content");
 
     std::ifstream file(c.paths_pattern);
     ustore_size_t rows_count =
@@ -947,8 +969,10 @@ void import_ndjson_docs(ustore_docs_import_t& c, linked_memory_lock_t& arena) {
     else
         import_sub_ndjson(c, docs, rows_count, arena);
 
-    munmap((void*)mapped_content.data(), mapped_content.size());
+    res = munmap((void*)mapped_content.data(), mapped_content.size());
+    return_error_if_m(res == 0, c.error, 0, "Failed to munmap content");
     close(handle);
+    return_error_if_m(res == 0, c.error, 0, "Failed to close decriptor");
 }
 
 void export_whole_docs( //
@@ -988,6 +1012,7 @@ void export_whole_docs( //
         else if (pcn == csv_k) {
             keys_vec[idx] = *iter;
             docs_vec[idx] = arena.alloc<ustore_char_t>(json.size() + 1, error).begin();
+            return_if_error_m(error);
             std::memcpy(docs_vec[idx], json.data(), json.size() + 1);
             ++idx;
         }
@@ -1038,6 +1063,7 @@ void export_sub_docs( //
         else if (pcn == csv_k) {
             keys_vec[idx] = *iter;
             docs_vec[idx] = arena.alloc<ustore_char_t>(json.size() + 1, c.error).begin();
+            return_if_error_m(c.error);
             std::memcpy(docs_vec[idx], json.data(), json.size() + 1);
             ++idx;
         }
@@ -1164,8 +1190,8 @@ void end_csv( //
     return_error_if_m(status.ok(), c.error, 0, "Can't write in file");
 }
 
-void end_ndjson(int fd) {
-    close(fd);
+int end_ndjson(int fd) {
+    return close(fd);
 }
 
 void write_in_ndjson( //
@@ -1206,8 +1232,9 @@ void ustore_docs_import(ustore_docs_import_t* c_ptr) {
     return_if_error_m(c.error);
 
     auto handle_exception = [&](char const* ex) {
-        auto ptr = arena.alloc<char>(strlen(ex), c.error);
-        std::memcpy(ptr.data(), ex, strlen(ex) + 1);
+        auto ptr = arena.alloc<char>(std::strlen(ex), c.error);
+        return_if_error_m(c.error);
+        std::memcpy(ptr.data(), ex, std::strlen(ex) + 1);
         *c.error = ptr.data();
     };
 
@@ -1254,8 +1281,9 @@ void ustore_docs_export(ustore_docs_export_t* c_ptr) {
     return_if_error_m(c.error);
 
     auto handle_exception = [&](char const* ex) {
-        auto ptr = arena.alloc<char>(strlen(ex), c.error);
-        std::memcpy(ptr.data(), ex, strlen(ex) + 1);
+        auto ptr = arena.alloc<char>(std::strlen(ex), c.error);
+        return_if_error_m(c.error);
+        std::memcpy(ptr.data(), ex, std::strlen(ex) + 1);
         *c.error = ptr.data();
     };
 
@@ -1273,23 +1301,27 @@ void ustore_docs_export(ustore_docs_export_t* c_ptr) {
         fields_t fields;
         ptr_range_gt<ustore_char_t> tape;
         auto counts = arena.alloc<ustore_size_t>(c.fields_count, c.error);
+        return_if_error_m(c.error);
 
         if (pcn == parquet_k)
             make_parquet(c, os);
         else if (pcn == csv_k) {
             keys_vec = arena.alloc<ustore_key_t>(task_count, c.error);
+            return_if_error_m(c.error);
             docs_vec = arena.alloc<ustore_char_t*>(task_count, c.error);
+            return_if_error_m(c.error);
         }
         else
             handle = make_ndjson(c);
 
         if (c.fields) {
-            fields = prepare_fields(c, arena);
+            prepare_fields(c, arena, fields);
             ustore_size_t max_size = c.fields_count * symbols_count_k;
             for (ustore_size_t idx = 0; idx < c.fields_count; ++idx)
-                max_size += strlen(fields[idx]);
+                max_size += std::strlen(fields[idx]);
 
             tape = arena.alloc<ustore_char_t>(max_size, c.error);
+            return_if_error_m(c.error);
             fields_parser(c.error, arena, c.fields_count, fields, counts, tape);
         }
 
@@ -1364,7 +1396,7 @@ void ustore_docs_export(ustore_docs_export_t* c_ptr) {
         if (pcn == csv_k)
             end_csv(c, string_builder, int_builder);
         else if (pcn == ndjson_k)
-            end_ndjson(handle);
+            return_error_if_m(end_ndjson(handle) == 0, c.error, 0, "Failed to close decriptor");
     }
     catch (std::exception const& ex) {
         handle_exception(ex.what());
@@ -1392,6 +1424,7 @@ void parse_arrow_table_graph(ustore_graph_import_t& c,
     return_error_if_m(count > 0, c.error, 0, "Empty Input");
 
     auto vertices_edges = arena.alloc<edge_t>(table->num_rows(), c.error);
+    return_if_error_m(c.error);
     ustore_size_t idx = 0;
 
     for (ustore_size_t chunk_idx = 0; chunk_idx != count; ++chunk_idx) {
@@ -1422,14 +1455,17 @@ void parse_arrow_table_graph(ustore_graph_import_t& c,
 void import_ndjson_graph(ustore_graph_import_t& c, ustore_size_t task_count, linked_memory_lock_t& arena) noexcept {
 
     auto edges = arena.alloc<edge_t>(task_count, c.error);
+    return_if_error_m(c.error);
 
     auto handle = open(c.paths_pattern, O_RDONLY);
     return_error_if_m(handle != -1, c.error, 0, "Can't open file");
 
     ustore_size_t file_size = std::filesystem::file_size(std::filesystem::path(c.paths_pattern));
     auto begin = mmap(nullptr, file_size, PROT_READ, MAP_PRIVATE, handle, 0);
+    return_error_if_m(begin != MAP_FAILED, c.error, 0, "Failed to mmap content");
     std::string_view mapped_content = std::string_view(reinterpret_cast<ustore_char_t const*>(begin), file_size);
-    madvise(begin, file_size, MADV_SEQUENTIAL);
+    auto res = madvise(begin, file_size, MADV_SEQUENTIAL);
+    return_error_if_m(res == 0, c.error, 0, "Failed to madvise content");
 
     auto get_data = [&](simdjson::ondemand::object& data, ustore_str_view_t field) {
         return chrcmp_(field[0], '/') ? rewinded(data).at_pointer(field) : rewinded(data)[field];
@@ -1458,8 +1494,10 @@ void import_ndjson_graph(ustore_graph_import_t& c, ustore_size_t task_count, lin
     if (idx != 0)
         upsert_graph(c, edges, idx);
 
-    munmap((void*)mapped_content.data(), mapped_content.size());
+    res = munmap((void*)mapped_content.data(), mapped_content.size());
+    return_error_if_m(res == 0, c.error, 0, "Failed to munmap content");
     close(handle);
+    return_error_if_m(res == 0, c.error, 0, "Failed to close decriptor");
 }
 
 void make_parquet_graph(ustore_graph_export_t& c, parquet::StreamWriter& os) {
@@ -1644,8 +1682,9 @@ void ustore_graph_import(ustore_graph_import_t* c_ptr) {
     return_if_error_m(c.error);
 
     auto handle_exception = [&](char const* ex) {
-        auto ptr = arena.alloc<char>(strlen(ex), c.error);
-        std::memcpy(ptr.data(), ex, strlen(ex) + 1);
+        auto ptr = arena.alloc<char>(std::strlen(ex), c.error);
+        return_if_error_m(c.error);
+        std::memcpy(ptr.data(), ex, std::strlen(ex) + 1);
         *c.error = ptr.data();
     };
 
@@ -1693,8 +1732,9 @@ void ustore_graph_export(ustore_graph_export_t* c_ptr) {
     return_if_error_m(c.error);
 
     auto handle_exception = [&](char const* ex) {
-        auto ptr = arena.alloc<char>(strlen(ex), c.error);
-        std::memcpy(ptr.data(), ex, strlen(ex) + 1);
+        auto ptr = arena.alloc<char>(std::strlen(ex), c.error);
+        return_if_error_m(c.error);
+        std::memcpy(ptr.data(), ex, std::strlen(ex) + 1);
         *c.error = ptr.data();
     };
 
@@ -1719,10 +1759,13 @@ void ustore_graph_export(ustore_graph_export_t* c_ptr) {
         int_builder_t targets_builder;
         int_builder_t edges_builder;
         auto sources = arena.alloc<ustore_key_t>(task_count, c.error);
+        return_if_error_m(c.error);
         auto targets = arena.alloc<ustore_key_t>(task_count, c.error);
+        return_if_error_m(c.error);
         ptr_range_gt<ustore_key_t> edges;
         if (c.edge_id_field)
             edges = arena.alloc<ustore_key_t>(task_count, c.error);
+        return_if_error_m(c.error);
 
         keys_stream_t stream(c.db, c.collection, task_count, nullptr);
         auto status = stream.seek_to_first();
@@ -1773,7 +1816,7 @@ void ustore_graph_export(ustore_graph_export_t* c_ptr) {
         if (pcn == csv_k)
             end_csv_graph(c, sources_builder, targets_builder, edges_builder);
         else if (pcn == ndjson_k)
-            end_ndjson(handle);
+            return_error_if_m(end_ndjson(handle) == 0, c.error, 0, "Failed to close decriptor");
     }
     catch (std::exception const& ex) {
         handle_exception(ex.what());
