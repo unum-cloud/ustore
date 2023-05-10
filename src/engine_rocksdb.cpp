@@ -23,6 +23,7 @@
 
 #include <rocksdb/db.h>
 #include <rocksdb/utilities/options_util.h>
+#include <rocksdb/utilities/checkpoint.h>
 #include <rocksdb/utilities/transaction.h>
 #include <rocksdb/utilities/optimistic_transaction_db.h>
 
@@ -80,7 +81,7 @@ struct rocks_snapshot_t {
 
 struct rocks_db_t {
     std::vector<rocks_collection_t*> columns;
-    std::unordered_map<ustore_size_t, rocks_snapshot_t*> snapshots;
+    std::unordered_map<ustore_snapshot_t, rocks_snapshot_t*> snapshots;
     std::unique_ptr<rocks_native_t> native;
     std::mutex mutex;
 };
@@ -279,8 +280,36 @@ void ustore_snapshot_create(ustore_snapshot_create_t* c_ptr) {
     if (!rocks_snapshot->snapshot)
         *c.error = "Couldn't get a snapshot!";
 
-    *c.id = reinterpret_cast<std::size_t>(rocks_snapshot);
+    *c.id = reinterpret_cast<ustore_snapshot_t>(rocks_snapshot);
     db.snapshots[*c.id] = rocks_snapshot;
+}
+
+void ustore_snapshot_export(ustore_snapshot_export_t* c_ptr) {
+    ustore_snapshot_export_t& c = *c_ptr;
+    return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+
+    try {
+        rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
+
+        rocksdb::Checkpoint* chp_ptr = nullptr;
+        rocksdb::Checkpoint::Create(db.native.get(), &chp_ptr);
+        return_error_if_m(chp_ptr, c.error, uninitialized_state_k, "Checkpoint is uninitialized");
+
+        auto it = db.snapshots.find(c.id);
+        return_error_if_m(it != db.snapshots.end(), c.error, args_wrong_k, "The snapshot does'nt exist!");
+        rocks_snapshot_t& snap = *reinterpret_cast<rocks_snapshot_t*>(c.id);
+        return_error_if_m(snap.snapshot, c.error, uninitialized_state_k, "The snapshot does'nt exist!");
+
+        if (std::filesystem::is_empty(c.path))
+            std::filesystem::remove(c.path);
+        uint64_t snapshot_id = reinterpret_cast<uint64_t>(snap.snapshot);
+        rocks_status_t status = chp_ptr->CreateCheckpoint(c.path, 0, &snapshot_id);
+
+        export_error(status, c.error);
+    }
+    catch (...) {
+        *c.error = "Snapshot Export Failure";
+    }
 }
 
 void ustore_snapshot_drop(ustore_snapshot_drop_t* c_ptr) {
@@ -300,7 +329,7 @@ void ustore_snapshot_drop(ustore_snapshot_drop_t* c_ptr) {
     db.native->ReleaseSnapshot(snap.snapshot);
     snap.snapshot = nullptr;
 
-    auto id = reinterpret_cast<std::size_t>(c.id);
+    auto id = reinterpret_cast<ustore_size_t>(c.id);
     db.mutex.lock();
     db.snapshots.erase(id);
     db.mutex.unlock();
@@ -436,7 +465,7 @@ void read_one( //
 
     rocksdb::ReadOptions options;
     if (snap_ptr) {
-        auto it = db.snapshots.find(reinterpret_cast<std::size_t>(snap_ptr));
+        auto it = db.snapshots.find(reinterpret_cast<ustore_size_t>(snap_ptr));
         return_error_if_m(it != db.snapshots.end(), c_error, args_wrong_k, "The snapshot does'nt exist!");
         options.snapshot = snap_ptr->snapshot;
     }
@@ -479,7 +508,7 @@ void read_many( //
 
     rocksdb::ReadOptions options;
     if (snap_ptr) {
-        auto it = db.snapshots.find(reinterpret_cast<std::size_t>(snap_ptr));
+        auto it = db.snapshots.find(reinterpret_cast<ustore_size_t>(snap_ptr));
         return_error_if_m(it != db.snapshots.end(), c_error, args_wrong_k, "The snapshot does'nt exist!");
         options.snapshot = snap_ptr->snapshot;
     }
