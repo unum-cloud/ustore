@@ -254,6 +254,20 @@ class context_t : public std::enable_shared_from_this<context_t> {
         ustore_transaction_commit(&txn_commit);
         return {std::move(status), std::move(sequence_number)};
     }
+
+    /**
+     * @brief Exports the snapshot as a new database into the specified path
+     */
+    status_t export_to(ustore_str_view_t path) noexcept {
+        status_t status;
+        ustore_snapshot_export_t snap_export {};
+        snap_export.db = db_;
+        snap_export.error = status.member_ptr();
+        snap_export.id = snap_;
+        snap_export.path = path;
+        ustore_snapshot_export(&snap_export);
+        return status;
+    }
 };
 
 using transaction_t = context_t;
