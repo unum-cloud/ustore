@@ -311,7 +311,7 @@ void add_key_value( //
     jsons_str += "{";
     for (size_t idx = 0; idx != es.size(); idx++) {
         offsets[idx] = jsons_str.size();
-        fmt::format_to(std::back_inserter(jsons_str), "\"{}\": {}", column_name.data(), numeric_array->Value(row_idx));
+        fmt::format_to(std::back_inserter(jsons_str), "\"{}\": {},", column_name.data(), numeric_array->Value(idx));
     }
     jsons_str.back() = '}';
     offsets.back() = jsons_str.size();
@@ -341,7 +341,7 @@ void add_key_value<arrow::BinaryArray>( //
         offsets[idx] = jsons_str.size();
         auto value = binary_array->Value(idx);
         fmt::format_to(std::back_inserter(jsons_str),
-                       "\"{}\":\"{}\"",
+                       "\"{}\":\"{}\",",
                        column_name.data(),
                        std::string_view(value.data(), value.size()));
     }
