@@ -306,14 +306,14 @@ void add_key_value( //
     auto numeric_array = std::static_pointer_cast<array_type_at>(array);
 
     std::string jsons_str;
-    jsons_str.reserve(es.size() * (column_name.size() + 2));
+    jsons_str.reserve(es.size() * (sizeof(array_type_at) + column_name.size() + 2));
     std::vector<ustore_length_t> offsets(es.size() + 1);
-
+    jsons_str += "{";
     for (size_t idx = 0; idx != es.size(); idx++) {
         offsets[idx] = jsons_str.size();
-        jsons_str += fmt::format("{{\"{}\": {}}}", column_name.data(), numeric_array->Value(idx));
+        fmt::format_to(std::back_inserter(jsons_str), "\"{}\": {}", column_name.data(), numeric_array->Value(row_idx));
     }
-
+    jsons_str.back() = '}';
     offsets.back() = jsons_str.size();
 
     contents_arg_t values {};
@@ -336,12 +336,16 @@ void add_key_value<arrow::BinaryArray>( //
     jsons_str.reserve(es.size() * (column_name.size() + 2));
     std::vector<ustore_length_t> offsets(es.size() + 1);
 
+    jsons_str += "{";
     for (size_t idx = 0; idx != es.size(); idx++) {
         offsets[idx] = jsons_str.size();
         auto value = binary_array->Value(idx);
-        jsons_str += fmt::format("{\"{}\":\"{}\"}", column_name.data(), std::string_view(value.data(), value.size()));
+        fmt::format_to(std::back_inserter(jsons_str),
+                       "\"{}\":\"{}\"",
+                       column_name.data(),
+                       std::string_view(value.data(), value.size()));
     }
-
+    jsons_str.back() = '}';
     offsets.back() = jsons_str.size();
 
     contents_arg_t values {};
