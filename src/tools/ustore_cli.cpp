@@ -26,10 +26,17 @@ std::string remove_quotes(std::string str) {
     return str;
 }
 
+template<typename... args_at>
+void print(char const* color, std::string message, args_at&&... args) {
+    if (sizeof...(args) != 0)
+        message = fmt::format(message, std::forward<args_at>(args)...);
+    fmt::print("{}{}{}\n", color, message, RESET);
+}
+
 status_t collection_create(database_t& db, std::string const& name) {
     auto maybe_collection = db.find_or_create(name.c_str());
     if (maybe_collection)
-        fmt::print("{}Collection '{}' created{}\n", GREEN, name, RESET);
+        print(GREEN, "Collection '{}' created", name);
     else
         fmt::print("{}Failed to create collection '{}'{}\n", RED, name, RESET);
 
