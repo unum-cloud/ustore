@@ -59,7 +59,7 @@ void collection_list(database_t& db) {
     }
 
     while (!collections->names.is_end()) {
-        print(YELLOW, "{}\n", *collections->names);
+        print(YELLOW, "{}", *collections->names);
         ++collections->names;
     }
 }
