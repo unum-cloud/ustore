@@ -33,29 +33,20 @@ void print(char const* color, std::string message, args_at&&... args) {
     fmt::print("{}{}{}\n", color, message, RESET);
 }
 
-status_t collection_create(database_t& db, std::string const& name) {
+void collection_create(database_t& db, std::string const& name) {
     auto maybe_collection = db.find_or_create(name.c_str());
     if (maybe_collection)
         print(GREEN, "Collection '{}' created", name);
     else
-        print(RED, "{}Failed to create collection '{}'{}\n", name);
-
-    return maybe_collection.release_status();
+        print(RED, "Failed to create collection '{}'\n", name);
 }
 
-status_t collection_drop(database_t& db, std::string const& name) {
-    status_t status;
-    auto maybe_collection = db.find(name);
-    if (!maybe_collection) {
-        status = maybe_collection.release_status();
-        print("{}Collection '{}' not found{}\n", RED, name);
-        return maybe_collection.release_status();
-    }
-
+void collection_drop(database_t& db, std::string const& name) {
+    auto status = db.drop(name);
     if (status)
-        print(GREEN, "{}Collection '{}' dropped{}\n", name);
+        print(GREEN, "Collection '{}' dropped\n", name);
     else
-        print(RED, "{}Failed to drop collection '{}'{}\n", name);
+        print(RED, "Failed to drop collection '{}'\n", name);
 }
 
 void collection_list(database_t& db) {
