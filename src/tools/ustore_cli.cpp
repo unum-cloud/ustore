@@ -179,55 +179,49 @@ int main(int argc, char* argv[]) {
             continue;
         }
 
-        if (commands[0] == "create") {
-            if (commands.size() != 3) {
-                fmt::print("{}Invalid input{}\n", RED, RESET);
-                continue;
-            }
+        if (commands[0] == "collection") {
 
-            auto& argument = commands[1];
-            if (argument == "--collection") {
-                auto collection_name = remove_quotes(commands[2]);
-                auto collection = db.find_or_create(collection_name.c_str());
+            auto& action = commands[1];
+            if (action == "create") {
+
+                if (commands.size() != 3) {
+                    fmt::print("{}Invalid input{}\n", RED, RESET);
+                    continue;
+                }
+
+                name = remove_quotes(commands[2]);
+                auto collection = db.find_or_create(name.c_str());
                 if (collection)
-                    fmt::print("{}Succesfully created collection {}{}\n", GREEN, collection_name, RESET);
+                    fmt::print("{}Succesfully created collection {}{}\n", GREEN, name, RESET);
                 else
-                    fmt::print("{}Failed to created collection {}{}\n", RED, collection_name, RESET);
+                    fmt::print("{}Failed to created collection {}{}\n", RED, name, RESET);
             }
-            else
-                fmt::print("{}Invalid create argument {}{}\n", RED, argument, RESET);
-        }
-        else if (commands[0] == "drop") {
-            if (commands.size() != 3) {
-                fmt::print("{}Invalid input{}\n", RED, RESET);
-                continue;
-            }
+            else if (action == "drop") {
 
-            auto& argument = commands[1];
-            if (argument == "--collection") {
-                auto collection_name = remove_quotes(commands[2]);
-                auto collection = db.find(collection_name);
+                if (commands.size() != 3) {
+                    fmt::print("{}Invalid input{}\n", RED, RESET);
+                    continue;
+                }
+
+                auto name = remove_quotes(commands[2]);
+                auto collection = db.find(name);
                 if (collection) {
                     auto status = collection->drop();
                     if (status)
-                        fmt::print("{}Succesfully droped collection {}{}\n", GREEN, collection_name, RESET);
+                        fmt::print("{}Succesfully droped collection {}{}\n", GREEN, name, RESET);
                     else
-                        fmt::print("{}Failed to drop collection {}{}\n", RED, collection_name, RESET);
+                        fmt::print("{}Failed to drop collection {}{}\n", RED, name, RESET);
                 }
                 else
-                    fmt::print("{}Collection {} not found{}\n", RED, collection_name, RESET);
+                    fmt::print("{}Collection {} not found{}\n", RED, name, RESET);
             }
-            else
-                fmt::print("{}Invalid drop argument {}{}\n", RED, argument, RESET);
-        }
-        else if (commands[0] == "list") {
-            if (commands.size() != 2) {
-                fmt::print("{}Invalid input{}\n", RED, RESET);
-                continue;
-            }
+            else if (action == "list") {
 
-            auto& argument = commands[1];
-            if (argument == "--collections") {
+                if (commands.size() != 2) {
+                    fmt::print("{}Invalid input{}\n", RED, RESET);
+                    continue;
+                }
+
                 auto context = context_t {db, nullptr};
                 auto collections = context.collections();
                 if (!collections) {
@@ -240,7 +234,7 @@ int main(int argc, char* argv[]) {
                 }
             }
             else
-                fmt::print("{}Invalid list argument {}{}\n", RED, argument, RESET);
+                fmt::print("{}Invalid collection action {}{}\n", RED, action, RESET);
         }
         else if (commands[0] == "import") {
             if (commands.size() != 9 && commands.size() != 7) {
