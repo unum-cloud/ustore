@@ -1145,11 +1145,11 @@ TEST(db, cli) {
     EXPECT_EQ(maybe_cols->ids.size(), 0);
 
     command = exec_path + "ustore";
-    run_command(command.c_str(), "--url", url, "collection", "create", "collection1");
+    run_command(command.c_str(), "--url", url, "collection", "create", "--name", "collection1");
     EXPECT_TRUE(db.contains("collection1"));
     EXPECT_TRUE(*db.contains("collection1"));
 
-    run_command(command.c_str(), "--url", url, "collection", "drop", "collection1");
+    run_command(command.c_str(), "--url", url, "collection", "drop", "--name", "collection1");
     EXPECT_TRUE(db.contains("collection1"));
     EXPECT_FALSE(*db.contains("collection1"));
 
