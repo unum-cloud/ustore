@@ -91,13 +91,19 @@ int main(int argc, char* argv[]) {
     std::string selected;
     std::string action;
     std::string name;
+    std::string export_path;
+    ustore_snapshot_t snap_id;
 
     auto collection = (option("collection").set(selected, std::string("collection")) &
                        ((required("create").set(action, std::string("create")) & value("collection name", name)) |
                         (required("drop").set(action, std::string("drop")) & value("collection name", name)) |
                         required("list").set(action, std::string("list"))));
 
-    auto snapshot = (option("snapshot").set(selected, std::string("snapshot")));
+    auto snapshot = (option("snapshot").set(selected, std::string("snapshot")) &
+                         (required("create").set(action, std::string("create"))) |
+                     (required("export").set(action, std::string("export")) & value("path", export_path)) |
+                     (required("drop").set(action, std::string("drop")) & value("snapshot id", snap_id)) |
+                     (required("list").set(action, std::string("list"))));
 
     auto cli = ( //
         (required("--url") & value("URL", url)).doc("Server URL"),
@@ -142,6 +148,25 @@ int main(int argc, char* argv[]) {
     }
     else if (selected == "snapshot") {
         close = true;
+        if (action == "create") {
+            db.snapshot();
+        }
+        else if (action == "export") {
+            auto context = context_t {db, nullptr};
+            context.export_to(export_path.c_str());
+        }
+        else if (action == "drop") {
+            // TODO
+        }
+        else if (action == "list") {
+            auto context = context_t {db, nullptr};
+            auto snapshots = context.snapshots().throw_or_release();
+            auto it = snapshots.begin();
+            while (it != snapshots.end()) {
+                fmt::print("{}\n", *it);
+                ++it;
+            }
+        }
     }
 
     if (!imp.empty()) {
@@ -235,6 +260,55 @@ int main(int argc, char* argv[]) {
             }
             else
                 fmt::print("{}Invalid collection action {}{}\n", RED, action, RESET);
+        }
+        else if (commands[0] == "snapshot") {
+
+            auto& action = commands[1];
+            if (action == "create") {
+
+                if (commands.size() != 2) {
+                    fmt::print("{}Invalid input{}\n", RED, RESET);
+                    continue;
+                }
+
+                auto snapshot = db.snapshot();
+                if (snapshot)
+                    fmt::print("{}Succesfully created snapshot {}\n", GREEN);
+                else
+                    fmt::print("{}Failed to created snapshot {}\n", RED);
+            }
+            else if (action == "export") {
+
+                if (commands.size() != 3) {
+                    fmt::print("{}Invalid input{}\n", RED, RESET);
+                    continue;
+                }
+
+                auto context = context_t {db, nullptr};
+                auto status = context.export_to(export_path.c_str());
+                if (status)
+                    fmt::print("{}Succesfully exported snapshot {}\n", GREEN);
+                else
+                    fmt::print("{}Failed to export snapshot {}\n", RED);
+            }
+            else if (action == "drop") {
+                // TODO
+            }
+            else if (action == "list") {
+
+                if (commands.size() != 2) {
+                    fmt::print("{}Invalid input{}\n", RED, RESET);
+                    continue;
+                }
+
+                auto context = context_t {db, nullptr};
+                auto snapshots = context.snapshots().throw_or_release();
+                auto it = snapshots.begin();
+                while (it != snapshots.end()) {
+                    fmt::print("{}{}{}\n", YELLOW, *it, RESET);
+                    ++it;
+                }
+            }
         }
         else if (commands[0] == "import") {
             if (commands.size() != 9 && commands.size() != 7) {
