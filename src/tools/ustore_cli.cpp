@@ -152,10 +152,9 @@ int main(int argc, char* argv[]) {
                       (required("drop").set(action, std::string("drop")) & value("snapshot id", snap_id)) |
                       (required("list").set(action, std::string("list")))));
 
-    auto cli = ( //
-        (required("--url") & value("URL", url)).doc("Server URL"),
-        (collection | snapshot),
-        option("-h", "--help").set(help).doc("Print this help information on this tool and exit"));
+    auto cli = ((required("--url") & value("URL", url)).doc("Server URL"),
+                (collection | snapshot),
+                option("-h", "--help").set(help).doc("Print this help information on this tool and exit"));
 
     if (!parse(argc, argv, cli)) {
         std::cerr << make_man_page(cli, argv[0]);
