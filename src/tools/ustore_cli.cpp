@@ -18,7 +18,7 @@ using namespace unum;
 #define YELLOW "\x1B[33m"
 #define RESET "\033[0m"
 
-std::string& remove_quotes(std::string& str) {
+std::string remove_quotes(std::string str) {
     if (str[0] == '\"' && str[str.size() - 1] == '\"') {
         str.erase(0, 1);
         str.erase(str.size() - 1);
@@ -237,7 +237,7 @@ int main(int argc, char* argv[]) {
                     continue;
                 }
 
-                name = remove_quotes(commands[2]);
+                auto name = remove_quotes(commands[2]);
                 collection_create(name);
             }
             else if (action == "drop") {
