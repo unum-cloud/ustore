@@ -58,6 +58,21 @@ status_t collection_drop(database_t& db, std::string const& name) {
         print(RED, "{}Failed to drop collection '{}'{}\n", name);
 }
 
+void collection_list(database_t& db) {
+    auto context = context_t {db, nullptr};
+    auto collections = context.collections();
+
+    if (!collections) {
+        print(RED, "{}Failed to list collections{}\n");
+        return;
+    }
+
+    while (!collections->names.is_end()) {
+        print(YELLOW, "{}\n", *collections->names);
+        ++collections->names;
+    }
+}
+
 void docs_import(database_t& db,
                  std::string const& collection_name,
                  std::string const& input_file,
@@ -172,12 +187,7 @@ int main(int argc, char* argv[]) {
             collection_drop(db, name);
         }
         else if (action == "list") {
-            auto context = context_t {db, nullptr};
-            auto collections = context.collections().throw_or_release();
-            while (!collections.names.is_end()) {
-                print(YELLOW, "{}\n", *collections.names);
-                ++collections.names;
-            }
+            collection_list(db);
         }
         else if (action == "import")
             docs_import(db, coll_name, input_file, id_field, max_batch_size);
@@ -262,17 +272,7 @@ int main(int argc, char* argv[]) {
                     print(RED, "{}Invalid input{}\n");
                     continue;
                 }
-
-                auto context = context_t {db, nullptr};
-                auto collections = context.collections();
-                if (!collections) {
-                    print(RED, "{}Failed to list collections{}\n");
-                    continue;
-                }
-                while (!collections->names.is_end()) {
-                    print("{}{}{}\n", YELLOW, *collections->names);
-                    ++collections->names;
-                }
+                collection_list(db);
             }
             else
                 print(RED, "{}Invalid collection action {}{}\n", action);
