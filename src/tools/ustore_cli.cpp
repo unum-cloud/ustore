@@ -38,15 +38,15 @@ void collection_create(database_t& db, std::string const& name) {
     if (maybe_collection)
         print(GREEN, "Collection '{}' created", name);
     else
-        print(RED, "Failed to create collection '{}'\n", name);
+        print(RED, "Failed to create collection '{}'", name);
 }
 
 void collection_drop(database_t& db, std::string const& name) {
     auto status = db.drop(name);
     if (status)
-        print(GREEN, "Collection '{}' dropped\n", name);
+        print(GREEN, "Collection '{}' dropped", name);
     else
-        print(RED, "Failed to drop collection '{}'\n", name);
+        print(RED, "Failed to drop collection '{}'", name);
 }
 
 void collection_list(database_t& db) {
@@ -54,7 +54,7 @@ void collection_list(database_t& db) {
     auto collections = context.collections();
 
     if (!collections) {
-        print(RED, "{}Failed to list collections{}\n");
+        print(RED, "Failed to list collections");
         return;
     }
 
@@ -86,9 +86,9 @@ void docs_import(database_t& db,
     ustore_docs_import(&docs);
 
     if (status)
-        print(GREEN, "Successfully imported\n");
+        print(GREEN, "Successfully imported");
     else
-        print(RED, "Failed to import: {}\n", status.message());
+        print(RED, "Failed to import: {}", status.message());
 }
 
 void docs_export(database_t& db,
@@ -110,9 +110,9 @@ void docs_export(database_t& db,
     };
     ustore_docs_export(&docs);
     if (status)
-        print(GREEN, "Successfully exported\n");
+        print(GREEN, "Successfully exported");
     else
-        print(RED, "Failed to export: {}\n", status.message());
+        print(RED, "Failed to export: {}", status.message());
 }
 
 int main(int argc, char* argv[]) {
@@ -199,7 +199,7 @@ int main(int argc, char* argv[]) {
             auto snapshots = context.snapshots().throw_or_release();
             auto it = snapshots.begin();
             while (it != snapshots.end()) {
-                print(YELLOW, "{}\n", *it);
+                print(YELLOW, "{}", *it);
                 ++it;
             }
         }
@@ -237,7 +237,7 @@ int main(int argc, char* argv[]) {
             if (action == "create") {
 
                 if (commands.size() != 3) {
-                    print(RED, "{}Invalid input{}\n");
+                    print(RED, "Invalid input");
                     continue;
                 }
 
@@ -247,7 +247,7 @@ int main(int argc, char* argv[]) {
             else if (action == "drop") {
 
                 if (commands.size() != 3) {
-                    print(RED, "{}Invalid input{}\n");
+                    print(RED, "Invalid input");
                     continue;
                 }
 
@@ -257,13 +257,13 @@ int main(int argc, char* argv[]) {
             else if (action == "list") {
 
                 if (commands.size() != 2) {
-                    print(RED, "{}Invalid input{}\n");
+                    print(RED, "Invalid input");
                     continue;
                 }
                 collection_list(db);
             }
             else
-                print(RED, "{}Invalid collection action {}{}\n", action);
+                print(RED, "Invalid collection action {}", action);
         }
         else if (commands[0] == "snapshot") {
 
@@ -271,29 +271,29 @@ int main(int argc, char* argv[]) {
             if (action == "create") {
 
                 if (commands.size() != 2) {
-                    print(RED, "{}Invalid input{}\n");
+                    print(RED, "Invalid input");
                     continue;
                 }
 
                 auto snapshot = db.snapshot();
                 if (snapshot)
-                    print(GREEN, "{}Snapshot created{}\n");
+                    print(GREEN, "Snapshot created");
                 else
-                    print(RED, "{}Failed to created snapshot{}\n");
+                    print(RED, "Failed to created snapshot");
             }
             else if (action == "export") {
 
                 if (commands.size() != 3) {
-                    print(RED, "{}Invalid input{}\n");
+                    print(RED, "Invalid input");
                     continue;
                 }
 
                 auto context = context_t {db, nullptr};
                 auto status = context.export_to(export_path.c_str());
                 if (status)
-                    print(GREEN, "{}Snapshot exported{}\n");
+                    print(GREEN, "Snapshot exported");
                 else
-                    print(RED, "{}Failed to export snapshot{}\n");
+                    print(RED, "Failed to export snapshot");
             }
             else if (action == "drop") {
                 // TODO
@@ -301,7 +301,7 @@ int main(int argc, char* argv[]) {
             else if (action == "list") {
 
                 if (commands.size() != 2) {
-                    print(RED, "{}Invalid input{}\n");
+                    print(RED, "Invalid input");
                     continue;
                 }
 
@@ -309,14 +309,14 @@ int main(int argc, char* argv[]) {
                 auto snapshots = context.snapshots().throw_or_release();
                 auto it = snapshots.begin();
                 while (it != snapshots.end()) {
-                    print(YELLOW, "{}{}{}\n", *it);
+                    print(YELLOW, "{}", *it);
                     ++it;
                 }
             }
         }
         else if (commands[0] == "import") {
             if (commands.size() != 9 && commands.size() != 7) {
-                print(RED, "{}Invalid input{}\n");
+                print(RED, "Invalid input");
                 continue;
             }
 
@@ -324,7 +324,7 @@ int main(int argc, char* argv[]) {
             if (argument == "--input")
                 input_file = commands[2];
             else {
-                print(RED, "{}Invalid list argument {}{}\n", argument);
+                print(RED, "Invalid list argument {}", argument);
                 continue;
             }
 
@@ -332,7 +332,7 @@ int main(int argc, char* argv[]) {
             if (argument == "--id")
                 id_field = commands[4];
             else {
-                print(RED, "{}Invalid list argument {}{}\n", argument);
+                print(RED, "Invalid list argument {}", argument);
                 continue;
             }
 
@@ -340,7 +340,7 @@ int main(int argc, char* argv[]) {
             if (argument == "--max_batch_size")
                 max_batch_size = std::stoi(commands[6]);
             else {
-                print(RED, "{}Invalid list argument {}{}\n", argument);
+                print(RED, "Invalid list argument {}", argument);
                 continue;
             }
 
@@ -349,7 +349,7 @@ int main(int argc, char* argv[]) {
                 if (argument == "--collection")
                     name = commands[8];
                 else {
-                    print(RED, "{}Invalid list argument {}{}\n", argument);
+                    print(RED, "Invalid list argument {}", argument);
                     continue;
                 }
             }
@@ -360,7 +360,7 @@ int main(int argc, char* argv[]) {
         }
         else if (commands[0] == "export") {
             if (commands.size() != 7 && commands.size() != 5) {
-                print(RED, "{}Invalid input{}\n");
+                print(RED, "Invalid input");
                 continue;
             }
 
@@ -368,7 +368,7 @@ int main(int argc, char* argv[]) {
             if (argument == "--output")
                 output_ext = commands[2];
             else {
-                print(RED, "{}Invalid list argument {}{}\n", argument);
+                print(RED, "Invalid list argument {}", argument);
                 continue;
             }
 
@@ -376,7 +376,7 @@ int main(int argc, char* argv[]) {
             if (argument == "--max_batch_size")
                 max_batch_size = std::stoi(commands[4]);
             else {
-                print(RED, "{}Invalid list argument {}{}\n", argument);
+                print(RED, "Invalid list argument {}", argument);
                 continue;
             }
 
@@ -385,7 +385,7 @@ int main(int argc, char* argv[]) {
                 if (argument == "--collection")
                     name = commands[6];
                 else {
-                    print(RED, "{}Invalid list argument {}{}\n", argument);
+                    print(RED, "Invalid list argument {}", argument);
                     continue;
                 }
             }
@@ -395,7 +395,7 @@ int main(int argc, char* argv[]) {
             docs_export(db, name, output_ext, max_batch_size);
         }
         else
-            print(RED, "{}Invalid input{}\n");
+            print(RED, "Invalid input");
     };
 
     return 0;
