@@ -53,7 +53,7 @@ status_t collection_drop(database_t& db, std::string const& name) {
 
 void docs_import(database_t& db,
                  std::string const& collection_name,
-                 std::string const& imp,
+                 std::string const& input_file,
                  std::string const& id_field,
                  std::size_t max_batch_size) {
     status_t status;
@@ -66,21 +66,21 @@ void docs_import(database_t& db,
         .arena = arena.member_ptr(),
         .options = ustore_options_default_k,
         .collection = collection,
-        .paths_pattern = imp.c_str(),
+        .paths_pattern = input_file.c_str(),
         .max_batch_size = max_batch_size,
         .id_field = id_field.c_str(),
     };
     ustore_docs_import(&docs);
 
     if (status)
-        fmt::print("Successfully imported\n");
+        fmt::print("{}Successfully imported{}\n", GREEN, RESET);
     else
-        fmt::print("Failed to import: {}\n", status.message());
+        fmt::print("{}Failed to import: {}{}\n", RED, status.message(), RESET);
 }
 
 void docs_export(database_t& db,
                  std::string const& collection_name,
-                 std::string const& exp,
+                 std::string const& output_ext,
                  std::size_t max_batch_size) {
     status_t status;
     arena_t arena(db);
@@ -92,22 +92,22 @@ void docs_export(database_t& db,
         .arena = arena.member_ptr(),
         .options = ustore_options_default_k,
         .collection = collection,
-        .paths_extension = exp.c_str(),
+        .paths_extension = output_ext.c_str(),
         .max_batch_size = max_batch_size,
     };
     ustore_docs_export(&docs);
     if (status)
-        fmt::print("Successfully exported\n");
+        fmt::print("{}Successfully exported{}\n", GREEN, RESET);
     else
-        fmt::print("Failed to export: {}\n", status.message());
+        fmt::print("Failed to export: {}\n", RED, status.message(), RESET);
 }
 
 int main(int argc, char* argv[]) {
     using namespace clipp;
 
     std::string url = "";
-    std::string imp;
-    std::string exp;
+    std::string input_file;
+    std::string output_ext;
     std::string id_field;
     std::string coll_name;
     std::size_t max_batch_size;
@@ -119,10 +119,19 @@ int main(int argc, char* argv[]) {
     std::string export_path;
     ustore_snapshot_t snap_id;
 
-    auto collection = (option("collection").set(selected, std::string("collection")) &
-                       ((required("create").set(action, std::string("create")) & value("collection name", name)) |
-                        (required("drop").set(action, std::string("drop")) & value("collection name", name)) |
-                        required("list").set(action, std::string("list"))));
+    auto collection =
+        (option("collection").set(selected, std::string("collection")) &
+         ((required("create").set(action, std::string("create")) & required("--name") &
+           value("collection name", name)) |
+          (required("drop").set(action, std::string("drop")) & required("--name") & value("collection name", name)) |
+          required("list").set(action, std::string("list")) |
+          ((required("import").set(action, std::string("import")) &
+            (required("--input") & value("input", input_file)).doc("Input file name") &
+            (required("--id") & value("id field", id_field)).doc("The field which data will use as key(s)")) |
+           (required("export").set(action, std::string("export")) &
+            (required("--output") & value("output", output_ext)).doc("Output file extension"))) &
+              ((required("--max_batch_size") & value("max batch size", max_batch_size)).doc("Size of available RAM"),
+               (option("--name") & value("collection name", coll_name)))));
 
     auto snapshot = (option("snapshot").set(selected, std::string("snapshot")) &
                          (required("create").set(action, std::string("create"))) |
@@ -133,11 +142,6 @@ int main(int argc, char* argv[]) {
     auto cli = ( //
         (required("--url") & value("URL", url)).doc("Server URL"),
         (collection | snapshot),
-        (option("--import") & value("file path", imp)).doc("Import the .ndjson|.csv|.parquet file"),
-        (option("--export") & value("file extension", exp)).doc("Export into .ndjson|.csv|.parquet file"),
-        (option("--collection") & value("collection name", coll_name)).doc("Place for imp"),
-        (option("--id") & value("id field", id_field)).doc("The field which data will use as key(s)"),
-        (option("--max_batch_size") & value("max batch size", max_batch_size)).doc("Size of available RAM"),
         option("-h", "--help").set(help).doc("Print this help information on this tool and exit"));
 
     if (!parse(argc, argv, cli)) {
@@ -168,6 +172,10 @@ int main(int argc, char* argv[]) {
                 ++collections.names;
             }
         }
+        else if (action == "import")
+            docs_import(db, coll_name, input_file, id_field, max_batch_size);
+        else if (action == "export")
+            docs_export(db, coll_name, output_ext, max_batch_size);
     }
     else if (selected == "snapshot") {
         close = true;
@@ -190,15 +198,6 @@ int main(int argc, char* argv[]) {
                 ++it;
             }
         }
-    }
-
-    if (!imp.empty()) {
-        close = true;
-        docs_import(db, coll_name, imp, id_field, max_batch_size);
-    }
-    if (!exp.empty()) {
-        close = true;
-        docs_export(db, coll_name, exp, max_batch_size);
     }
 
     if (close)
@@ -327,8 +326,8 @@ int main(int argc, char* argv[]) {
             }
 
             auto& argument = commands[1];
-            if (argument == "--path")
-                imp = commands[2];
+            if (argument == "--input")
+                input_file = commands[2];
             else {
                 fmt::print("{}Invalid list argument {}{}\n", RED, argument, RESET);
                 continue;
@@ -362,7 +361,7 @@ int main(int argc, char* argv[]) {
             else
                 coll_name = "";
 
-            docs_import(db, coll_name, imp, id_field, max_batch_size);
+            docs_import(db, coll_name, input_file, id_field, max_batch_size);
         }
         else if (commands[0] == "export") {
             if (commands.size() != 7 && commands.size() != 5) {
@@ -371,8 +370,8 @@ int main(int argc, char* argv[]) {
             }
 
             auto& argument = commands[1];
-            if (argument == "--path")
-                exp = commands[2];
+            if (argument == "--output")
+                output_ext = commands[2];
             else {
                 fmt::print("{}Invalid list argument {}{}\n", RED, argument, RESET);
                 continue;
@@ -398,7 +397,7 @@ int main(int argc, char* argv[]) {
             else
                 coll_name = "";
 
-            docs_export(db, coll_name, exp, max_batch_size);
+            docs_export(db, coll_name, output_ext, max_batch_size);
         }
         else
             fmt::print("{}Invalid input{}\n", RED, RESET);
