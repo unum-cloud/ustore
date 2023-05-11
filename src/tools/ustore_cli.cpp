@@ -168,15 +168,12 @@ int main(int argc, char* argv[]) {
     bool close = false;
     if (db_object == "collection") {
         close = true;
-        if (action == "create") {
+        if (action == "create")
             collection_create(db, name);
-        }
-        else if (action == "drop") {
+        else if (action == "drop")
             collection_drop(db, name);
-        }
-        else if (action == "list") {
+        else if (action == "list")
             collection_list(db);
-        }
         else if (action == "import")
             docs_import(db, name, input_file, id_field, max_batch_size);
         else if (action == "export")
