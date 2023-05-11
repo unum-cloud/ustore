@@ -26,7 +26,7 @@ std::string remove_quotes(std::string str) {
     return str;
 }
 
-status_t collection_create(std::string const& name) {
+status_t collection_create(database_t& db, std::string const& name) {
     auto maybe_collection = db.find_or_create(name.c_str());
     if (maybe_collection)
         fmt::print("{}Collection '{}' created{}\n", GREEN, name, RESET);
@@ -36,7 +36,7 @@ status_t collection_create(std::string const& name) {
     return maybe_collection.release_status();
 }
 
-status_t collection_drop(std::string const& name) {
+status_t collection_drop(database_t& db, std::string const& name) {
     status_t status;
     auto maybe_collection = db.find(name);
     if (!maybe_collection) {
@@ -155,10 +155,10 @@ int main(int argc, char* argv[]) {
     if (selected == "collection") {
         close = true;
         if (action == "create") {
-            collection_create(name);
+            collection_create(db, name);
         }
         else if (action == "drop") {
-            collection_drop(name)
+            collection_drop(db, name);
         }
         else if (action == "list") {
             auto context = context_t {db, nullptr};
@@ -237,8 +237,8 @@ int main(int argc, char* argv[]) {
                     continue;
                 }
 
-                auto name = remove_quotes(commands[2]);
-                collection_create(name);
+                name = remove_quotes(commands[2]);
+                collection_create(db, name);
             }
             else if (action == "drop") {
 
@@ -247,8 +247,8 @@ int main(int argc, char* argv[]) {
                     continue;
                 }
 
-                auto name = remove_quotes(commands[2]);
-                collection_drop(name);
+                name = remove_quotes(commands[2]);
+                collection_drop(db, name);
             }
             else if (action == "list") {
 
