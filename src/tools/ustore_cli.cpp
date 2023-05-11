@@ -121,7 +121,7 @@ int main(int argc, char* argv[]) {
     bool help = false;
     std::string url = "";
     std::string name;
-    std::string selected;
+    std::string db_object;
     std::string action;
     std::string id_field;
     std::string input_file;
@@ -131,7 +131,7 @@ int main(int argc, char* argv[]) {
     ustore_snapshot_t snap_id;
 
     auto collection =
-        (option("collection").set(selected, std::string("collection")) &
+        (option("collection").set(db_object, std::string("collection")) &
          ((required("create").set(action, std::string("create")) & required("--name") &
            value("collection name", name)) |
           (required("drop").set(action, std::string("drop")) & required("--name") & value("collection name", name)) |
@@ -144,7 +144,7 @@ int main(int argc, char* argv[]) {
               ((required("--max_batch_size") & value("max batch size", max_batch_size)).doc("Size of available RAM"),
                (option("--name") & value("collection name", name)))));
 
-    auto snapshot = (option("snapshot").set(selected, std::string("snapshot")) &
+    auto snapshot = (option("snapshot").set(db_object, std::string("snapshot")) &
                      ((required("create").set(action, std::string("create"))) |
                       (required("export").set(action, std::string("export")) & value("path", export_path)) |
                       (required("drop").set(action, std::string("drop")) & value("snapshot id", snap_id)) |
@@ -166,7 +166,7 @@ int main(int argc, char* argv[]) {
     database_t db;
     db.open(url.c_str()).throw_unhandled();
     bool close = false;
-    if (selected == "collection") {
+    if (db_object == "collection") {
         close = true;
         if (action == "create") {
             collection_create(db, name);
@@ -182,7 +182,7 @@ int main(int argc, char* argv[]) {
         else if (action == "export")
             docs_export(db, name, output_ext, max_batch_size);
     }
-    else if (selected == "snapshot") {
+    else if (db_object == "snapshot") {
         close = true;
         if (action == "create") {
             db.snapshot();
