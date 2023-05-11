@@ -26,6 +26,31 @@ std::string& remove_quotes(std::string& str) {
     return str;
 }
 
+status_t collection_create(std::string const& name) {
+    auto maybe_collection = db.find_or_create(name.c_str());
+    if (maybe_collection)
+        fmt::print("{}Collection '{}' created{}\n", GREEN, name, RESET);
+    else
+        fmt::print("{}Failed to create collection '{}'{}\n", RED, name, RESET);
+
+    return maybe_collection.release_status();
+}
+
+status_t collection_drop(std::string const& name) {
+    status_t status;
+    auto maybe_collection = db.find(name);
+    if (!maybe_collection) {
+        status = maybe_collection.release_status();
+        fmt::print("{}Collection '{}' not found{}\n", RED, name, RESET);
+        return maybe_collection.release_status();
+    }
+
+    if (status)
+        fmt::print("{}Collection '{}' dropped{}\n", GREEN, name, RESET);
+    else
+        fmt::print("{}Failed to drop collection '{}'{}\n", RED, name, RESET);
+}
+
 void docs_import(database_t& db,
                  std::string const& collection_name,
                  std::string const& imp,
@@ -130,12 +155,10 @@ int main(int argc, char* argv[]) {
     if (selected == "collection") {
         close = true;
         if (action == "create") {
-            db.find_or_create(name.c_str());
+            collection_create(name);
         }
         else if (action == "drop") {
-            auto collection = db.find(name);
-            if (collection)
-                collection->drop();
+            collection_drop(name)
         }
         else if (action == "list") {
             auto context = context_t {db, nullptr};
@@ -215,11 +238,7 @@ int main(int argc, char* argv[]) {
                 }
 
                 name = remove_quotes(commands[2]);
-                auto collection = db.find_or_create(name.c_str());
-                if (collection)
-                    fmt::print("{}Successfully created collection {}{}\n", GREEN, name, RESET);
-                else
-                    fmt::print("{}Failed to created collection {}{}\n", RED, name, RESET);
+                collection_create(name);
             }
             else if (action == "drop") {
 
@@ -229,16 +248,7 @@ int main(int argc, char* argv[]) {
                 }
 
                 auto name = remove_quotes(commands[2]);
-                auto collection = db.find(name);
-                if (collection) {
-                    auto status = collection->drop();
-                    if (status)
-                        fmt::print("{}Successfully dropped collection {}{}\n", GREEN, name, RESET);
-                    else
-                        fmt::print("{}Failed to drop collection {}{}\n", RED, name, RESET);
-                }
-                else
-                    fmt::print("{}Collection {} not found{}\n", RED, name, RESET);
+                collection_drop(name);
             }
             else if (action == "list") {
 
@@ -273,9 +283,9 @@ int main(int argc, char* argv[]) {
 
                 auto snapshot = db.snapshot();
                 if (snapshot)
-                    fmt::print("{}Succesfully created snapshot {}\n", GREEN);
+                    fmt::print("{}Snapshot created{}\n", GREEN);
                 else
-                    fmt::print("{}Failed to created snapshot {}\n", RED);
+                    fmt::print("{}Failed to created snapshot{}\n", RED);
             }
             else if (action == "export") {
 
@@ -287,9 +297,9 @@ int main(int argc, char* argv[]) {
                 auto context = context_t {db, nullptr};
                 auto status = context.export_to(export_path.c_str());
                 if (status)
-                    fmt::print("{}Succesfully exported snapshot {}\n", GREEN);
+                    fmt::print("{}Snapshot exported{}\n", GREEN);
                 else
-                    fmt::print("{}Failed to export snapshot {}\n", RED);
+                    fmt::print("{}Failed to export snapshot{}\n", RED);
             }
             else if (action == "drop") {
                 // TODO
