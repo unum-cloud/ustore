@@ -48,7 +48,7 @@ void docs_import(database_t& db,
     ustore_docs_import(&docs);
 
     if (status)
-        fmt::print("Succesfully imported\n");
+        fmt::print("Successfully imported\n");
     else
         fmt::print("Failed to import: {}\n", status.message());
 }
@@ -72,7 +72,7 @@ void docs_export(database_t& db,
     };
     ustore_docs_export(&docs);
     if (status)
-        fmt::print("Succesfully exported\n");
+        fmt::print("Successfully exported\n");
     else
         fmt::print("Failed to export: {}\n", status.message());
 }
@@ -192,7 +192,7 @@ int main(int argc, char* argv[]) {
                 name = remove_quotes(commands[2]);
                 auto collection = db.find_or_create(name.c_str());
                 if (collection)
-                    fmt::print("{}Succesfully created collection {}{}\n", GREEN, name, RESET);
+                    fmt::print("{}Successfully created collection {}{}\n", GREEN, name, RESET);
                 else
                     fmt::print("{}Failed to created collection {}{}\n", RED, name, RESET);
             }
@@ -208,7 +208,7 @@ int main(int argc, char* argv[]) {
                 if (collection) {
                     auto status = collection->drop();
                     if (status)
-                        fmt::print("{}Succesfully droped collection {}{}\n", GREEN, name, RESET);
+                        fmt::print("{}Successfully dropped collection {}{}\n", GREEN, name, RESET);
                     else
                         fmt::print("{}Failed to drop collection {}{}\n", RED, name, RESET);
                 }
