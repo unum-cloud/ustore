@@ -181,9 +181,8 @@ int main(int argc, char* argv[]) {
     }
     else if (db_object == "snapshot") {
         close = true;
-        if (action == "create") {
+        if (action == "create")
             db.snapshot();
-        }
         else if (action == "export") {
             auto context = context_t {db, nullptr};
             context.export_to(export_path.c_str());
