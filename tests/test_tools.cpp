@@ -205,15 +205,9 @@ class arrow_visitor_at {
         fmt::format_to(std::back_inserter(json), "{},", reinterpret_cast<char const*>(arr.Value(idx)));
         return arrow::Status::OK();
     }
-    arrow::Status Visit(arrow::ListArray const& arr) {
-        return arrow::VisitArrayInline(*arr.values().get(), this);
-    }
-    arrow::Status Visit(arrow::LargeListArray const& arr) {
-        return arrow::VisitArrayInline(*arr.values().get(), this);
-    }
-    arrow::Status Visit(arrow::MapArray const& arr) {
-        return arrow::VisitArrayInline(*arr.values().get(), this);
-    }
+    arrow::Status Visit(arrow::ListArray const& arr) { return arrow::VisitArrayInline(*arr.values().get(), this); }
+    arrow::Status Visit(arrow::LargeListArray const& arr) { return arrow::VisitArrayInline(*arr.values().get(), this); }
+    arrow::Status Visit(arrow::MapArray const& arr) { return arrow::VisitArrayInline(*arr.values().get(), this); }
     arrow::Status Visit(arrow::FixedSizeListArray const& arr) {
         return arrow::VisitArrayInline(*arr.values().get(), this);
     }
@@ -1116,7 +1110,62 @@ TEST(crash_cases, docs_export) {
     test_crash_cases_docs_export(ext_csv_k);
 }
 
+#if defined(USTORE_FLIGHT_CLIENT)
+static std::string exec_path;
+
+template <typename... args>
+void run_command(const char* command, args... arguments) {
+    pid_t pid = fork();
+    if (pid == -1)
+        EXPECT_TRUE(false) << "Failed to run command";
+    else if (pid == 0)
+        EXPECT_NE(execl(command, command, arguments..., (char*)(NULL)), -1) << "Fail to execute command";
+    else
+        wait(NULL);
+}
+
+TEST(db, cli) {
+
+    auto command = exec_path + "ustore_flight_server_ucset";
+    pid_t srv_id = fork();
+    if (srv_id == 0) {
+        usleep(1);
+        execl(command.c_str(), command.c_str(), "--quiet", (char*)(NULL));
+        exit(0);
+    }
+    usleep(100000); // 0.1 sec
+
+    database_t db;
+    auto url = "grpc://0.0.0.0:38709";
+    EXPECT_TRUE(db.open());
+    EXPECT_TRUE(db.clear());
+    auto context = context_t {db, nullptr};
+    auto maybe_cols = context.collections();
+    EXPECT_TRUE(maybe_cols);
+    EXPECT_EQ(maybe_cols->ids.size(), 0);
+
+    command = exec_path + "ustore";
+    run_command(command.c_str(), "--url", url, "collection", "create", "collection1");
+    EXPECT_TRUE(db.contains("collection1"));
+    EXPECT_TRUE(*db.contains("collection1"));
+
+    run_command(command.c_str(), "--url", url, "collection", "drop", "collection1");
+    EXPECT_TRUE(db.contains("collection1"));
+    EXPECT_FALSE(*db.contains("collection1"));
+
+    kill(srv_id, SIGKILL);
+    waitpid(srv_id, nullptr, 0);
+}
+
+#endif
+
 int main(int argc, char** argv) {
+
+#if defined(USTORE_FLIGHT_CLIENT)
+    exec_path = argv[0];
+    exec_path = exec_path.substr(0, exec_path.find_last_of("/") + 1);
+#endif
+
     make_ndjson_docs();
     for (const auto& entry : fs::directory_iterator(path_k))
         paths.push_back(ustore_str_span_t(entry.path().c_str()));
@@ -1124,7 +1173,7 @@ int main(int argc, char** argv) {
     db.open().throw_unhandled();
     ::testing::InitGoogleTest(&argc, argv);
     int result = RUN_ALL_TESTS();
-    
+
     delete_test_file();
     return result;
 }
