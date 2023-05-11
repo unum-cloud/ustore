@@ -13,6 +13,11 @@
 using namespace unum::ustore;
 using namespace unum;
 
+#define RED "\033[31m"
+#define GREEN "\033[32m"
+#define YELLOW "\x1B[33m"
+#define RESET "\033[0m"
+
 std::string& remove_quotes(std::string& str) {
     if (str[0] == '\"' && str[str.size() - 1] == '\"') {
         str.erase(0, 1);
@@ -76,21 +81,27 @@ int main(int argc, char* argv[]) {
     using namespace clipp;
 
     std::string url = "";
-    std::string drop_collection;
-    std::string create_collection;
     std::string imp;
     std::string exp;
     std::string id_field;
     std::string coll_name;
     std::size_t max_batch_size;
     bool help = false;
-    bool list_collections = false;
+
+    std::string selected;
+    std::string action;
+    std::string name;
+
+    auto collection = (option("collection").set(selected, std::string("collection")) &
+                       ((required("create").set(action, std::string("create")) & value("collection name", name)) |
+                        (required("drop").set(action, std::string("drop")) & value("collection name", name)) |
+                        required("list").set(action, std::string("list"))));
+
+    auto snapshot = (option("snapshot").set(selected, std::string("snapshot")));
 
     auto cli = ( //
         (required("--url") & value("URL", url)).doc("Server URL"),
-        (option("--list_collections").set(list_collections)).doc("Print list of collections"),
-        (option("--drop_collection") & value("collection name", drop_collection)).doc("Drop collection"),
-        (option("--create_collection") & value("collection name", create_collection)).doc("Create collection"),
+        (collection | snapshot),
         (option("--import") & value("file path", imp)).doc("Import the .ndjson|.csv|.parquet file"),
         (option("--export") & value("file extension", exp)).doc("Export into .ndjson|.csv|.parquet file"),
         (option("--collection") & value("collection name", coll_name)).doc("Place for imp"),
@@ -109,32 +120,35 @@ int main(int argc, char* argv[]) {
 
     database_t db;
     db.open(url.c_str()).throw_unhandled();
-
     bool close = false;
-    if (list_collections) {
+    if (selected == "collection") {
         close = true;
-        auto context = context_t {db, nullptr};
-        auto collections = context.collections().throw_or_release();
-        while (!collections.names.is_end()) {
-            fmt::print("{}\n", *collections.names);
-            ++collections.names;
+        if (action == "create") {
+            db.find_or_create(name.c_str());
+        }
+        else if (action == "drop") {
+            auto collection = db.find(name);
+            if (collection)
+                collection->drop();
+        }
+        else if (action == "list") {
+            auto context = context_t {db, nullptr};
+            auto collections = context.collections().throw_or_release();
+            while (!collections.names.is_end()) {
+                fmt::print("{}\n", *collections.names);
+                ++collections.names;
+            }
         }
     }
-    if (!drop_collection.empty()) {
+    else if (selected == "snapshot") {
         close = true;
-        auto collection = db.find(drop_collection);
-        if (collection)
-            collection->drop();
     }
-    if (!create_collection.empty()) {
-        close = true;
-        db.find_or_create(create_collection.c_str());
-    }
-    if (!imp.empty()){
+
+    if (!imp.empty()) {
         close = true;
         docs_import(db, coll_name, imp, id_field, max_batch_size);
     }
-    if (!exp.empty()){
+    if (!exp.empty()) {
         close = true;
         docs_export(db, coll_name, exp, max_batch_size);
     }
@@ -159,9 +173,15 @@ int main(int argc, char* argv[]) {
 
         if (commands[0] == "exit" && commands.size() == 1)
             break;
+
+        if (commands[0] == "clear" && commands.size() == 1) {
+            system("clear");
+            continue;
+        }
+
         if (commands[0] == "create") {
             if (commands.size() != 3) {
-                fmt::print("Invalid input\n");
+                fmt::print("{}Invalid input{}\n", RED, RESET);
                 continue;
             }
 
@@ -170,16 +190,16 @@ int main(int argc, char* argv[]) {
                 auto collection_name = remove_quotes(commands[2]);
                 auto collection = db.find_or_create(collection_name.c_str());
                 if (collection)
-                    fmt::print("Succesfully created collection {}\n", collection_name);
+                    fmt::print("{}Succesfully created collection {}{}\n", GREEN, collection_name, RESET);
                 else
-                    fmt::print("Failed to created collection {}\n", collection_name);
+                    fmt::print("{}Failed to created collection {}{}\n", RED, collection_name, RESET);
             }
             else
-                fmt::print("Invalid create argument {}\n", argument);
+                fmt::print("{}Invalid create argument {}{}\n", RED, argument, RESET);
         }
         else if (commands[0] == "drop") {
             if (commands.size() != 3) {
-                fmt::print("Invalid input\n");
+                fmt::print("{}Invalid input{}\n", RED, RESET);
                 continue;
             }
 
@@ -190,19 +210,19 @@ int main(int argc, char* argv[]) {
                 if (collection) {
                     auto status = collection->drop();
                     if (status)
-                        fmt::print("Succesfully droped collection {}\n", collection_name);
+                        fmt::print("{}Succesfully droped collection {}{}\n", GREEN, collection_name, RESET);
                     else
-                        fmt::print("Failed to drop collection {}\n", collection_name);
+                        fmt::print("{}Failed to drop collection {}{}\n", RED, collection_name, RESET);
                 }
                 else
-                    fmt::print("Collection {} not found\n", collection_name);
+                    fmt::print("{}Collection {} not found{}\n", RED, collection_name, RESET);
             }
             else
-                fmt::print("Invalid drop argument {}\n", argument);
+                fmt::print("{}Invalid drop argument {}{}\n", RED, argument, RESET);
         }
         else if (commands[0] == "list") {
             if (commands.size() != 2) {
-                fmt::print("Invalid input\n");
+                fmt::print("{}Invalid input{}\n", RED, RESET);
                 continue;
             }
 
@@ -211,20 +231,20 @@ int main(int argc, char* argv[]) {
                 auto context = context_t {db, nullptr};
                 auto collections = context.collections();
                 if (!collections) {
-                    fmt::print("Failed to list collections\n");
+                    fmt::print("{}Failed to list collections{}\n", RED, RESET);
                     continue;
                 }
                 while (!collections->names.is_end()) {
-                    fmt::print("{}\n", *collections->names);
+                    fmt::print("{}{}{}\n", YELLOW, *collections->names, RESET);
                     ++collections->names;
                 }
             }
             else
-                fmt::print("Invalid list argument {}\n", argument);
+                fmt::print("{}Invalid list argument {}{}\n", RED, argument, RESET);
         }
         else if (commands[0] == "import") {
             if (commands.size() != 9 && commands.size() != 7) {
-                fmt::print("Invalid input {}\n", commands.size());
+                fmt::print("{}Invalid input{}\n", RED, RESET);
                 continue;
             }
 
@@ -232,7 +252,7 @@ int main(int argc, char* argv[]) {
             if (argument == "--path")
                 imp = commands[2];
             else {
-                fmt::print("Invalid list argument {}\n", argument);
+                fmt::print("{}Invalid list argument {}{}\n", RED, argument, RESET);
                 continue;
             }
 
@@ -240,7 +260,7 @@ int main(int argc, char* argv[]) {
             if (argument == "--id")
                 id_field = commands[4];
             else {
-                fmt::print("Invalid list argument {}\n", argument);
+                fmt::print("{}Invalid list argument {}{}\n", RED, argument, RESET);
                 continue;
             }
 
@@ -248,7 +268,7 @@ int main(int argc, char* argv[]) {
             if (argument == "--max_batch_size")
                 max_batch_size = std::stoi(commands[6]);
             else {
-                fmt::print("Invalid list argument {}\n", argument);
+                fmt::print("{}Invalid list argument {}{}\n", RED, argument, RESET);
                 continue;
             }
 
@@ -257,7 +277,7 @@ int main(int argc, char* argv[]) {
                 if (argument == "--collection")
                     coll_name = commands[8];
                 else {
-                    fmt::print("Invalid list argument {}\n", argument);
+                    fmt::print("{}Invalid list argument {}{}\n", RED, argument, RESET);
                     continue;
                 }
             }
@@ -268,7 +288,7 @@ int main(int argc, char* argv[]) {
         }
         else if (commands[0] == "export") {
             if (commands.size() != 7 && commands.size() != 5) {
-                fmt::print("Invalid input\n");
+                fmt::print("{}Invalid input{}\n", RED, RESET);
                 continue;
             }
 
@@ -276,7 +296,7 @@ int main(int argc, char* argv[]) {
             if (argument == "--path")
                 exp = commands[2];
             else {
-                fmt::print("Invalid list argument {}\n", argument);
+                fmt::print("{}Invalid list argument {}{}\n", RED, argument, RESET);
                 continue;
             }
 
@@ -284,7 +304,7 @@ int main(int argc, char* argv[]) {
             if (argument == "--max_batch_size")
                 max_batch_size = std::stoi(commands[4]);
             else {
-                fmt::print("Invalid list argument {}\n", argument);
+                fmt::print("{}Invalid list argument {}{}\n", RED, argument, RESET);
                 continue;
             }
 
@@ -293,7 +313,7 @@ int main(int argc, char* argv[]) {
                 if (argument == "--collection")
                     coll_name = commands[6];
                 else {
-                    fmt::print("Invalid list argument {}\n", argument);
+                    fmt::print("{}Invalid list argument {}{}\n", RED, argument, RESET);
                     continue;
                 }
             }
@@ -303,7 +323,7 @@ int main(int argc, char* argv[]) {
             docs_export(db, coll_name, exp, max_batch_size);
         }
         else
-            fmt::print("Invalid input\n");
+            fmt::print("{}Invalid input{}\n", RED, RESET);
     };
 
     return 0;
