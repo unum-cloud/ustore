@@ -141,10 +141,10 @@ int main(int argc, char* argv[]) {
                (option("--name") & value("collection name", coll_name)))));
 
     auto snapshot = (option("snapshot").set(selected, std::string("snapshot")) &
-                         (required("create").set(action, std::string("create"))) |
-                     (required("export").set(action, std::string("export")) & value("path", export_path)) |
-                     (required("drop").set(action, std::string("drop")) & value("snapshot id", snap_id)) |
-                     (required("list").set(action, std::string("list"))));
+                     ((required("create").set(action, std::string("create"))) |
+                      (required("export").set(action, std::string("export")) & value("path", export_path)) |
+                      (required("drop").set(action, std::string("drop")) & value("snapshot id", snap_id)) |
+                      (required("list").set(action, std::string("list")))));
 
     auto cli = ( //
         (required("--url") & value("URL", url)).doc("Server URL"),
