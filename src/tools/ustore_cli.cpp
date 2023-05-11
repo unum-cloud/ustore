@@ -118,18 +118,16 @@ void docs_export(database_t& db,
 int main(int argc, char* argv[]) {
     using namespace clipp;
 
-    std::string url = "";
-    std::string input_file;
-    std::string output_ext;
-    std::string id_field;
-    std::string coll_name;
-    std::size_t max_batch_size;
     bool help = false;
-
+    std::string url = "";
+    std::string name;
     std::string selected;
     std::string action;
-    std::string name;
+    std::string id_field;
+    std::string input_file;
+    std::string output_ext;
     std::string export_path;
+    std::size_t max_batch_size;
     ustore_snapshot_t snap_id;
 
     auto collection =
@@ -144,7 +142,7 @@ int main(int argc, char* argv[]) {
            (required("export").set(action, std::string("export")) &
             (required("--output") & value("output", output_ext)).doc("Output file extension"))) &
               ((required("--max_batch_size") & value("max batch size", max_batch_size)).doc("Size of available RAM"),
-               (option("--name") & value("collection name", coll_name)))));
+               (option("--name") & value("collection name", name)))));
 
     auto snapshot = (option("snapshot").set(selected, std::string("snapshot")) &
                      ((required("create").set(action, std::string("create"))) |
@@ -180,9 +178,9 @@ int main(int argc, char* argv[]) {
             collection_list(db);
         }
         else if (action == "import")
-            docs_import(db, coll_name, input_file, id_field, max_batch_size);
+            docs_import(db, name, input_file, id_field, max_batch_size);
         else if (action == "export")
-            docs_export(db, coll_name, output_ext, max_batch_size);
+            docs_export(db, name, output_ext, max_batch_size);
     }
     else if (selected == "snapshot") {
         close = true;
@@ -349,16 +347,16 @@ int main(int argc, char* argv[]) {
             if (commands.size() == 9) {
                 argument = commands[7];
                 if (argument == "--collection")
-                    coll_name = commands[8];
+                    name = commands[8];
                 else {
                     print(RED, "{}Invalid list argument {}{}\n", argument);
                     continue;
                 }
             }
             else
-                coll_name = "";
+                name = "";
 
-            docs_import(db, coll_name, input_file, id_field, max_batch_size);
+            docs_import(db, name, input_file, id_field, max_batch_size);
         }
         else if (commands[0] == "export") {
             if (commands.size() != 7 && commands.size() != 5) {
@@ -385,16 +383,16 @@ int main(int argc, char* argv[]) {
             if (commands.size() == 7) {
                 argument = commands[5];
                 if (argument == "--collection")
-                    coll_name = commands[6];
+                    name = commands[6];
                 else {
                     print(RED, "{}Invalid list argument {}{}\n", argument);
                     continue;
                 }
             }
             else
-                coll_name = "";
+                name = "";
 
-            docs_export(db, coll_name, output_ext, max_batch_size);
+            docs_export(db, name, output_ext, max_batch_size);
         }
         else
             print(RED, "{}Invalid input{}\n");
