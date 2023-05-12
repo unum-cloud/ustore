@@ -626,16 +626,16 @@ void import_parquet(ustore_docs_import_t& c, std::shared_ptr<arrow::Table>& tabl
 
     // Open File
     auto maybe_input = arrow::io::ReadableFile::Open(c.paths_pattern);
-    return_error_if_m(maybe_input.ok(), c.error, 0, status.ToString().c_str());
+    return_error_if_m(maybe_input.ok(), c.error, 0, "Cant open file");
     auto input = *maybe_input;
 
     std::unique_ptr<parquet::arrow::FileReader> arrow_reader;
     status = parquet::arrow::OpenFile(input, pool, &arrow_reader);
-    return_error_if_m(status.ok(), c.error, 0, status.ToString().c_str());
+    return_error_if_m(status.ok(), c.error, 0, "Can't instantiate reader");
 
     // Read File into table
     status = arrow_reader->ReadTable(&table);
-    return_error_if_m(status.ok(), c.error, 0, status.ToString().c_str());
+    return_error_if_m(status.ok(), c.error, 0, "Can't read file");
 }
 
 void import_csv(ustore_docs_import_t& c, std::shared_ptr<arrow::Table>& table) {
