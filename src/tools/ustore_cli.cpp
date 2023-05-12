@@ -64,6 +64,38 @@ void collection_list(database_t& db) {
     }
 }
 
+void snapshot_create(database_t& db) {
+    auto snapshot = db.snapshot();
+    if (snapshot)
+        print(GREEN, "Snapshot created");
+    else
+        print(RED, "Failed to create snapshot");
+}
+
+void snapshot_export(database_t& db, std::string const& path) {
+    auto context = context_t {db, nullptr};
+    auto status = context.export_to(path.c_str());
+    if (status)
+        print(GREEN, "Snapshot exported");
+    else
+        print(RED, "Failed to export snapshot");
+}
+
+void snapshot_drop(database_t& /* db */, ustore_snapshot_t const& /* id */) {
+    // TODO
+}
+
+void snapshot_list(database_t& db) {
+    auto context = context_t {db, nullptr};
+    auto snapshots = context.snapshots().throw_or_release();
+
+    auto it = snapshots.begin();
+    while (it != snapshots.end()) {
+        print(YELLOW, "{}", *it);
+        ++it;
+    }
+}
+
 void docs_import(database_t& db,
                  std::string const& collection_name,
                  std::string const& input_file,
@@ -182,23 +214,13 @@ int main(int argc, char* argv[]) {
     else if (db_object == "snapshot") {
         close = true;
         if (action == "create")
-            db.snapshot();
-        else if (action == "export") {
-            auto context = context_t {db, nullptr};
-            context.export_to(export_path.c_str());
-        }
-        else if (action == "drop") {
-            // TODO
-        }
-        else if (action == "list") {
-            auto context = context_t {db, nullptr};
-            auto snapshots = context.snapshots().throw_or_release();
-            auto it = snapshots.begin();
-            while (it != snapshots.end()) {
-                print(YELLOW, "{}", *it);
-                ++it;
-            }
-        }
+            snapshot_create(db);
+        else if (action == "export")
+            snapshot_export(db, export_path);
+        else if (action == "drop")
+            snapshot_drop(db, snap_id);
+        else if (action == "list")
+            snapshot_list(db);
     }
 
     if (close)
@@ -270,12 +292,7 @@ int main(int argc, char* argv[]) {
                     print(RED, "Invalid input");
                     continue;
                 }
-
-                auto snapshot = db.snapshot();
-                if (snapshot)
-                    print(GREEN, "Snapshot created");
-                else
-                    print(RED, "Failed to created snapshot");
+                snapshot_create(db);
             }
             else if (action == "export") {
 
@@ -283,16 +300,14 @@ int main(int argc, char* argv[]) {
                     print(RED, "Invalid input");
                     continue;
                 }
-
-                auto context = context_t {db, nullptr};
-                auto status = context.export_to(export_path.c_str());
-                if (status)
-                    print(GREEN, "Snapshot exported");
-                else
-                    print(RED, "Failed to export snapshot");
+                snapshot_export(db, export_path);
             }
             else if (action == "drop") {
-                // TODO
+                if (commands.size() != 3) {
+                    print(RED, "Invalid input");
+                    continue;
+                }
+                snapshot_drop(db, snap_id);
             }
             else if (action == "list") {
 
@@ -300,15 +315,10 @@ int main(int argc, char* argv[]) {
                     print(RED, "Invalid input");
                     continue;
                 }
-
-                auto context = context_t {db, nullptr};
-                auto snapshots = context.snapshots().throw_or_release();
-                auto it = snapshots.begin();
-                while (it != snapshots.end()) {
-                    print(YELLOW, "{}", *it);
-                    ++it;
-                }
+                snapshot_list(db);
             }
+            else
+                print(RED, "Invalid snapshot action {}", action);
         }
         else if (commands[0] == "import") {
             if (commands.size() != 9 && commands.size() != 7) {
