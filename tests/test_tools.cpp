@@ -1124,6 +1124,55 @@ void run_command(const char* command, args... arguments) {
         wait(NULL);
 }
 
+bool test_import_export_cli(database_t& db, ustore_str_view_t url, std::string& command) {
+
+    std::vector<std::string> updated_paths;
+    std::string new_file;
+
+    run_command(command.c_str(),
+                "--url",
+                url,
+                "collection",
+                "import",
+                "--input",
+                ndjson_path_k,
+                "--id",
+                "id",
+                "--max_batch_size",
+                "1073741824");
+
+    run_command(command.c_str(),
+                "--url",
+                url,
+                "collection",
+                "export",
+                "--output",
+                ".ndjson",
+                "--max_batch_size",
+                "1073741824");
+
+    for (const auto& entry : fs::directory_iterator(path_k))
+        updated_paths.push_back(entry.path());
+
+    EXPECT_GT(updated_paths.size(), paths.size());
+
+    for (size_t idx = 0; idx < paths.size(); ++idx) {
+        if (paths[idx] != updated_paths[idx]) {
+            new_file = updated_paths[idx];
+            break;
+        }
+    }
+    if (new_file.size() == 0)
+        new_file = updated_paths.back();
+
+    new_file.erase(0, 2);
+    EXPECT_TRUE(cmp_ndjson_docs_whole(ndjson_path_k, new_file.data()));
+
+    std::remove(new_file.data());
+    db.clear().throw_unhandled();
+    return true;
+}
+
 TEST(db, cli) {
 
     auto command = exec_path + "ustore_flight_server_ucset";
@@ -1152,6 +1201,8 @@ TEST(db, cli) {
     run_command(command.c_str(), "--url", url, "collection", "drop", "--name", "collection1");
     EXPECT_TRUE(db.contains("collection1"));
     EXPECT_FALSE(*db.contains("collection1"));
+
+    EXPECT_TRUE(test_import_export_cli(db, url, command));
 
     kill(srv_id, SIGKILL);
     waitpid(srv_id, nullptr, 0);
