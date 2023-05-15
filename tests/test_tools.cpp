@@ -1180,13 +1180,13 @@ void run_command(const char* command, args... arguments) {
         wait(NULL);
 }
 
-bool test_import_export_cli(database_t& db, ustore_str_view_t url, std::string& command) {
+bool test_import_export_cli(database_t& db, ustore_str_view_t url, std::string& cli) {
     clear_environment();
 
     std::vector<std::string> updated_paths;
     std::string new_file;
 
-    run_command(command.c_str(),
+    run_command(cli.c_str(),
                 "--url",
                 url,
                 "collection",
@@ -1198,7 +1198,7 @@ bool test_import_export_cli(database_t& db, ustore_str_view_t url, std::string& 
                 "--mlimit",
                 "1073741824");
 
-    run_command(command.c_str(), "--url", url, "collection", "export", "--output", ".ndjson", "--mlimit", "1073741824");
+    run_command(cli.c_str(), "--url", url, "collection", "export", "--output", ".ndjson", "--mlimit", "1073741824");
 
     for (const auto& entry : fs::directory_iterator(path_k))
         updated_paths.push_back(entry.path());
@@ -1234,16 +1234,16 @@ TEST(db, cli) {
     EXPECT_TRUE(maybe_cols);
     EXPECT_EQ(maybe_cols->ids.size(), 0);
 
-    auto command = exec_path + "ustore";
-    run_command(command.c_str(), "--url", url, "collection", "create", "--name", "collection1");
+    auto cli = exec_path + "ustore";
+    run_command(cli.c_str(), "--url", url, "collection", "create", "--name", "collection1");
     EXPECT_TRUE(db.contains("collection1"));
     EXPECT_TRUE(*db.contains("collection1"));
 
-    run_command(command.c_str(), "--url", url, "collection", "drop", "--name", "collection1");
+    run_command(cli.c_str(), "--url", url, "collection", "drop", "--name", "collection1");
     EXPECT_TRUE(db.contains("collection1"));
     EXPECT_FALSE(*db.contains("collection1"));
 
-    EXPECT_TRUE(test_import_export_cli(db, url, command));
+    EXPECT_TRUE(test_import_export_cli(db, url, cli));
 }
 
 #endif
