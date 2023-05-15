@@ -1195,18 +1195,10 @@ bool test_import_export_cli(database_t& db, ustore_str_view_t url, std::string& 
                 ndjson_path_k,
                 "--id",
                 "id",
-                "--max_batch_size",
+                "--mlimit",
                 "1073741824");
 
-    run_command(command.c_str(),
-                "--url",
-                url,
-                "collection",
-                "export",
-                "--output",
-                ".ndjson",
-                "--max_batch_size",
-                "1073741824");
+    run_command(command.c_str(), "--url", url, "collection", "export", "--output", ".ndjson", "--mlimit", "1073741824");
 
     for (const auto& entry : fs::directory_iterator(path_k))
         updated_paths.push_back(entry.path());
