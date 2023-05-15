@@ -173,7 +173,7 @@ int main(int argc, char* argv[]) {
             (required("--id") & value("id field", id_field)).doc("The field which data will use as key(s)")) |
            (required("export").set(action, std::string("export")) &
             (required("--output") & value("output", output_ext)).doc("Output file extension"))) &
-              ((required("--max_batch_size") & value("max batch size", max_batch_size)).doc("Size of available RAM"),
+              ((required("--mlimit") & value("max batch size", max_batch_size)).doc("Size of available RAM"),
                (option("--name") & value("collection name", name)))));
 
     auto snapshot = (option("snapshot").set(db_object, std::string("snapshot")) &
@@ -343,7 +343,7 @@ int main(int argc, char* argv[]) {
             }
 
             argument = commands[5];
-            if (argument == "--max_batch_size")
+            if (argument == "--mlimit")
                 max_batch_size = std::stoi(commands[6]);
             else {
                 print(RED, "Invalid list argument {}", argument);
@@ -379,7 +379,7 @@ int main(int argc, char* argv[]) {
             }
 
             argument = commands[3];
-            if (argument == "--max_batch_size")
+            if (argument == "--mlimit")
                 max_batch_size = std::stoi(commands[4]);
             else {
                 print(RED, "Invalid list argument {}", argument);
