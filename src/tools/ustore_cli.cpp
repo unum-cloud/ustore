@@ -4,8 +4,8 @@
 #include <fmt/format.h>
 
 #include <clipp.h>
-#include "readline/readline.h"
-#include "readline/history.h"
+#include <readline/readline.h>
+#include <readline/history.h>
 
 #include "ustore/cpp/db.hpp"
 #include "dataset.h"
@@ -18,8 +18,10 @@ using namespace unum;
 #define YELLOW "\x1B[33m"
 #define RESET "\033[0m"
 
-std::string remove_quotes(std::string str) {
-    if (str[0] == '\"' && str[str.size() - 1] == '\"') {
+#pragma region Helpers
+inline std::string remove_quotes(std::string str) {
+    if (str[0] != '\"' || str[str.size() - 1] != '\"')
+        static_assert(str.size() > 1);
         str.erase(0, 1);
         str.erase(str.size() - 1);
     }
@@ -27,13 +29,16 @@ std::string remove_quotes(std::string str) {
 }
 
 template <typename... args_at>
-void print(char const* color, std::string message, args_at&&... args) {
+inline void print(char const* color, std::string message, args_at&&... args) {
     if (sizeof...(args) != 0)
         message = fmt::format(message, std::forward<args_at>(args)...);
     fmt::print("{}{}{}\n", color, message, RESET);
 }
+#pragma endregion Helpers
 
-void collection_create(database_t& db, std::string const& name) {
+#pragma region Interface
+#pragma region Collection
+inline void collection_create(database_t& db, std::string const& name) {
     auto maybe_collection = db.find_or_create(name.c_str());
     if (maybe_collection)
         print(GREEN, "Collection '{}' created", name);
@@ -41,7 +46,7 @@ void collection_create(database_t& db, std::string const& name) {
         print(RED, "Failed to create collection '{}'", name);
 }
 
-void collection_drop(database_t& db, std::string const& name) {
+inline void collection_drop(database_t& db, std::string const& name) {
     auto status = db.drop(name);
     if (status)
         print(GREEN, "Collection '{}' dropped", name);
@@ -63,8 +68,10 @@ void collection_list(database_t& db) {
         ++collections->names;
     }
 }
+#pragma endregion Collection
 
-void snapshot_create(database_t& db) {
+#pragma region Snapshot
+inline void snapshot_create(database_t& db) {
     auto snapshot = db.snapshot();
     if (snapshot)
         print(GREEN, "Snapshot created");
@@ -72,7 +79,7 @@ void snapshot_create(database_t& db) {
         print(RED, "Failed to create snapshot");
 }
 
-void snapshot_export(database_t& db, std::string const& path) {
+inline void snapshot_export(database_t& db, std::string const& path) {
     auto context = context_t {db, nullptr};
     auto status = context.export_to(path.c_str());
     if (status)
@@ -90,12 +97,12 @@ void snapshot_list(database_t& db) {
     auto snapshots = context.snapshots().throw_or_release();
 
     auto it = snapshots.begin();
-    while (it != snapshots.end()) {
+    for (auto it = snapshots.begin(); it != snapshots.end(); ++it)
         print(YELLOW, "{}", *it);
-        ++it;
-    }
 }
+#pragma endregion Snapshot
 
+#pragma region Import/Export
 void docs_import(database_t& db,
                  std::string const& collection_name,
                  std::string const& input_file,
@@ -141,11 +148,14 @@ void docs_export(database_t& db,
         .max_batch_size = max_batch_size,
     };
     ustore_docs_export(&docs);
+    
     if (status)
         print(GREEN, "Successfully exported");
     else
         print(RED, "Failed to export: {}", status.message());
 }
+#pragma endregion Import/Export
+#pragma endregion Interface
 
 int main(int argc, char* argv[]) {
     using namespace clipp;
@@ -169,11 +179,11 @@ int main(int argc, char* argv[]) {
           (required("drop").set(action, std::string("drop")) & required("--name") & value("collection name", name)) |
           required("list").set(action, std::string("list")) |
           ((required("import").set(action, std::string("import")) &
-            (required("--input") & value("input", input_file)).doc("Input file name") &
+            (required("--input") & value("input", input_file)).doc("Input file path") &
             (required("--id") & value("id field", id_field)).doc("The field which data will use as key(s)")) |
            (required("export").set(action, std::string("export")) &
-            (required("--output") & value("output", output_ext)).doc("Output file extension"))) &
-              ((required("--mlimit") & value("max batch size", max_batch_size)).doc("Size of available RAM"),
+            (required("--output") & value("output", output_ext)).doc("Output file path"))) &
+              ((required("--mlimit") & value("memory limit", max_batch_size)).doc("Size of available RAM for a specific operation in bytes"),
                (option("--name") & value("collection name", name)))));
 
     auto snapshot = (option("snapshot").set(db_object, std::string("snapshot")) &
