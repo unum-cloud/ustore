@@ -243,7 +243,6 @@ int main(int argc, char* argv[]) {
 
         if (commands[0] == "exit" && commands.size() == 1)
             break;
-
         if (commands[0] == "clear" && commands.size() == 1) {
             system("clear");
             continue;
@@ -303,6 +302,7 @@ int main(int argc, char* argv[]) {
                 snapshot_export(db, export_path);
             }
             else if (action == "drop") {
+
                 if (commands.size() != 3) {
                     print(RED, "Invalid input");
                     continue;
@@ -321,6 +321,7 @@ int main(int argc, char* argv[]) {
                 print(RED, "Invalid snapshot action {}", action);
         }
         else if (commands[0] == "import") {
+
             if (commands.size() != 9 && commands.size() != 7) {
                 print(RED, "Invalid input");
                 continue;
