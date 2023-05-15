@@ -90,6 +90,56 @@ static constexpr ustore_str_view_t fields_columns_ak[fields_columns_count_k] = {
 static constexpr ustore_str_view_t doc_k = "doc";
 static constexpr ustore_str_view_t id_k = "_id";
 
+static char const* path() {
+    char* path = std::getenv("USTORE_TEST_PATH");
+    if (path)
+        return std::strlen(path) ? path : nullptr;
+
+#if defined(USTORE_FLIGHT_CLIENT)
+    return nullptr;
+#elif defined(USTORE_TEST_PATH)
+    return USTORE_TEST_PATH;
+#else
+    return nullptr;
+#endif
+}
+
+static std::string config() {
+    auto dir = path();
+    if (!dir)
+        return {};
+    return fmt::format(R"({{"version": "1.0", "directory": "{}"}})", dir);
+}
+
+#if defined(USTORE_FLIGHT_CLIENT)
+static pid_t srv_id = -1;
+static std::string srv_path;
+#endif
+
+void clear_environment() {
+#if defined(USTORE_FLIGHT_CLIENT)
+    if (srv_id > 0) {
+        kill(srv_id, SIGKILL);
+        waitpid(srv_id, nullptr, 0);
+    }
+
+    srv_id = fork();
+    if (srv_id == 0) {
+        usleep(1); // TODO Any statement is requiered to be run for successful `execl` run...
+        execl(srv_path.c_str(), srv_path.c_str(), "--quiet", (char*)(NULL));
+        exit(0);
+    }
+    usleep(100000); // 0.1 sec
+#endif
+
+    namespace stdfs = std::filesystem;
+    auto directory_str = path() ? std::string_view(path()) : "";
+    if (!directory_str.empty()) {
+        stdfs::remove_all(directory_str);
+        stdfs::create_directories(stdfs::path(directory_str));
+    }
+}
+
 std::filesystem::path home_path(std::getenv("HOME"));
 std::vector<std::string> paths;
 docs_t docs_w_keys;
@@ -694,6 +744,7 @@ bool cmp_table_docs_sub(ustore_str_view_t lhs, ustore_str_view_t rhs) {
 
 template <typename comparator>
 bool test_sub_docs(ustore_str_view_t file, ustore_str_view_t ext, comparator cmp, bool state = false) {
+    clear_environment();
 
     auto collection = db.main();
     arena_t arena(db);
@@ -767,6 +818,7 @@ bool test_sub_docs(ustore_str_view_t file, ustore_str_view_t ext, comparator cmp
 
 template <typename comparator>
 bool test_whole_docs(ustore_str_view_t file, ustore_str_view_t ext, comparator cmp, bool state = false) {
+    clear_environment();
 
     auto collection = db.main();
     arena_t arena(db);
@@ -833,6 +885,8 @@ bool test_whole_docs(ustore_str_view_t file, ustore_str_view_t ext, comparator c
 }
 
 bool test_crash_cases_docs_import(ustore_str_view_t file) {
+    clear_environment();
+
     auto collection = db.main();
     arena_t arena(db);
     status_t status;
@@ -930,6 +984,8 @@ bool test_crash_cases_docs_import(ustore_str_view_t file) {
 }
 
 bool test_crash_cases_docs_export(ustore_str_view_t ext) {
+    clear_environment();
+
     auto collection = db.main();
     arena_t arena(db);
     status_t status;
@@ -1125,6 +1181,7 @@ void run_command(const char* command, args... arguments) {
 }
 
 bool test_import_export_cli(database_t& db, ustore_str_view_t url, std::string& command) {
+    clear_environment();
 
     std::vector<std::string> updated_paths;
     std::string new_file;
@@ -1174,15 +1231,7 @@ bool test_import_export_cli(database_t& db, ustore_str_view_t url, std::string& 
 }
 
 TEST(db, cli) {
-
-    auto command = exec_path + "ustore_flight_server_ucset";
-    pid_t srv_id = fork();
-    if (srv_id == 0) {
-        usleep(1);
-        execl(command.c_str(), command.c_str(), "--quiet", (char*)(NULL));
-        exit(0);
-    }
-    usleep(100000); // 0.1 sec
+    clear_environment();
 
     database_t db;
     auto url = "grpc://0.0.0.0:38709";
@@ -1203,9 +1252,6 @@ TEST(db, cli) {
     EXPECT_FALSE(*db.contains("collection1"));
 
     EXPECT_TRUE(test_import_export_cli(db, url, command));
-
-    kill(srv_id, SIGKILL);
-    waitpid(srv_id, nullptr, 0);
 }
 
 #endif
@@ -1213,8 +1259,8 @@ TEST(db, cli) {
 int main(int argc, char** argv) {
 
 #if defined(USTORE_FLIGHT_CLIENT)
-    exec_path = argv[0];
-    exec_path = exec_path.substr(0, exec_path.find_last_of("/") + 1);
+    srv_path = argv[0];
+    srv_path = srv_path.substr(0, srv_path.find_last_of("/") + 1) + "ustore_flight_server_ucset";
 #endif
 
     make_ndjson_docs();
@@ -1224,6 +1270,11 @@ int main(int argc, char** argv) {
     db.open().throw_unhandled();
     ::testing::InitGoogleTest(&argc, argv);
     int result = RUN_ALL_TESTS();
+
+#if defined(USTORE_FLIGHT_CLIENT)
+    kill(srv_id, SIGKILL);
+    waitpid(srv_id, nullptr, 0);
+#endif
 
     delete_test_file();
     return result;
