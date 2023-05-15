@@ -114,6 +114,7 @@ static std::string config() {
 #if defined(USTORE_FLIGHT_CLIENT)
 static pid_t srv_id = -1;
 static std::string srv_path;
+static std::string cli_path;
 #endif
 
 void clear_environment() {
@@ -1173,8 +1174,6 @@ TEST(crash_cases, docs_export) {
 }
 
 #if defined(USTORE_FLIGHT_CLIENT)
-static std::string exec_path;
-
 template <typename... args>
 void run_command(const char* command, args... arguments) {
     pid_t pid = fork();
@@ -1186,12 +1185,12 @@ void run_command(const char* command, args... arguments) {
         wait(NULL);
 }
 
-bool test_import_export_cli(database_t& db, ustore_str_view_t url, std::string& cli) {
+bool test_import_export_cli(database_t& db, ustore_str_view_t url) {
 
     std::vector<std::string> updated_paths;
     std::string new_file;
 
-    run_command(cli.c_str(),
+    run_command(cli_path.c_str(),
                 "--url",
                 url,
                 "collection",
@@ -1203,7 +1202,15 @@ bool test_import_export_cli(database_t& db, ustore_str_view_t url, std::string& 
                 "--mlimit",
                 "1073741824");
 
-    run_command(cli.c_str(), "--url", url, "collection", "export", "--output", ".ndjson", "--mlimit", "1073741824");
+    run_command(cli_path.c_str(),
+                "--url",
+                url,
+                "collection",
+                "export",
+                "--output",
+                ".ndjson",
+                "--mlimit",
+                "1073741824");
 
     for (const auto& entry : fs::directory_iterator(path_k))
         updated_paths.push_back(entry.path());
@@ -1239,16 +1246,15 @@ TEST(db, cli) {
     EXPECT_TRUE(maybe_cols);
     EXPECT_EQ(maybe_cols->ids.size(), 0);
 
-    auto cli = exec_path + "ustore";
-    run_command(cli.c_str(), "--url", url, "collection", "create", "--name", "collection1");
+    run_command(cli_path.c_str(), "--url", url, "collection", "create", "--name", "collection1");
     EXPECT_TRUE(db.contains("collection1"));
     EXPECT_TRUE(*db.contains("collection1"));
 
-    run_command(cli.c_str(), "--url", url, "collection", "drop", "--name", "collection1");
+    run_command(cli_path.c_str(), "--url", url, "collection", "drop", "--name", "collection1");
     EXPECT_TRUE(db.contains("collection1"));
     EXPECT_FALSE(*db.contains("collection1"));
 
-    EXPECT_TRUE(test_import_export_cli(db, url, cli));
+    EXPECT_TRUE(test_import_export_cli(db, url));
 }
 
 #endif
@@ -1256,8 +1262,9 @@ TEST(db, cli) {
 int main(int argc, char** argv) {
 
 #if defined(USTORE_FLIGHT_CLIENT)
-    srv_path = argv[0];
-    srv_path = srv_path.substr(0, srv_path.find_last_of("/") + 1) + "ustore_flight_server_ucset";
+    std::string exec_path = argv[0];
+    cli_path = exec_path.substr(0, exec_path.find_last_of("/") + 1) + "ustore";
+    srv_path = exec_path.substr(0, exec_path.find_last_of("/") + 1) + "ustore_flight_server_ucset";
 #endif
 
     make_ndjson_docs();
