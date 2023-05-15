@@ -1234,7 +1234,7 @@ TEST(db, cli) {
     EXPECT_TRUE(maybe_cols);
     EXPECT_EQ(maybe_cols->ids.size(), 0);
 
-    command = exec_path + "ustore";
+    auto command = exec_path + "ustore";
     run_command(command.c_str(), "--url", url, "collection", "create", "--name", "collection1");
     EXPECT_TRUE(db.contains("collection1"));
     EXPECT_TRUE(*db.contains("collection1"));
