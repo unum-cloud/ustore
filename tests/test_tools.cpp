@@ -144,8 +144,6 @@ std::filesystem::path home_path(std::getenv("HOME"));
 std::vector<std::string> paths;
 docs_t docs_w_keys;
 
-static database_t db;
-
 simdjson::ondemand::object& rewind(simdjson::ondemand::object& doc) noexcept {
     doc.reset();
     return doc;
@@ -746,6 +744,8 @@ template <typename comparator>
 bool test_sub_docs(ustore_str_view_t file, ustore_str_view_t ext, comparator cmp, bool state = false) {
     clear_environment();
 
+    database_t db;
+    EXPECT_TRUE(db.open(config().c_str()));
     auto collection = db.main();
     arena_t arena(db);
     status_t status;
@@ -820,6 +820,8 @@ template <typename comparator>
 bool test_whole_docs(ustore_str_view_t file, ustore_str_view_t ext, comparator cmp, bool state = false) {
     clear_environment();
 
+    database_t db;
+    EXPECT_TRUE(db.open(config().c_str()));
     auto collection = db.main();
     arena_t arena(db);
     status_t status;
@@ -887,6 +889,8 @@ bool test_whole_docs(ustore_str_view_t file, ustore_str_view_t ext, comparator c
 bool test_crash_cases_docs_import(ustore_str_view_t file) {
     clear_environment();
 
+    database_t db;
+    EXPECT_TRUE(db.open(config().c_str()));
     auto collection = db.main();
     arena_t arena(db);
     status_t status;
@@ -986,6 +990,8 @@ bool test_crash_cases_docs_import(ustore_str_view_t file) {
 bool test_crash_cases_docs_export(ustore_str_view_t ext) {
     clear_environment();
 
+    database_t db;
+    EXPECT_TRUE(db.open(config().c_str()));
     auto collection = db.main();
     arena_t arena(db);
     status_t status;
@@ -1181,7 +1187,6 @@ void run_command(const char* command, args... arguments) {
 }
 
 bool test_import_export_cli(database_t& db, ustore_str_view_t url, std::string& cli) {
-    clear_environment();
 
     std::vector<std::string> updated_paths;
     std::string new_file;
@@ -1227,7 +1232,7 @@ TEST(db, cli) {
 
     database_t db;
     auto url = "grpc://0.0.0.0:38709";
-    EXPECT_TRUE(db.open());
+    EXPECT_TRUE(db.open(url));
     EXPECT_TRUE(db.clear());
     auto context = context_t {db, nullptr};
     auto maybe_cols = context.collections();
@@ -1259,7 +1264,6 @@ int main(int argc, char** argv) {
     for (const auto& entry : fs::directory_iterator(path_k))
         paths.push_back(ustore_str_span_t(entry.path().c_str()));
 
-    db.open().throw_unhandled();
     ::testing::InitGoogleTest(&argc, argv);
     int result = RUN_ALL_TESTS();
 
