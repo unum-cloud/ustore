@@ -20,8 +20,7 @@ using namespace unum;
 
 #pragma region Helpers
 inline std::string remove_quotes(std::string str) {
-    if (str[0] != '\"' || str[str.size() - 1] != '\"') {
-        static_assert(str.size() > 1);
+    if (str[0] == '\"' && str[str.size() - 1] == '\"') {
         str.erase(0, 1);
         str.erase(str.size() - 1);
     }
