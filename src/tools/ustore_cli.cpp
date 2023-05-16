@@ -35,7 +35,6 @@ inline void print(char const* color, std::string message, args_at&&... args) {
 }
 #pragma endregion Helpers
 
-#pragma region Interface
 #pragma region Collection
 inline void collection_create(database_t& db, std::string const& name) {
     auto maybe_collection = db.find_or_create(name.c_str());
@@ -153,6 +152,9 @@ void docs_export(database_t& db,
         print(RED, "Failed to export: {}", status.message());
 }
 #pragma endregion Import / Export
+
+#pragma region Interface
+
 #pragma endregion Interface
 
 int main(int argc, char* argv[]) {
@@ -167,7 +169,7 @@ int main(int argc, char* argv[]) {
     std::string input_file;
     std::string output_ext;
     std::string export_path;
-    std::size_t max_batch_size;
+    std::size_t memory_limit;
     ustore_snapshot_t snap_id;
 
     auto collection =
@@ -181,7 +183,7 @@ int main(int argc, char* argv[]) {
             (required("--id") & value("id field", id_field)).doc("The field which data will use as key(s)")) |
            (required("export").set(action, std::string("export")) &
             (required("--output") & value("output", output_ext)).doc("Output file path"))) &
-              ((required("--mlimit") & value("memory limit", max_batch_size))
+              ((required("--mlimit") & value("memory limit", memory_limit))
                    .doc("Size of available RAM for a specific operation in bytes"),
                (option("--name") & value("collection name", name)))));
 
@@ -206,9 +208,8 @@ int main(int argc, char* argv[]) {
 
     database_t db;
     db.open(url.c_str()).throw_unhandled();
-    bool close = false;
+
     if (db_object == "collection") {
-        close = true;
         if (action == "create")
             collection_create(db, name);
         else if (action == "drop")
@@ -216,12 +217,12 @@ int main(int argc, char* argv[]) {
         else if (action == "list")
             collection_list(db);
         else if (action == "import")
-            docs_import(db, name, input_file, id_field, max_batch_size);
+            docs_import(db, name, input_file, id_field, memory_limit);
         else if (action == "export")
-            docs_export(db, name, output_ext, max_batch_size);
+            docs_export(db, name, output_ext, memory_limit);
+        return 0;
     }
     else if (db_object == "snapshot") {
-        close = true;
         if (action == "create")
             snapshot_create(db);
         else if (action == "export")
@@ -230,10 +231,8 @@ int main(int argc, char* argv[]) {
             snapshot_drop(db, snap_id);
         else if (action == "list")
             snapshot_list(db);
-    }
-
-    if (close)
         return 0;
+    }
 
     std::string input;
     std::vector<std::string> commands;
@@ -244,22 +243,24 @@ int main(int argc, char* argv[]) {
         commands.clear();
         input = readline(">>> ");
         add_history(input.c_str());
+
         std::regex_token_iterator<std::string::iterator> it(input.begin(), input.end(), reg_exp, -1);
         while (it != end_tokens)
             commands.emplace_back(*it++);
+
         if (!commands[0].size())
             commands.erase(commands.begin());
 
         if (commands[0] == "exit" && commands.size() == 1)
             break;
+
         if (commands[0] == "clear" && commands.size() == 1) {
             system("clear");
             continue;
         }
 
         if (commands[0] == "collection") {
-
-            auto& action = commands[1];
+            std::string const& action = commands[1];
             if (action == "create") {
 
                 if (commands.size() != 3) {
@@ -293,7 +294,7 @@ int main(int argc, char* argv[]) {
         }
         else if (commands[0] == "snapshot") {
 
-            auto& action = commands[1];
+            std::string const& action = commands[1];
             if (action == "create") {
 
                 if (commands.size() != 2) {
@@ -336,7 +337,7 @@ int main(int argc, char* argv[]) {
                 continue;
             }
 
-            auto& argument = commands[1];
+            std::string argument = commands[1];
             if (argument == "--input")
                 input_file = commands[2];
             else {
@@ -354,7 +355,7 @@ int main(int argc, char* argv[]) {
 
             argument = commands[5];
             if (argument == "--mlimit")
-                max_batch_size = std::stoi(commands[6]);
+                memory_limit = std::stoi(commands[6]);
             else {
                 print(RED, "Invalid list argument {}", argument);
                 continue;
@@ -372,7 +373,7 @@ int main(int argc, char* argv[]) {
             else
                 name = "";
 
-            docs_import(db, name, input_file, id_field, max_batch_size);
+            docs_import(db, name, input_file, id_field, memory_limit);
         }
         else if (commands[0] == "export") {
             if (commands.size() != 7 && commands.size() != 5) {
@@ -380,7 +381,7 @@ int main(int argc, char* argv[]) {
                 continue;
             }
 
-            auto& argument = commands[1];
+            std::string argument = commands[1];
             if (argument == "--output")
                 output_ext = commands[2];
             else {
@@ -390,7 +391,7 @@ int main(int argc, char* argv[]) {
 
             argument = commands[3];
             if (argument == "--mlimit")
-                max_batch_size = std::stoi(commands[4]);
+                memory_limit = std::stoi(commands[4]);
             else {
                 print(RED, "Invalid list argument {}", argument);
                 continue;
@@ -408,7 +409,7 @@ int main(int argc, char* argv[]) {
             else
                 name = "";
 
-            docs_export(db, name, output_ext, max_batch_size);
+            docs_export(db, name, output_ext, memory_limit);
         }
         else
             print(RED, "Invalid input");
