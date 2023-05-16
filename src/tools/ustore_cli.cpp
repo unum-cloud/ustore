@@ -20,7 +20,7 @@ using namespace unum;
 
 #pragma region Helpers
 inline std::string remove_quotes(std::string str) {
-    if (str[0] != '\"' || str[str.size() - 1] != '\"')
+    if (str[0] != '\"' || str[str.size() - 1] != '\"') {
         static_assert(str.size() > 1);
         str.erase(0, 1);
         str.erase(str.size() - 1);
@@ -148,13 +148,13 @@ void docs_export(database_t& db,
         .max_batch_size = max_batch_size,
     };
     ustore_docs_export(&docs);
-    
+
     if (status)
         print(GREEN, "Successfully exported");
     else
         print(RED, "Failed to export: {}", status.message());
 }
-#pragma endregion Import/Export
+#pragma endregion Import / Export
 #pragma endregion Interface
 
 int main(int argc, char* argv[]) {
@@ -183,7 +183,8 @@ int main(int argc, char* argv[]) {
             (required("--id") & value("id field", id_field)).doc("The field which data will use as key(s)")) |
            (required("export").set(action, std::string("export")) &
             (required("--output") & value("output", output_ext)).doc("Output file path"))) &
-              ((required("--mlimit") & value("memory limit", max_batch_size)).doc("Size of available RAM for a specific operation in bytes"),
+              ((required("--mlimit") & value("memory limit", max_batch_size))
+                   .doc("Size of available RAM for a specific operation in bytes"),
                (option("--name") & value("collection name", name)))));
 
     auto snapshot = (option("snapshot").set(db_object, std::string("snapshot")) &
