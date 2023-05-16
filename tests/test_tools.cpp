@@ -1185,32 +1185,62 @@ void run_command(const char* command, args... arguments) {
         wait(NULL);
 }
 
-bool test_import_export_cli(database_t& db, ustore_str_view_t url) {
+bool test_import_export_cli(database_t& db, ustore_str_view_t url, ustore_str_view_t coll_name = nullptr) {
 
     std::vector<std::string> updated_paths;
     std::string new_file;
 
-    run_command(cli_path.c_str(),
-                "--url",
-                url,
-                "collection",
-                "import",
-                "--input",
-                ndjson_path_k,
-                "--id",
-                "id",
-                "--mlimit",
-                "1073741824");
+    if (coll_name) {
+        run_command(cli_path.c_str(),
+                    "--url",
+                    url,
+                    "collection",
+                    "import",
+                    "--input",
+                    ndjson_path_k,
+                    "--id",
+                    "id",
+                    "--mlimit",
+                    "1073741824",
+                    "--name",
+                    coll_name);
 
-    run_command(cli_path.c_str(),
-                "--url",
-                url,
-                "collection",
-                "export",
-                "--output",
-                ".ndjson",
-                "--mlimit",
-                "1073741824");
+        run_command(cli_path.c_str(),
+                    "--url",
+                    url,
+                    "collection",
+                    "export",
+                    "--output",
+                    ".ndjson",
+                    "--mlimit",
+                    "1073741824",
+                    "--name",
+                    coll_name);
+    }
+    else {
+        run_command(cli_path.c_str(),
+                    "--url",
+                    url,
+                    "collection",
+                    "import",
+                    "--input",
+                    ndjson_path_k,
+                    "--id",
+                    "id",
+                    "--mlimit",
+                    "1073741824");
+
+        run_command(cli_path.c_str(),
+                    "--url",
+                    url,
+                    "collection",
+                    "export",
+                    "--output",
+                    ".ndjson",
+                    "--mlimit",
+                    "1073741824""--name",
+                    coll_name);
+    }
 
     for (const auto& entry : fs::directory_iterator(path_k))
         updated_paths.push_back(entry.path());
@@ -1230,7 +1260,6 @@ bool test_import_export_cli(database_t& db, ustore_str_view_t url) {
     EXPECT_TRUE(cmp_ndjson_docs_whole(ndjson_path_k, new_file.data()));
 
     std::remove(new_file.data());
-    db.clear().throw_unhandled();
     return true;
 }
 
@@ -1249,6 +1278,8 @@ TEST(db, cli) {
     run_command(cli_path.c_str(), "--url", url, "collection", "create", "--name", "collection1");
     EXPECT_TRUE(db.contains("collection1"));
     EXPECT_TRUE(*db.contains("collection1"));
+
+    EXPECT_TRUE(test_import_export_cli(db, url, "collection1"));
 
     run_command(cli_path.c_str(), "--url", url, "collection", "drop", "--name", "collection1");
     EXPECT_TRUE(db.contains("collection1"));
