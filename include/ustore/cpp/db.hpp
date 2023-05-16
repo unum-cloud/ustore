@@ -146,7 +146,6 @@ class context_t : public std::enable_shared_from_this<context_t> {
 
     expected_gt<snapshots_list_t> snapshots() noexcept {
         ustore_size_t count = 0;
-        ustore_str_span_t names = nullptr;
         ustore_snapshot_t* ids = nullptr;
         status_t status;
         ustore_snapshot_list_t snapshots_list {};
