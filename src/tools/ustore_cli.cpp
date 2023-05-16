@@ -95,7 +95,6 @@ void snapshot_list(database_t& db) {
     auto context = context_t {db, nullptr};
     auto snapshots = context.snapshots().throw_or_release();
 
-    auto it = snapshots.begin();
     for (auto it = snapshots.begin(); it != snapshots.end(); ++it)
         print(YELLOW, "{}", *it);
 }
