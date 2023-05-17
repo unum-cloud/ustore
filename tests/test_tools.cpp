@@ -95,13 +95,13 @@ static char const* path() {
     if (path)
         return std::strlen(path) ? path : nullptr;
 
-#if defined(USTORE_FLIGHT_CLIENT)
+#if defined(USTORE_CLI)
     return nullptr;
 #elif defined(USTORE_TEST_PATH)
     return USTORE_TEST_PATH;
 #else
     return nullptr;
-#endif
+#endif // USTORE_CLI
 }
 
 static std::string config() {
@@ -111,14 +111,14 @@ static std::string config() {
     return fmt::format(R"({{"version": "1.0", "directory": "{}"}})", dir);
 }
 
-#if defined(USTORE_FLIGHT_CLIENT)
+#if defined(USTORE_CLI)
 static pid_t srv_id = -1;
 static std::string srv_path;
 static std::string cli_path;
-#endif
+#endif // USTORE_CLI
 
 void clear_environment() {
-#if defined(USTORE_FLIGHT_CLIENT)
+#if defined(USTORE_CLI)
     if (srv_id > 0) {
         kill(srv_id, SIGKILL);
         waitpid(srv_id, nullptr, 0);
@@ -131,7 +131,7 @@ void clear_environment() {
         exit(0);
     }
     usleep(100000); // 0.1 sec
-#endif
+#endif // USTORE_CLI
 
     namespace stdfs = std::filesystem;
     auto directory_str = path() ? std::string_view(path()) : "";
@@ -1173,7 +1173,8 @@ TEST(crash_cases, docs_export) {
     test_crash_cases_docs_export(ext_csv_k);
 }
 
-#if defined(USTORE_FLIGHT_CLIENT)
+
+#if defined(USTORE_CLI)
 template <typename... args>
 void run_command(const char* command, args... arguments) {
     pid_t pid = fork();
@@ -1289,15 +1290,15 @@ TEST(db, cli) {
     EXPECT_TRUE(test_import_export_cli(db, url));
 }
 
-#endif
+#endif // USTORE_CLI
 
 int main(int argc, char** argv) {
 
-#if defined(USTORE_FLIGHT_CLIENT)
+#if defined(USTORE_CLI)
     std::string exec_path = argv[0];
     cli_path = exec_path.substr(0, exec_path.find_last_of("/") + 1) + "ustore";
     srv_path = exec_path.substr(0, exec_path.find_last_of("/") + 1) + "ustore_flight_server_ucset";
-#endif
+#endif // USTORE_CLI
 
     make_ndjson_docs();
     for (const auto& entry : fs::directory_iterator(path_k))
@@ -1306,10 +1307,10 @@ int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     int result = RUN_ALL_TESTS();
 
-#if defined(USTORE_FLIGHT_CLIENT)
+#if defined(USTORE_CLI)
     kill(srv_id, SIGKILL);
     waitpid(srv_id, nullptr, 0);
-#endif
+#endif // USTORE_CLI
 
     delete_test_file();
     return result;
