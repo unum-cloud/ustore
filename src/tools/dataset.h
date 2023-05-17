@@ -1,3 +1,7 @@
+/**
+ * @file dataset.h
+ * @author Ashot Vardanian
+ */
 
 #pragma once
 
