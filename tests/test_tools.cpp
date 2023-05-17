@@ -1238,7 +1238,8 @@ bool test_import_export_cli(database_t& db, ustore_str_view_t url, ustore_str_vi
                     "--output",
                     ".ndjson",
                     "--mlimit",
-                    "1073741824""--name",
+                    "1073741824",
+                    "--name",
                     coll_name);
     }
 
