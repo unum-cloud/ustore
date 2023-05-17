@@ -128,15 +128,9 @@ class arrow_visitor_t {
         fmt::format_to(std::back_inserter(json), "{},", reinterpret_cast<char const*>(arr.Value(idx)));
         return arrow::Status::OK();
     }
-    arrow::Status Visit(arrow::ListArray const& arr) {
-        return arrow::VisitArrayInline(*arr.values().get(), this);
-    }
-    arrow::Status Visit(arrow::LargeListArray const& arr) {
-        return arrow::VisitArrayInline(*arr.values().get(), this);
-    }
-    arrow::Status Visit(arrow::MapArray const& arr) {
-        return arrow::VisitArrayInline(*arr.values().get(), this);
-    }
+    arrow::Status Visit(arrow::ListArray const& arr) { return arrow::VisitArrayInline(*arr.values().get(), this); }
+    arrow::Status Visit(arrow::LargeListArray const& arr) { return arrow::VisitArrayInline(*arr.values().get(), this); }
+    arrow::Status Visit(arrow::MapArray const& arr) { return arrow::VisitArrayInline(*arr.values().get(), this); }
     arrow::Status Visit(arrow::FixedSizeListArray const& arr) {
         return arrow::VisitArrayInline(*arr.values().get(), this);
     }
@@ -559,7 +553,7 @@ void fields_parser( //
     ustore_size_t fields_count,
     fields_t const& fields,
     counts_t& counts,
-    tape_t& tape) noexcept {
+    tape_t& tape) {
 
     ustore_size_t counts_idx = ULLONG_MAX;
     ustore_size_t back_idx = 0;
@@ -838,8 +832,13 @@ void parse_arrow_table_docs(ustore_docs_import_t& c,
             for (auto it = fields; g_idx < c.fields_count; ++g_idx, ++it) {
                 fmt::format_to(std::back_inserter(json), "\"{}\":", *it);
                 visitor.idx = value_idx;
-                // TODO: handle return status of function
-                auto _ = arrow::VisitArrayInline(*chunks[g_idx].get(), &visitor);
+                auto status = arrow::VisitArrayInline(*chunks[g_idx].get(), &visitor);
+                if (!status.ok()) {
+                    auto ptr = arena.alloc<char>(status.message().size() + 1, c.error);
+                    return_if_error_m(c.error);
+                    std::memcpy(ptr.data(), status.message().c_str(), status.message().size() + 1);
+                    *c.error = ptr.data();
+                }
             }
 
             json[json.size() - 1] = '}';
@@ -855,6 +854,7 @@ void parse_arrow_table_docs(ustore_docs_import_t& c,
 
             if (used_mem >= c.max_batch_size) {
                 upsert_docs(c, values, idx);
+                return_if_error_m(c.error);
                 used_mem = 0;
                 idx = 0;
             }
@@ -882,6 +882,7 @@ void import_whole_ndjson(ustore_docs_import_t& c,
         ++idx;
         if (used_mem >= c.max_batch_size) {
             upsert_docs(c, values, idx);
+            return_if_error_m(c.error);
             idx = 0;
         }
     }
@@ -931,6 +932,7 @@ void import_sub_ndjson(ustore_docs_import_t& c,
 
         if (used_mem >= c.max_batch_size) {
             upsert_docs(c, values, idx);
+            return_if_error_m(c.error);
             idx = 0;
         }
     }
@@ -964,6 +966,7 @@ void import_ndjson_docs(ustore_docs_import_t& c, linked_memory_lock_t& arena) {
         import_whole_ndjson(c, docs, rows_count, arena);
     else
         import_sub_ndjson(c, docs, rows_count, arena);
+    return_if_error_m(c.error);
 
     res = munmap((void*)mapped_content.data(), mapped_content.size());
     return_error_if_m(res == 0, c.error, 0, "Failed to munmap content");
@@ -1228,7 +1231,7 @@ void ustore_docs_import(ustore_docs_import_t* c_ptr) {
     return_if_error_m(c.error);
 
     auto handle_exception = [&](char const* ex) {
-        auto ptr = arena.alloc<char>(std::strlen(ex), c.error);
+        auto ptr = arena.alloc<char>(std::strlen(ex) + 1, c.error);
         return_if_error_m(c.error);
         std::memcpy(ptr.data(), ex, std::strlen(ex) + 1);
         *c.error = ptr.data();
@@ -1244,8 +1247,8 @@ void ustore_docs_import(ustore_docs_import_t* c_ptr) {
                 import_parquet(c, table);
             else if (ext == ".csv")
                 import_csv(c, table);
-            return_if_error_m(c.error);
             parse_arrow_table_docs(c, table, arena);
+            return_if_error_m(c.error);
         }
     }
     catch (std::exception const& ex) {
@@ -1277,7 +1280,7 @@ void ustore_docs_export(ustore_docs_export_t* c_ptr) {
     return_if_error_m(c.error);
 
     auto handle_exception = [&](char const* ex) {
-        auto ptr = arena.alloc<char>(std::strlen(ex), c.error);
+        auto ptr = arena.alloc<char>(std::strlen(ex) + 1, c.error);
         return_if_error_m(c.error);
         std::memcpy(ptr.data(), ex, std::strlen(ex) + 1);
         *c.error = ptr.data();
@@ -1319,6 +1322,7 @@ void ustore_docs_export(ustore_docs_export_t* c_ptr) {
             tape = arena.alloc<ustore_char_t>(max_size, c.error);
             return_if_error_m(c.error);
             fields_parser(c.error, arena, c.fields_count, fields, counts, tape);
+            return_if_error_m(c.error);
         }
 
         auto status = stream.seek_to_first();
@@ -1342,6 +1346,7 @@ void ustore_docs_export(ustore_docs_export_t* c_ptr) {
                 .lengths = &lengths,
             };
             ustore_docs_read(&docs_read);
+            return_if_error_m(c.error);
 
             for (ustore_size_t idx = 0; idx < keys.size(); ++idx) {
                 ustore_size_t pre_idx = idx;
@@ -1365,6 +1370,7 @@ void ustore_docs_export(ustore_docs_export_t* c_ptr) {
                     .values = &values.first,
                 };
                 ustore_docs_read(&docs_read);
+                return_if_error_m(c.error);
                 values.second = offsets[idx - pre_idx - 1] + lengths[idx - 1];
 
                 if (pcn == parquet_k)
@@ -1384,6 +1390,7 @@ void ustore_docs_export(ustore_docs_export_t* c_ptr) {
                                  idx - pre_idx);
                 else
                     write_in_ndjson(c, arena, keys, tape, fields, counts, values, handle);
+                return_if_error_m(c.error);
             }
             status = stream.seek_to_next_batch();
             return_error_if_m(status, c.error, 0, "Invalid batch");
@@ -1440,6 +1447,7 @@ void parse_arrow_table_graph(ustore_graph_import_t& c,
             ++idx;
             if (idx == task_count) {
                 upsert_graph(c, vertices_edges, idx);
+                return_if_error_m(c.error);
                 idx = 0;
             }
         }
@@ -1448,7 +1456,7 @@ void parse_arrow_table_graph(ustore_graph_import_t& c,
         upsert_graph(c, vertices_edges, idx);
 }
 
-void import_ndjson_graph(ustore_graph_import_t& c, ustore_size_t task_count, linked_memory_lock_t& arena) noexcept {
+void import_ndjson_graph(ustore_graph_import_t& c, ustore_size_t task_count, linked_memory_lock_t& arena) {
 
     auto edges = arena.alloc<edge_t>(task_count, c.error);
     return_if_error_m(c.error);
@@ -1480,15 +1488,16 @@ void import_ndjson_graph(ustore_graph_import_t& c, ustore_size_t task_count, lin
         if (c.edge_id_field)
             edge = get_data(data, c.edge_id_field);
         edges[idx] = edge_t {get_data(data, c.source_id_field), get_data(data, c.target_id_field), edge};
-
         ++idx;
         if (idx == task_count) {
             upsert_graph(c, edges, idx);
+            return_if_error_m(c.error);
             idx = 0;
         }
     }
     if (idx != 0)
         upsert_graph(c, edges, idx);
+    return_if_error_m(c.error);
 
     res = munmap((void*)mapped_content.data(), mapped_content.size());
     return_error_if_m(res == 0, c.error, 0, "Failed to munmap content");
@@ -1678,7 +1687,7 @@ void ustore_graph_import(ustore_graph_import_t* c_ptr) {
     return_if_error_m(c.error);
 
     auto handle_exception = [&](char const* ex) {
-        auto ptr = arena.alloc<char>(std::strlen(ex), c.error);
+        auto ptr = arena.alloc<char>(std::strlen(ex) + 1, c.error);
         return_if_error_m(c.error);
         std::memcpy(ptr.data(), ex, std::strlen(ex) + 1);
         *c.error = ptr.data();
@@ -1695,8 +1704,8 @@ void ustore_graph_import(ustore_graph_import_t* c_ptr) {
                 import_parquet(c, table);
             else if (ext == ".csv")
                 import_csv(c, table);
-            return_if_error_m(c.error);
             parse_arrow_table_graph(c, task_count, table, arena);
+            return_if_error_m(c.error);
         }
     }
     catch (std::exception const& ex) {
@@ -1728,7 +1737,7 @@ void ustore_graph_export(ustore_graph_export_t* c_ptr) {
     return_if_error_m(c.error);
 
     auto handle_exception = [&](char const* ex) {
-        auto ptr = arena.alloc<char>(std::strlen(ex), c.error);
+        auto ptr = arena.alloc<char>(std::strlen(ex) + 1, c.error);
         return_if_error_m(c.error);
         std::memcpy(ptr.data(), ex, std::strlen(ex) + 1);
         *c.error = ptr.data();
@@ -1785,6 +1794,7 @@ void ustore_graph_export(ustore_graph_export_t* c_ptr) {
                 .edges_per_vertex = &ids_in_edges.first,
             };
             ustore_graph_find_edges(&graph_find);
+            return_if_error_m(c.error);
 
             batch_ids =
                 std::transform_reduce(degrees, degrees + count, 0ul, std::plus {}, [](ustore_vertex_degree_t d) {
