@@ -41,7 +41,7 @@ inline StringView to_string_view(ustore_key_t const& k) noexcept {
     return {reinterpret_cast<const char*>(&k), sizeof(ustore_key_t)};
 }
 
-StringView redis_collection(ustore_collection_t collection) {
+inline StringView redis_collection(ustore_collection_t collection) {
     return collection == ustore_collection_main_k ? kDefaultCollectionName : reinterpret_cast<const char*>(collection);
 }
 
