@@ -92,6 +92,12 @@
             "type": "shell"
         },
         {
+            "label": "Build Debug Redis Client",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUSTORE_BUILD_API_REDIS_CLIENT=1 -B ./build_debug && make test_units_ustore_redis_client -j --silent -C ./build_debug && sleep 5",
+            "args": [],
+            "type": "shell"
+        },
+        {
             "label": "Build Debug Arrow Server",
             "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUSTORE_BUILD_API_FLIGHT_SERVER=1 -B ./build_debug && make ustore_flight_server_ucset -j --silent -C ./build_debug",
             "args": [],

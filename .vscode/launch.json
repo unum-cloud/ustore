@@ -315,6 +315,24 @@
             "miDebuggerPath": "/usr/bin/gdb"
         },
         {
+            "name": "C++: Test Redis Client",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build_debug/build/bin/test_units_ustore_redis_client",
+            "args": [
+                "--gtest_break_on_failure",
+                "--gtest_catch_exceptions=0"
+            ],
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "showDisplayString": true,
+            "stopAtEntry": false,
+            "externalConsole": false,
+            "preLaunchTask": "Build Debug Redis Client",
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb"
+        },
+        {
             "name": "C++: Test Arrow Server",
             "type": "cppdbg",
             "request": "launch",
