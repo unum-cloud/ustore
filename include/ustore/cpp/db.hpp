@@ -333,6 +333,17 @@ class database_t : public std::enable_shared_from_this<database_t> {
             return context_t {db_, nullptr, raw};
     }
 
+    status_t drop_snapshot(ustore_snapshot_t id) noexcept {
+        status_t status;
+        ustore_snapshot_drop_t snap_drop {
+            .db = db_,
+            .error = status.member_ptr(),
+            .id = id,
+        };
+        ustore_snapshot_drop(&snap_drop);
+        return status;
+    }
+
     template <typename collection_at = blobs_collection_t>
     collection_at main() noexcept {
         return collection_at {db_, ustore_collection_main_k};

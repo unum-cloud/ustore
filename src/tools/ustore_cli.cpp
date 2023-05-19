@@ -86,8 +86,12 @@ inline void snapshot_export(database_t& db, std::string const& path) {
         print(RED, "Failed to export snapshot");
 }
 
-void snapshot_drop(database_t& /* db */, ustore_snapshot_t const& /* id */) {
-    // TODO
+void snapshot_drop(database_t& db, ustore_snapshot_t const& id) {
+    auto status = db.drop_snapshot(id);
+    if (status)
+        print(GREEN, "Snapshot dropped");
+    else
+        print(RED, "Failed to drop snapshot");
 }
 
 void snapshot_list(database_t& db) {
