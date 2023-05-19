@@ -107,6 +107,25 @@ void clear_environment() {
     usleep(100000); // 0.1 sec
 #endif
 
+#if defined(USTORE_REDIS_CLIENT)
+    int originalStdout = dup(STDOUT_FILENO);
+    int devNull = open("/dev/null", O_WRONLY);
+    EXPECT_NE(devNull, -1) << "open";
+    EXPECT_NE(dup2(devNull, STDOUT_FILENO), -1) << "dup2";
+    close(devNull);
+
+    pid_t pid = fork();
+    if (pid == -1)
+        EXPECT_TRUE(false) << "Failed To Clear Redis";
+    else if (pid == 0)
+        EXPECT_NE(execl("/usr/bin/redis-cli", "redis-cli", "FLUSHALL", (char*)(NULL)), -1) << "Failed To Clear Redis";
+    else
+        wait(NULL);
+
+    EXPECT_NE(dup2(originalStdout, STDOUT_FILENO), -1) << "dup2";
+    close(originalStdout);
+#endif
+
     namespace stdfs = std::filesystem;
     auto directory_str = path() ? std::string_view(path()) : "";
     if (!directory_str.empty()) {
