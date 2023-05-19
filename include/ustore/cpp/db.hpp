@@ -67,15 +67,6 @@ class context_t : public std::enable_shared_from_this<context_t> {
     inline ~context_t() noexcept {
         ustore_transaction_free(txn_);
         txn_ = nullptr;
-
-        status_t status;
-        ustore_snapshot_drop_t snap_drop {
-            .db = db_,
-            .error = status.member_ptr(),
-            .id = snap_,
-        };
-        ustore_snapshot_drop(&snap_drop);
-        snap_ = 0;
     }
 
     inline ustore_database_t db() const noexcept { return db_; }
