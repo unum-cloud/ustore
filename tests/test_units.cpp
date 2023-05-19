@@ -743,7 +743,7 @@ TEST(db, snapshots_list) {
     snap_1 = *db.snapshot();
     snapshots = snap_1.snapshots();
     snaps = *snapshots;
-    EXPECT_EQ(snaps.size(), 3u);
+    EXPECT_EQ(snaps.size(), 4u);
 
     EXPECT_TRUE(db.clear());
 
