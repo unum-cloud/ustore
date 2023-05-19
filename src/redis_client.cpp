@@ -307,6 +307,11 @@ void ustore_snapshot_drop(ustore_snapshot_drop_t* c_ptr) {
     *c.error = "Snapshots not supported by Redis!";
 }
 
+void ustore_snapshot_export(ustore_snapshot_export_t* c_ptr) {
+    ustore_snapshot_export_t& c = *c_ptr;
+    *c.error = "Snapshots not supported by Redis!";
+}
+
 /*********************************************************/
 /*****************		Transactions	  ****************/
 /*********************************************************/
