@@ -142,15 +142,6 @@ void ustore_write(ustore_write_t* c_ptr) {
     });
 }
 
-void ustore_paths_write(ustore_paths_write_t* c_ptr) {
-}
-
-void ustore_paths_match(ustore_paths_match_t* c_ptr) {
-}
-
-void ustore_paths_read(ustore_paths_read_t* c_ptr) {
-}
-
 void ustore_scan(ustore_scan_t* c_ptr) {
     ustore_scan_t& c = *c_ptr;
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
