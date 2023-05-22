@@ -20,10 +20,12 @@ jobs:
           ref: 'main-dev'
       - name: Install dependencies
         run: sudo apt update && sudo apt install -y doxygen graphviz dia git && pip install sphinx breathe furo m2r2 sphinxcontrib-googleanalytics==0.2.dev20220708 sphinxcontrib-jquery
-      - name: Install USearch from PyPi
-        run: pip install usearch
+      - name: Install UKV from PyPi
+        run: pip install ukv
+      - name: Fetch GoLang repo
+        run: git submodule update --init --recursive --remote go-ustore/
       - name: Build documentation
-        run: cd docs && make html
+        run: cd docs && doxygen conf.dox && make html
       - name: Copy assets
         run: cp -r assets build/docs/html/
       - name: Compress assets
