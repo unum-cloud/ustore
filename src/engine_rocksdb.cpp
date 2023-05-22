@@ -429,12 +429,38 @@ void ustore_write(ustore_write_t* c_ptr) {
 
     ustore_write_t& c = *c_ptr;
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
-    if (!c.tasks_count)
-        return;
 
     rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
-    rocks_txn_t& txn = *reinterpret_cast<rocks_txn_t*>(c.transaction);
     strided_iterator_gt<ustore_collection_t const> collections {c.collections, c.collections_stride};
+
+    if (!c.tasks_count) {
+        if (c.keys == nullptr && c.values == nullptr && c.options == ustore_option_write_flush_k) {
+            ustore_size_t count;
+            ustore_collection_t* ids;
+            ustore_length_t* offsets;
+            ustore_char_t* names;
+            ustore_collection_list_t list {};
+            list.db = c.db;
+            list.error = c.error;
+            list.arena = c.arena;
+            list.options = ustore_option_dont_discard_memory_k;
+            list.count = &count;
+            list.ids = &ids;
+            list.offsets = &offsets;
+            list.names = &names;
+            ustore_collection_list(&list);
+
+            std::vector<rocks_collection_t*> cols(count + 1);
+            for (std::size_t i = 0; i != count; ++i)
+                cols[i] = rocks_collection(db, ids[i]);
+            cols.back() = rocks_collection(db, ustore_collection_main_k);
+            auto status = db.native->Flush(rocksdb::FlushOptions(), cols);
+            return_error_if_m(status.code() == rocksdb::Status::kOk, c.error, error_unknown_k, "Failed to flush");
+        }
+        return;
+    }
+
+    rocks_txn_t& txn = *reinterpret_cast<rocks_txn_t*>(c.transaction);
     strided_iterator_gt<ustore_key_t const> keys {c.keys, c.keys_stride};
     strided_iterator_gt<ustore_bytes_cptr_t const> vals {c.values, c.values_stride};
     strided_iterator_gt<ustore_length_t const> offs {c.offsets, c.offsets_stride};

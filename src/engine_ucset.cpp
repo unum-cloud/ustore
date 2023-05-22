@@ -553,13 +553,17 @@ void ustore_write(ustore_write_t* c_ptr) {
 
     ustore_write_t& c = *c_ptr;
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
-    if (!c.tasks_count)
+    database_t& db = *reinterpret_cast<database_t*>(c.db);
+    if (!c.tasks_count) {
+        if (c.keys == nullptr && c.values == nullptr && //
+            c.options == ustore_option_write_flush_k && !db.persisted_directory.empty())
+            safe_section("Saving to disk", c.error, [&] { write(db, db.persisted_directory, c.error); });
         return;
+    }
 
     linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
     return_if_error_m(c.error);
 
-    database_t& db = *reinterpret_cast<database_t*>(c.db);
     transaction_t& txn = *reinterpret_cast<transaction_t*>(c.transaction);
     strided_iterator_gt<ustore_collection_t const> collections {c.collections, c.collections_stride};
     strided_iterator_gt<ustore_key_t const> keys {c.keys, c.keys_stride};
