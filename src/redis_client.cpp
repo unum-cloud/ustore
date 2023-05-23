@@ -26,24 +26,26 @@ static const char kDefaultCollectionName[] = "default";
 
 using namespace unum::ustore;
 using namespace unum;
+namespace redis = sw::redis;
 
-inline sw::redis::StringView to_string_view(byte_t const* p, size_t size_bytes) noexcept {
+inline redis::StringView to_string_view(byte_t const* p, size_t size_bytes) noexcept {
     return {reinterpret_cast<const char*>(p), size_bytes};
 }
 
-inline sw::redis::StringView to_string_view(ustore_key_t const& k) noexcept {
+inline redis::StringView to_string_view(ustore_key_t const& k) noexcept {
     return {reinterpret_cast<const char*>(&k), sizeof(ustore_key_t)};
 }
 
-inline sw::redis::StringView redis_collection(ustore_collection_t collection) {
+inline redis::StringView redis_collection(ustore_collection_t collection) {
     return collection == ustore_collection_main_k ? kDefaultCollectionName : reinterpret_cast<const char*>(collection);
 }
 
 struct redis_txn_t {
-    std::unique_ptr<sw::redis::Transaction> native;
-    std::map<collection_key_t, sw::redis::OptionalString> uncommited;
+    std::unique_ptr<redis::Transaction> native;
+    std::unordered_map<collection_key_t, redis::OptionalString> uncommited;
 
-    sw::redis::OptionalString get_uncommited(ustore_collection_t collection, ustore_key_t key) {
+    redis::OptionalString get_uncommited(ustore_collection_t collection, ustore_key_t key) {
+        native->hget(redis_collection(collection), to_string_view(key));
         auto it = uncommited.find({collection, key});
         if (it != uncommited.end())
             return it->second;
@@ -66,7 +68,7 @@ struct redis_txn_t {
 };
 
 struct redis_client_t {
-    std::unique_ptr<sw::redis::Redis> native;
+    std::unique_ptr<redis::Redis> native;
     std::vector<std::string> collections;
 };
 
@@ -78,12 +80,12 @@ void ustore_database_init(ustore_database_init_t* c_ptr) {
     ustore_database_init_t& c = *c_ptr;
 
     safe_section("Starting client", c.error, [&] {
-        sw::redis::ConnectionOptions connection_options;
+        redis::ConnectionOptions connection_options;
         connection_options.host = "127.0.0.1";
         connection_options.port = 6379;
 
         redis_client_t* db_ptr = new redis_client_t;
-        db_ptr->native = std::make_unique<sw::redis::Redis>(connection_options);
+        db_ptr->native = std::make_unique<redis::Redis>(connection_options);
 
         db_ptr->native->keys("*", std::back_inserter(db_ptr->collections));
         auto it = std::find(db_ptr->collections.begin(), db_ptr->collections.end(), kDefaultCollectionName);
@@ -122,13 +124,12 @@ void ustore_read(ustore_read_t* c_ptr) {
         uninitialized_array_gt<byte_t> contents(arena);
         for (std::size_t i = 0; i != places.size(); ++i) {
             place_t place = places[i];
-            sw::redis::OptionalString value;
+            redis::OptionalString value;
 
             if (c.transaction) {
                 value = txn.get_uncommited(place.collection, place.key);
                 if (!value)
                     value = db.native->hget(redis_collection(place.collection), to_string_view(place.key));
-                txn.native->hget(redis_collection(place.collection), to_string_view(place.key));
             }
             else
                 value = db.native->hget(redis_collection(place.collection), to_string_view(place.key));
@@ -365,7 +366,7 @@ void ustore_transaction_init(ustore_transaction_init_t* c_ptr) {
     redis_client_t& db = *reinterpret_cast<redis_client_t*>(c.db);
     safe_section("Initializing Transaction", c.error, [&] {
         auto txn_ptr = new redis_txn_t;
-        txn_ptr->native = std::make_unique<sw::redis::Transaction>(db.native->transaction());
+        txn_ptr->native = std::make_unique<redis::Transaction>(db.native->transaction());
         *c.transaction = txn_ptr;
     });
 }
