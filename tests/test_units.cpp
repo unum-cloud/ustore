@@ -86,6 +86,20 @@ static std::string config() {
     return fmt::format(R"({{"version": "1.0", "directory": "{}"}})", dir);
 }
 
+template <typename function_at>
+void without_printing(function_at&& function) {
+    int originalStdout = dup(STDOUT_FILENO);
+    int devNull = open("/dev/null", O_WRONLY);
+    EXPECT_NE(devNull, -1) << "open";
+    EXPECT_NE(dup2(devNull, STDOUT_FILENO), -1) << "dup2";
+    close(devNull);
+    
+    function();
+
+    EXPECT_NE(dup2(originalStdout, STDOUT_FILENO), -1) << "dup2";
+    close(originalStdout);
+}
+
 #if defined(USTORE_FLIGHT_CLIENT)
 static pid_t srv_id = -1;
 static std::string srv_path;
@@ -105,25 +119,15 @@ void clear_environment() {
         exit(0);
     }
     usleep(100000); // 0.1 sec
-#endif
 
-#if defined(USTORE_REDIS_CLIENT)
-    int originalStdout = dup(STDOUT_FILENO);
-    int devNull = open("/dev/null", O_WRONLY);
-    EXPECT_NE(devNull, -1) << "open";
-    EXPECT_NE(dup2(devNull, STDOUT_FILENO), -1) << "dup2";
-    close(devNull);
-
+#elif defined(USTORE_REDIS_CLIENT)
     pid_t pid = fork();
     if (pid == -1)
         EXPECT_TRUE(false) << "Failed To Clear Redis";
     else if (pid == 0)
-        EXPECT_NE(execl("/usr/bin/redis-cli", "redis-cli", "FLUSHALL", (char*)(NULL)), -1) << "Failed To Clear Redis";
+        without_printing([](){EXPECT_NE(execl("/usr/local/bin/redis-cli", "redis-cli", "FLUSHALL", (char*)(NULL)), -1) << "Failed To Clear Redis";});
     else
         wait(NULL);
-
-    EXPECT_NE(dup2(originalStdout, STDOUT_FILENO), -1) << "dup2";
-    close(originalStdout);
 #endif
 
     namespace stdfs = std::filesystem;
@@ -2333,6 +2337,14 @@ int main(int argc, char** argv) {
 #if defined(USTORE_FLIGHT_CLIENT)
     srv_path = argv[0];
     srv_path = srv_path.substr(0, srv_path.find_last_of("/") + 1) + "ustore_flight_server_ucset";
+#elif defined(USTORE_REDIS_CLIENT)
+    pid_t srv_id = fork();
+    if (srv_id == 0) {
+        usleep(1); // TODO Any statement is requiered to be run for successful `execl` run...
+        without_printing([](){execl("/usr/local/bin/redis-server", "redis-server", (char*)(NULL));});
+        exit(0);
+    }
+    usleep(100000); // 0.1 sec
 #endif
 
     auto directory_str = path() ? std::string_view(path()) : "";
