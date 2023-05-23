@@ -194,7 +194,7 @@ void ustore_snapshot_list(ustore_snapshot_list_t* c_ptr) {
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
     return_error_if_m(c.count && c.ids, c.error, args_combo_k, "Need outputs!");
 
-    try {
+    safe_section("Geting Snapshot List", c.error, [&] {
         linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
         return_if_error_m(c.error);
 
@@ -210,17 +210,14 @@ void ustore_snapshot_list(ustore_snapshot_list_t* c_ptr) {
         std::size_t i = 0;
         for (const auto& [id, _] : db.snapshots)
             ids[i++] = id;
-    }
-    catch (...) {
-        *c.error = "Snapshot List Failure";
-    }
+    });
 }
 
 void ustore_snapshot_create(ustore_snapshot_create_t* c_ptr) {
     ustore_snapshot_create_t& c = *c_ptr;
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    try {
+    safe_section("Creating Snapshot", c.error, [&] {
         level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
         std::lock_guard<std::mutex> locker(db.mutex);
         auto it = db.snapshots.find(*c.id);
@@ -237,10 +234,7 @@ void ustore_snapshot_create(ustore_snapshot_create_t* c_ptr) {
 
         *c.id = reinterpret_cast<ustore_snapshot_t>(level_snapshot);
         db.snapshots[*c.id] = level_snapshot;
-    }
-    catch (...) {
-        *c.error = "Snapshot Create Failure";
-    }
+    });
 }
 
 void ustore_snapshot_export(ustore_snapshot_export_t* c_ptr) {
@@ -287,7 +281,7 @@ void ustore_snapshot_drop(ustore_snapshot_drop_t* c_ptr) {
     if (!c.id)
         return;
 
-    try {
+    safe_section("Dropping Snapshot", c.error, [&] {
         level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
         level_snapshot_t& snap = *reinterpret_cast<level_snapshot_t*>(c.id);
         if (!snap.snapshot)
@@ -300,10 +294,7 @@ void ustore_snapshot_drop(ustore_snapshot_drop_t* c_ptr) {
         db.mutex.lock();
         db.snapshots.erase(id);
         db.mutex.unlock();
-    }
-    catch (...) {
-        *c.error = "Snapshot Drop Failure";
-    }
+    });
 }
 
 void write_one( //
@@ -637,7 +628,7 @@ void ustore_collection_drop(ustore_collection_drop_t* c_ptr) {
                       args_combo_k,
                       "Collections not supported by LevelDB!");
 
-    try {
+    safe_section("Dropping Collection", c.error, [&] {
         level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
 
         leveldb::WriteBatch batch;
@@ -657,10 +648,7 @@ void ustore_collection_drop(ustore_collection_drop_t* c_ptr) {
         options.sync = true;
         level_status_t status = db.native->Write(options, &batch);
         export_error(status, c.error);
-    }
-    catch (...) {
-        *c.error = "Collection Drop Failure";
-    }
+    });
 }
 
 void ustore_collection_list(ustore_collection_list_t* c_ptr) {

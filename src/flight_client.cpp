@@ -1311,7 +1311,7 @@ void ustore_collection_create(ustore_collection_create_t* c_ptr) {
     auto name_len = c.name ? std::strlen(c.name) : 0;
     return_error_if_m(name_len, c.error, args_wrong_k, "Default collection is always present");
 
-    try {
+    safe_section("Creating Collection", c.error, [&] {
         rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
 
         arf::Action action;
@@ -1337,10 +1337,7 @@ void ustore_collection_create(ustore_collection_create_t* c_ptr) {
                           error_unknown_k,
                           "Inadequate response");
         std::memcpy(c.id, id_ptr->body->data(), sizeof(ustore_collection_t));
-    }
-    catch (...) {
-        *c.error = "Collection Create Failure";
-    }
+    });
 }
 
 void ustore_collection_drop(ustore_collection_drop_t* c_ptr) {
@@ -1348,7 +1345,7 @@ void ustore_collection_drop(ustore_collection_drop_t* c_ptr) {
     ustore_collection_drop_t& c = *c_ptr;
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    try {
+    safe_section("Dropping Collection", c.error, [&] {
         std::string_view mode;
         switch (c.mode) {
         case ustore_drop_vals_k: mode = kParamDropModeValues; break;
@@ -1372,10 +1369,7 @@ void ustore_collection_drop(ustore_collection_drop_t* c_ptr) {
         arf::FlightCallOptions options = arrow_call_options(pool);
         ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream = db.flight->DoAction(options, action);
         return_error_if_m(maybe_stream.ok(), c.error, network_k, "Failed to act on Arrow server");
-    }
-    catch (...) {
-        *c.error = "Collection Drop Failure";
-    }
+    });
 }
 
 void ustore_collection_list(ustore_collection_list_t* c_ptr) {
@@ -1383,7 +1377,7 @@ void ustore_collection_list(ustore_collection_list_t* c_ptr) {
     ustore_collection_list_t& c = *c_ptr;
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    try {
+    safe_section("Getting Collection List", c.error, [&] {
         rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
         if (!(c.options & ustore_option_dont_discard_memory_k))
             db.readers.clear();
@@ -1426,10 +1420,7 @@ void ustore_collection_list(ustore_collection_list_t* c_ptr) {
         }
 
         db.readers.push_back(std::move(stream_ptr));
-    }
-    catch (...) {
-        *c.error = "Collection List Failure";
-    }
+    });
 }
 
 void ustore_database_control(ustore_database_control_t* c_ptr) {
@@ -1449,7 +1440,7 @@ void ustore_snapshot_list(ustore_snapshot_list_t* c_ptr) {
     ustore_snapshot_list_t& c = *c_ptr;
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    try {
+    safe_section("Getting Snapshot List", c.error, [&] {
         linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
         return_if_error_m(c.error);
 
@@ -1478,17 +1469,14 @@ void ustore_snapshot_list(ustore_snapshot_list_t* c_ptr) {
             *c.count = static_cast<ustore_size_t>(batch_c.length);
         if (c.ids)
             *c.ids = (ustore_collection_t*)batch_c.children[*ids_column_idx]->buffers[1];
-    }
-    catch (...) {
-        *c.error = "Snapshot List Failure";
-    }
+    });
 }
 
 void ustore_snapshot_create(ustore_snapshot_create_t* c_ptr) {
     ustore_snapshot_create_t& c = *c_ptr;
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    try {
+    safe_section("Creating Snapshot", c.error, [&] {
         rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
 
         arf::Action action;
@@ -1512,17 +1500,14 @@ void ustore_snapshot_create(ustore_snapshot_create_t* c_ptr) {
                           error_unknown_k,
                           "Inadequate response");
         std::memcpy(c.id, id_ptr->body->data(), sizeof(ustore_snapshot_t));
-    }
-    catch (...) {
-        *c.error = "Snapshot Create Failure";
-    }
+    });
 }
 
 void ustore_snapshot_export(ustore_snapshot_export_t* c_ptr) {
     ustore_snapshot_export_t& c = *c_ptr;
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    try {
+    safe_section("Exporting Snapshot", c.error, [&] {
         rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
 
         arf::Action action;
@@ -1539,17 +1524,14 @@ void ustore_snapshot_export(ustore_snapshot_export_t* c_ptr) {
         arf::FlightCallOptions options = arrow_call_options(pool);
         ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream = db.flight->DoAction(options, action);
         return_error_if_m(maybe_stream.ok(), c.error, network_k, "Failed to act on Arrow server");
-    }
-    catch (...) {
-        *c.error = "Snapshot Export Failure";
-    }
+    });
 }
 
 void ustore_snapshot_drop(ustore_snapshot_drop_t* c_ptr) {
     ustore_snapshot_drop_t& c = *c_ptr;
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    try {
+    safe_section("Dropping Collection", c.error, [&] {
         rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
 
         arf::Action action;
@@ -1560,10 +1542,7 @@ void ustore_snapshot_drop(ustore_snapshot_drop_t* c_ptr) {
         arf::FlightCallOptions options = arrow_call_options(pool);
         ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream = db.flight->DoAction(options, action);
         return_error_if_m(maybe_stream.ok(), c.error, network_k, "Failed to act on Arrow server");
-    }
-    catch (...) {
-        *c.error = "Snapshot Drop Failure";
-    }
+    });
 }
 
 /*********************************************************/
@@ -1576,7 +1555,7 @@ void ustore_transaction_init(ustore_transaction_init_t* c_ptr) {
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
     return_error_if_m(c.transaction, c.error, uninitialized_state_k, "Transaction is uninitialized");
 
-    try {
+    safe_section("Initializing Transaction", c.error, [&] {
         rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
 
         arf::Action action;
@@ -1606,10 +1585,7 @@ void ustore_transaction_init(ustore_transaction_init_t* c_ptr) {
                           error_unknown_k,
                           "Inadequate response");
         std::memcpy(c.transaction, id_ptr->body->data(), sizeof(ustore_transaction_t));
-    }
-    catch (...) {
-        *c.error = "Transaction Init Failure";
-    }
+    });
 }
 
 void ustore_transaction_commit(ustore_transaction_commit_t* c_ptr) {
@@ -1617,7 +1593,7 @@ void ustore_transaction_commit(ustore_transaction_commit_t* c_ptr) {
     ustore_transaction_commit_t& c = *c_ptr;
     return_error_if_m(c.transaction, c.error, uninitialized_state_k, "Transaction is uninitialized");
 
-    try {
+    safe_section("Commiting Transaction", c.error, [&] {
         rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
 
         arf::Action action;
@@ -1634,10 +1610,7 @@ void ustore_transaction_commit(ustore_transaction_commit_t* c_ptr) {
         arf::FlightCallOptions options = arrow_call_options(pool);
         ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream = db.flight->DoAction(options, action);
         return_error_if_m(maybe_stream.ok(), c.error, network_k, "Failed to act on Arrow server");
-    }
-    catch (...) {
-        *c.error = "Transaction Commit Failure";
-    }
+    });
 }
 
 /*********************************************************/

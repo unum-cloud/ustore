@@ -244,7 +244,7 @@ void ustore_snapshot_list(ustore_snapshot_list_t* c_ptr) {
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
     return_error_if_m(c.count && c.ids, c.error, args_combo_k, "Need outputs!");
 
-    try {
+    safe_section("Geting Snapshot List", c.error, [&] {
         linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
         return_if_error_m(c.error);
 
@@ -260,10 +260,7 @@ void ustore_snapshot_list(ustore_snapshot_list_t* c_ptr) {
         std::size_t i = 0;
         for (const auto& [id, _] : db.snapshots)
             ids[i++] = id;
-    }
-    catch (...) {
-        *c.error = "Snapshot List Failure";
-    }
+    });
 }
 
 void ustore_snapshot_create(ustore_snapshot_create_t* c_ptr) {
@@ -271,7 +268,7 @@ void ustore_snapshot_create(ustore_snapshot_create_t* c_ptr) {
     ustore_snapshot_create_t& c = *c_ptr;
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    try {
+    safe_section("Creating Snapshot", c.error, [&] {
         rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
         std::lock_guard<std::mutex> locker(db.mutex);
         auto it = db.snapshots.find(*c.id);
@@ -288,10 +285,7 @@ void ustore_snapshot_create(ustore_snapshot_create_t* c_ptr) {
 
         *c.id = reinterpret_cast<ustore_snapshot_t>(rocks_snapshot);
         db.snapshots[*c.id] = rocks_snapshot;
-    }
-    catch (...) {
-        *c.error = "Snapshot Create Failure";
-    }
+    });
 }
 
 void ustore_snapshot_export(ustore_snapshot_export_t* c_ptr) {
@@ -299,7 +293,7 @@ void ustore_snapshot_export(ustore_snapshot_export_t* c_ptr) {
     ustore_snapshot_export_t& c = *c_ptr;
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    try {
+    safe_section("Exporting Snapshot", c.error, [&] {
         rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
 
         rocksdb::Checkpoint* chp_ptr = nullptr;
@@ -317,10 +311,7 @@ void ustore_snapshot_export(ustore_snapshot_export_t* c_ptr) {
         rocks_status_t status = chp_ptr->CreateCheckpoint(c.path, 0, &snapshot_id);
 
         export_error(status, c.error);
-    }
-    catch (...) {
-        *c.error = "Snapshot Export Failure";
-    }
+    });
 }
 
 void ustore_snapshot_drop(ustore_snapshot_drop_t* c_ptr) {
@@ -329,7 +320,7 @@ void ustore_snapshot_drop(ustore_snapshot_drop_t* c_ptr) {
     if (!c.id)
         return;
 
-    try {
+    safe_section("Dropping Snapshot", c.error, [&] {
         rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
         rocks_snapshot_t& snap = *reinterpret_cast<rocks_snapshot_t*>(c.id);
         if (!snap.snapshot)
@@ -342,10 +333,7 @@ void ustore_snapshot_drop(ustore_snapshot_drop_t* c_ptr) {
         db.mutex.lock();
         db.snapshots.erase(id);
         db.mutex.unlock();
-    }
-    catch (...) {
-        *c.error = "Snapshot Drop Failure";
-    }
+    });
 }
 
 void write_one( //
@@ -786,7 +774,7 @@ void ustore_collection_create(ustore_collection_create_t* c_ptr) {
     return_error_if_m(name_len, c.error, args_wrong_k, "Default collection is always present");
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    try {
+    safe_section("Creating Collection", c.error, [&] {
         rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
 
         for (auto handle : db.columns) {
@@ -805,10 +793,7 @@ void ustore_collection_create(ustore_collection_create_t* c_ptr) {
             db.columns.push_back(collection);
             *c.id = reinterpret_cast<ustore_collection_t>(collection);
         }
-    }
-    catch (...) {
-        *c.error = "Collection Create Failure";
-    }
+    });
 }
 
 void ustore_collection_drop(ustore_collection_drop_t* c_ptr) {
@@ -822,7 +807,7 @@ void ustore_collection_drop(ustore_collection_drop_t* c_ptr) {
                       args_combo_k,
                       "Default collection can't be invalidated.");
 
-    try {
+    safe_section("Dropping Collection", c.error, [&] {
         rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
         rocks_collection_t* collection_ptr = reinterpret_cast<rocks_collection_t*>(c.id);
         rocks_collection_t* collection_ptr_to_clear = nullptr;
@@ -873,10 +858,7 @@ void ustore_collection_drop(ustore_collection_drop_t* c_ptr) {
             export_error(status, c.error);
             return;
         }
-    }
-    catch (...) {
-        *c.error = "Collection Drop Failure";
-    }
+    });
 }
 
 void ustore_collection_list(ustore_collection_list_t* c_ptr) {
@@ -885,7 +867,7 @@ void ustore_collection_list(ustore_collection_list_t* c_ptr) {
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
     return_error_if_m(c.count && c.names, c.error, args_combo_k, "Need names and outputs!");
 
-    try {
+    safe_section("Geting Collection List", c.error, [&] {
         linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
         return_if_error_m(c.error);
 
@@ -922,10 +904,7 @@ void ustore_collection_list(ustore_collection_list_t* c_ptr) {
             ++i;
         }
         offs[i] = static_cast<ustore_length_t>(names - *c.names);
-    }
-    catch (...) {
-        *c.error = "Collection List Failure";
-    }
+    });
 }
 
 void ustore_database_control(ustore_database_control_t* c_ptr) {
@@ -942,7 +921,7 @@ void ustore_transaction_init(ustore_transaction_init_t* c_ptr) {
     validate_transaction_begin(c.transaction, c.options, c.error);
     return_if_error_m(c.error);
 
-    try {
+    safe_section("Initializing Transaction", c.error, [&] {
         bool const safe = c.options & ustore_option_write_flush_k;
         rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
         rocks_txn_t& txn = **reinterpret_cast<rocks_txn_t**>(c.transaction);
@@ -956,10 +935,7 @@ void ustore_transaction_init(ustore_transaction_init_t* c_ptr) {
             *c.error = "Couldn't start a transaction!";
         else
             *c.transaction = new_txn;
-    }
-    catch (...) {
-        *c.error = "Transaction Init Failure";
-    }
+    });
 }
 
 void ustore_transaction_commit(ustore_transaction_commit_t* c_ptr) {
@@ -970,7 +946,7 @@ void ustore_transaction_commit(ustore_transaction_commit_t* c_ptr) {
     validate_transaction_commit(c.transaction, c.options, c.error);
     return_if_error_m(c.error);
 
-    try {
+    safe_section("Committing Transaction", c.error, [&] {
         rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
         rocks_txn_t& txn = *reinterpret_cast<rocks_txn_t*>(c.transaction);
 
@@ -983,10 +959,7 @@ void ustore_transaction_commit(ustore_transaction_commit_t* c_ptr) {
                 *c.sequence_number = db.native->GetLatestSequenceNumber();
             db.mutex.unlock();
         }
-    }
-    catch (...) {
-        *c.error = "Transaction Commit Failure";
-    }
+    });
 }
 
 void ustore_arena_free(ustore_arena_t c_arena) {
