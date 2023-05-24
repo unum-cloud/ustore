@@ -70,7 +70,7 @@ static char const* path() {
     if (path)
         return std::strlen(path) ? path : nullptr;
 
-#if defined(USTORE_FLIGHT_CLIENT)
+#if defined(USTORE_FLIGHT_CLIENT) or defined(USTORE_REDIS_CLIENT)
     return nullptr;
 #elif defined(USTORE_TEST_PATH)
     return USTORE_TEST_PATH;
@@ -100,7 +100,7 @@ void without_printing(function_at&& function) {
     close(originalStdout);
 }
 
-#if defined(USTORE_FLIGHT_CLIENT)
+#if defined(USTORE_FLIGHT_CLIENT) or defined(USTORE_REDIS_CLIENT)
 static pid_t srv_id = -1;
 static std::string srv_path;
 #endif
@@ -2364,10 +2364,11 @@ int main(int argc, char** argv) {
     srv_path = argv[0];
     srv_path = srv_path.substr(0, srv_path.find_last_of("/") + 1) + "ustore_flight_server_ucset";
 #elif defined(USTORE_REDIS_CLIENT)
-    pid_t srv_id = fork();
+    srv_path = "/usr/local/bin/redis-server";
+    srv_id = fork();
     if (srv_id == 0) {
         usleep(1); // TODO Any statement is requiered to be run for successful `execl` run...
-        without_printing([]() { execl("/usr/local/bin/redis-server", "redis-server", (char*)(NULL)); });
+        without_printing([]() { execl(srv_path.c_str(), "redis-server", (char*)(NULL)); });
         exit(0);
     }
     usleep(100000); // 0.1 sec
@@ -2381,7 +2382,7 @@ int main(int argc, char** argv) {
 
     ::testing::InitGoogleTest(&argc, argv);
     int status = RUN_ALL_TESTS();
-#if defined(USTORE_FLIGHT_CLIENT)
+#if defined(USTORE_FLIGHT_CLIENT) or defined(USTORE_REDIS_CLIENT)
     kill(srv_id, SIGKILL);
     waitpid(srv_id, nullptr, 0);
 #endif
