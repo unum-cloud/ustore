@@ -235,6 +235,48 @@ void ustore_scan(ustore_scan_t* c_ptr) {
 }
 
 void ustore_sample(ustore_sample_t* c_ptr) {
+    ustore_sample_t& c = *c_ptr;
+    return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    if (!c.tasks_count)
+        return;
+
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
+    return_if_error_m(c.error);
+
+    redis_client_t& db = *reinterpret_cast<redis_client_t*>(c.db);
+    redis_txn_t& txn = *reinterpret_cast<redis_txn_t*>(c.transaction);
+    strided_iterator_gt<ustore_collection_t const> collections {c.collections, c.collections_stride};
+    strided_iterator_gt<ustore_length_t const> lens {c.count_limits, c.count_limits_stride};
+    sample_args_t samples {collections, lens, c.tasks_count};
+
+    // 1. Allocate a tape for all the values to be fetched
+    auto offsets = arena.alloc_or_dummy(samples.count + 1, c.error, c.offsets);
+    return_if_error_m(c.error);
+    auto counts = arena.alloc_or_dummy(samples.count, c.error, c.counts);
+    return_if_error_m(c.error);
+
+    auto total_keys = reduce_n(samples.limits, samples.count, 0ul);
+    auto keys_output = *c.keys = arena.alloc<ustore_key_t>(total_keys, c.error).begin();
+    return_if_error_m(c.error);
+    std::vector<std::string> keys;
+
+    for (std::size_t task_idx = 0; task_idx != samples.count; ++task_idx) {
+        sample_arg_t task = samples[task_idx];
+        auto collection = redis_collection(task.collection);
+        offsets[task_idx] = keys_output - *c.keys;
+
+        safe_section("Sampling", c.error, [&] {
+            db.native->command("HRANDFIELD", collection, task.limit, std::back_inserter(keys));
+        });
+
+        for (std::size_t i = 0; i != keys.size(); ++i) {
+            *keys_output = *reinterpret_cast<ustore_key_t*>(keys[i].data());
+            ++keys_output;
+        }
+        counts[task_idx] = keys.size();
+        keys.clear();
+    }
+    offsets[samples.count] = keys_output - *c.keys;
 }
 
 void ustore_measure(ustore_measure_t* c_ptr) {
