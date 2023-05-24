@@ -49,6 +49,7 @@ struct redis_txn_t {
         auto it = uncommited.find({collection, key});
         if (it != uncommited.end())
             return it->second;
+        return {};
     }
 
     void set(ustore_collection_t collection, ustore_key_t key, value_view_t value) {
