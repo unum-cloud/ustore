@@ -93,7 +93,7 @@ void without_printing(function_at&& function) {
     EXPECT_NE(devNull, -1) << "open";
     EXPECT_NE(dup2(devNull, STDOUT_FILENO), -1) << "dup2";
     close(devNull);
-    
+
     function();
 
     EXPECT_NE(dup2(originalStdout, STDOUT_FILENO), -1) << "dup2";
@@ -125,7 +125,10 @@ void clear_environment() {
     if (pid == -1)
         EXPECT_TRUE(false) << "Failed To Clear Redis";
     else if (pid == 0)
-        without_printing([](){EXPECT_NE(execl("/usr/local/bin/redis-cli", "redis-cli", "FLUSHALL", (char*)(NULL)), -1) << "Failed To Clear Redis";});
+        without_printing([]() {
+            EXPECT_NE(execl("/usr/local/bin/redis-cli", "redis-cli", "FLUSHALL", (char*)(NULL)), -1)
+                << "Failed To Clear Redis";
+        });
     else
         wait(NULL);
 #endif
@@ -588,6 +591,29 @@ TEST(db, presences) {
         }
         else {
             EXPECT_FALSE(presences[i]);
+        }
+    }
+}
+
+TEST(db, sample) {
+    clear_environment();
+    database_t db;
+    EXPECT_TRUE(db.open(config().c_str()));
+    EXPECT_TRUE(db.clear());
+    auto collection = db.main();
+
+    auto keys_count = 100;
+    std::vector<ustore_key_t> keys(keys_count);
+    std::iota(keys.begin(), keys.end(), 0);
+    collection[keys] = "value";
+
+    auto sample_count = 10;
+    for (std::size_t i = 0; i != keys_count; ++i) {
+        auto samples = collection.keys().sample(sample_count, collection.member_arena()).throw_or_release();
+        EXPECT_EQ(samples.size(), sample_count);
+        for (std::size_t i = 0; i != sample_count; ++i) {
+            EXPECT_GE(samples[i], 0);
+            EXPECT_LT(samples[i], 100);
         }
     }
 }
@@ -2341,7 +2367,7 @@ int main(int argc, char** argv) {
     pid_t srv_id = fork();
     if (srv_id == 0) {
         usleep(1); // TODO Any statement is requiered to be run for successful `execl` run...
-        without_printing([](){execl("/usr/local/bin/redis-server", "redis-server", (char*)(NULL));});
+        without_printing([]() { execl("/usr/local/bin/redis-server", "redis-server", (char*)(NULL)); });
         exit(0);
     }
     usleep(100000); // 0.1 sec
