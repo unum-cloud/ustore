@@ -1,24 +1,33 @@
-#include <iostream>
-#include <regex>
+/**
+ * @file cli.cpp
+ * @author Ashot Vardanian
+ * @date 25 May 2023
+ * @addtogroup Cpp
+ *
+ * @brief CLI tool for UStore.
+ */
 
-#include <fmt/format.h>
+#include <iostream>            // `std::cout`, `std::cerr`
+#include <regex>               // `std::regex`, `std::regex_token_iterator`
 
-#include <clipp.h>
-#include <readline/readline.h>
-#include <readline/history.h>
+#include <fmt/format.h>        // `fmt::format`, `fmt::print`
 
-#include "ustore/cpp/db.hpp"
-#include "dataset.h"
+#include <clipp.h>             // `clipp::parse`
+#include <readline/readline.h> // `readline`
+#include <readline/history.h>  // `add_history`
+
+#include "ustore/cpp/db.hpp"   // `database_t`
+#include "dataset.h"           // `import`, `export`
 
 using namespace unum::ustore;
 using namespace unum;
 
+#pragma region - Helpers
 static constexpr char const* red_k = "\033[31m";
 static constexpr char const* green_k = "\033[32m";
 static constexpr char const* yellow_k = "\x1B[33m";
 static constexpr char const* reset_k = "\033[0m";
 
-#pragma region - Helpers
 inline std::string remove_quotes(std::string str) {
     if (str[0] == '\"' && str[str.size() - 1] == '\"') {
         str.erase(0, 1);
@@ -106,8 +115,8 @@ void snapshot_list(database_t& db) {
 #pragma region - Import/Export
 void docs_import(database_t& db,
                  std::string const& collection_name,
-                 std::string const& arg.input_file,
-                 std::string const& arg.id_field,
+                 std::string const& input_file,
+                 std::string const& id_field,
                  std::size_t max_batch_size) {
     status_t status;
     arena_t arena(db);
@@ -119,9 +128,9 @@ void docs_import(database_t& db,
         .arena = arena.member_ptr(),
         .options = ustore_options_default_k,
         .collection = collection,
-        .paths_pattern = arg.input_file.c_str(),
+        .paths_pattern = input_file.c_str(),
         .max_batch_size = max_batch_size,
-        .arg.id_field = arg.id_field.c_str(),
+        .id_field = id_field.c_str(),
     };
     ustore_docs_import(&docs);
 
@@ -133,7 +142,7 @@ void docs_import(database_t& db,
 
 void docs_export(database_t& db,
                  std::string const& collection_name,
-                 std::string const& arg.output_ext,
+                 std::string const& output_ext,
                  std::size_t max_batch_size) {
     status_t status;
     arena_t arena(db);
@@ -145,7 +154,7 @@ void docs_export(database_t& db,
         .arena = arena.member_ptr(),
         .options = ustore_options_default_k,
         .collection = collection,
-        .paths_extension = arg.output_ext.c_str(),
+        .paths_extension = output_ext.c_str(),
         .max_batch_size = max_batch_size,
     };
     ustore_docs_export(&docs);
@@ -174,10 +183,12 @@ struct cli_args_t {
     std::string output_ext;
     std::string export_path;
     std::size_t memory_limit;
-}
+};
 
 // CLI arguments parser
 bool parse_cli_args(int argc, char* argv[], cli_args_t& arg) {
+    using namespace clipp;
+
     auto collection =
         (option("collection").set(arg.db_object, std::string("collection")) &
          ((required("create").set(arg.action, std::string("create")) & required("--name") &
@@ -243,87 +254,79 @@ bool execute(cli_args_t& arg, database_t& db) {
         print(red_k, "Invalid snapshot action {}", arg.action);
         return true;
     }
+    
     return false;
 }
 
 #pragma region - Interactive CLI
-void cmd_collection(cli_args_t& cli_arg, std::vector<std::string>& cmd_line) {
+bool parse_collection_args(cli_args_t& cli_arg, std::vector<std::string>& cmd_line) {
     cli_arg.action = cmd_line[1];
     if (cli_arg.action == "create") {
-
         if (cmd_line.size() != 3) {
             print(red_k, "Invalid input");
-            return;
+            return false;
         }
-
         cli_arg.col_name = remove_quotes(cmd_line[2]);
-        collection_create(db, cli_arg.col_name);
     }
     else if (cli_arg.action == "drop") {
-
         if (cmd_line.size() != 3) {
             print(red_k, "Invalid input");
-            return;
+            return false;
         }
-
         cli_arg.col_name = remove_quotes(cmd_line[2]);
-        collection_drop(db, cli_arg.col_name);
     }
     else if (cli_arg.action == "list") {
-
         if (cmd_line.size() != 2) {
             print(red_k, "Invalid input");
-            return;
+            return false;
         }
-
-        collection_list(db);
     }
-    else
-        print(red_k, "Invalid collection action {}", arg.action);
+    else {
+        print(red_k, "Invalid collection action {}", cli_arg.action);
+        return false;
+    }
+
+    return true;
 }
 
-void cmd_snapshot(cli_args_t& cli_arg, std::vector<std::string>& cmd_line) {
+bool parse_snapshot_args(cli_args_t& cli_arg, std::vector<std::string>& cmd_line) {
     cli_arg.action = cmd_line[1];
     if (cli_arg.action == "create") {
-
         if (cmd_line.size() != 2) {
             print(red_k, "Invalid input");
-            return;
+            return false;
         }
-        snapshot_create(db);
     }
     else if (cli_arg.action == "export") {
-
         if (cmd_line.size() != 3) {
             print(red_k, "Invalid input");
-            return;
+            return false;
         }
-        snapshot_export(db, cli_arg.export_path);
     }
     else if (cli_arg.action == "drop") {
-
         if (cmd_line.size() != 3) {
             print(red_k, "Invalid input");
-            return;
+            return false;
         }
-        snapshot_drop(db, cli_arg.snap_id);
     }
     else if (cli_arg.action == "list") {
-
         if (cmd_line.size() != 2) {
             print(red_k, "Invalid input");
-            return;
+            return false;
         }
-        snapshot_list(db);
     }
-    else
+    else {
         print(red_k, "Invalid snapshot action {}", cli_arg.action);
+        return false;
+    }
+
+    return true;
 }
 
-void cmd_import(cli_args_t& cli_arg, std::vector<std::string>& cmd_line) {
+bool parse_import_args(cli_args_t& cli_arg, std::vector<std::string>& cmd_line) {
     if (cmd_line.size() != 9 && cmd_line.size() != 7) {
         print(red_k, "Invalid input");
-        return;
+        return false;
     }
 
     std::string argument = cmd_line[1];
@@ -331,7 +334,7 @@ void cmd_import(cli_args_t& cli_arg, std::vector<std::string>& cmd_line) {
         cli_arg.input_file = cmd_line[2];
     else {
         print(red_k, "Invalid list argument {}", argument);
-        return;
+        return false;
     }
 
     argument = cmd_line[3];
@@ -339,7 +342,7 @@ void cmd_import(cli_args_t& cli_arg, std::vector<std::string>& cmd_line) {
         cli_arg.id_field = cmd_line[4];
     else {
         print(red_k, "Invalid list argument {}", argument);
-        return;
+        return false;
     }
 
     argument = cmd_line[5];
@@ -347,7 +350,7 @@ void cmd_import(cli_args_t& cli_arg, std::vector<std::string>& cmd_line) {
         cli_arg.memory_limit = std::stoi(cmd_line[6]);
     else {
         print(red_k, "Invalid list argument {}", argument);
-        return;
+        return false;
     }
 
     if (cmd_line.size() == 9) {
@@ -356,19 +359,20 @@ void cmd_import(cli_args_t& cli_arg, std::vector<std::string>& cmd_line) {
             cli_arg.col_name = cmd_line[8];
         else {
             print(red_k, "Invalid list argument {}", argument);
-            return;
+            return false;
         }
     }
-    else
+    else {
         cli_arg.col_name = "";
+    }
 
-    docs_import(db, cli_arg.col_name, cli_arg.input_file, cli_arg.id_field, cli_arg.memory_limit);
+    return true;
 }
 
-void cmd_export(cli_args_t& cli_arg, std::vector<std::string>& cmd_line) {
+bool parse_export_args(cli_args_t& cli_arg, std::vector<std::string>& cmd_line) {
     if (cmd_line.size() != 7 && cmd_line.size() != 5) {
         print(red_k, "Invalid input");
-        return;
+        return false;
     }
 
     std::string argument = cmd_line[1];
@@ -376,7 +380,7 @@ void cmd_export(cli_args_t& cli_arg, std::vector<std::string>& cmd_line) {
         cli_arg.output_ext = cmd_line[2];
     else {
         print(red_k, "Invalid list argument {}", argument);
-        return;
+        return false;
     }
 
     argument = cmd_line[3];
@@ -384,7 +388,7 @@ void cmd_export(cli_args_t& cli_arg, std::vector<std::string>& cmd_line) {
         cli_arg.memory_limit = std::stoi(cmd_line[4]);
     else {
         print(red_k, "Invalid list argument {}", argument);
-        return;
+        return false;
     }
 
     if (cmd_line.size() == 7) {
@@ -393,18 +397,18 @@ void cmd_export(cli_args_t& cli_arg, std::vector<std::string>& cmd_line) {
             cli_arg.col_name = cmd_line[6];
         else {
             print(red_k, "Invalid list argument {}", argument);
-            return;
+            return false;
         }
     }
     else
         cli_arg.col_name = "";
 
-    docs_export(db, cli_arg.col_name, cli_arg.output_ext, cli_arg.memory_limit);
+    return true;
 }
 
 // The main loop of interactive CLI tool
 void interactive_cli(database_t& db) {
-    cli_args_t arg;
+    cli_args_t args;
     std::string input;
     std::vector<std::string> cmd_line;
     std::regex const reg_exp(" +(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)");
@@ -430,14 +434,18 @@ void interactive_cli(database_t& db) {
             continue;
         }
 
+        bool status = false;
         if (cmd_line[0] == "collection")
-            cmd_collection(arg, cmd_line);
+            status = parse_collection_args(args, cmd_line);
         else if (cmd_line[0] == "snapshot")
-            cmd_snapshot(arg, cmd_line);
+            status = parse_snapshot_args(args, cmd_line);
         else if (cmd_line[0] == "import")
-            cmd_import(arg, cmd_line);
+            status = parse_import_args(args, cmd_line);
         else if (cmd_line[0] == "export")
-            cmd_export(arg, cmd_line);
+            status = parse_export_args(args, cmd_line);
+
+        if (status)
+            execute(args, db);
     }
 }
 #pragma endregion - Interactive CLI
@@ -445,16 +453,19 @@ void interactive_cli(database_t& db) {
 #pragma endregion - Interface
 
 int main(int argc, char* argv[]) {
-    using namespace clipp;
-
     cli_args_t arg;
-    bool result = parse_cli_args(argc, argv, cli_args);
+    bool result = parse_cli_args(argc, argv, arg);
 
     if (!result || arg.help)
         return !result | !arg.help;
 
     database_t db;
-    db.open(arg.url.c_str()).throw_unhandled();
+    status_t status = db.open(arg.url.c_str());
+
+    if (!status) {
+        print(red_k, status.message());
+        return 1;
+    }
 
     if (execute(arg, db))
         return 0;
