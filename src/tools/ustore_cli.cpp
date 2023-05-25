@@ -239,7 +239,8 @@ bool execute(cli_args_t& arg, database_t& db) {
             docs_import(db, arg.col_name, arg.input_file, arg.id_field, arg.memory_limit);
         else if (arg.action == "export")
             docs_export(db, arg.col_name, arg.output_ext, arg.memory_limit);
-        print(red_k, "Invalid collection action {}", arg.action);
+        else
+            print(red_k, "Invalid collection action {}", arg.action);
         return true;
     }
     else if (arg.db_object == "snapshot") {
@@ -251,10 +252,11 @@ bool execute(cli_args_t& arg, database_t& db) {
             snapshot_drop(db, arg.snap_id);
         else if (arg.action == "list")
             snapshot_list(db);
-        print(red_k, "Invalid snapshot action {}", arg.action);
+        else
+            print(red_k, "Invalid snapshot action {}", arg.action);
         return true;
     }
-    
+
     return false;
 }
 
