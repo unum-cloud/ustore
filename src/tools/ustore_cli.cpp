@@ -428,26 +428,26 @@ void interactive_cli(database_t& db) {
         if (!cmd_line[0].size())
             cmd_line.erase(cmd_line.begin());
 
-        std::string const& command = cmd_line[0]; 
-        if (command == "exit")
+        args.db_object = cmd_line[0];
+        if (args.db_object == "exit")
             break;
 
-        if (command == "clear") {
+        if (args.db_object == "clear") {
             system("clear");
             continue;
         }
 
         bool status = false;
-        if (command == "collection")
+        if (args.db_object == "collection")
             status = parse_collection_args(args, cmd_line);
-        else if (command == "snapshot")
+        else if (args.db_object == "snapshot")
             status = parse_snapshot_args(args, cmd_line);
-        else if (command == "import")
+        else if (args.db_object == "import")
             status = parse_import_args(args, cmd_line);
-        else if (command == "export")
+        else if (args.db_object == "export")
             status = parse_export_args(args, cmd_line);
-        else 
-            print(red_k, "Unknown command {}", command);
+        else
+            print(red_k, "Unknown command {}", args.db_object);
 
         if (status)
             execute(args, db);
