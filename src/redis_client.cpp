@@ -62,9 +62,10 @@ struct redis_txn_t {
         uncommited.erase({collection, key});
     }
 
-    void exec() {
-        native->exec();
+    redis::QueuedReplies exec() {
+        auto reply = native->exec();
         uncommited.clear();
+        return reply;
     }
 };
 
