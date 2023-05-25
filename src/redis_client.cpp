@@ -42,7 +42,7 @@ inline redis::StringView redis_collection(ustore_collection_t collection) {
 
 struct redis_txn_t {
     std::unique_ptr<redis::Transaction> native;
-    std::unordered_map<collection_key_t, redis::OptionalString> uncommited;
+    std::unordered_map<collection_key_t, std::string> uncommited;
 
     redis::OptionalString get_uncommited(ustore_collection_t collection, ustore_key_t key) {
         native->hget(redis_collection(collection), to_string_view(key));
@@ -52,9 +52,9 @@ struct redis_txn_t {
         return {};
     }
 
-    void set(ustore_collection_t collection, ustore_key_t key, value_view_t value) {
-        native->hset(redis_collection(collection), to_string_view(key), to_string_view(value.data(), value.size()));
-        uncommited[{collection, key}] = std::string((const char*)value.data(), value.size());
+    void set(ustore_collection_t collection, ustore_key_t key, redis::StringView value) {
+        native->hset(redis_collection(collection), to_string_view(key), value);
+        uncommited[{collection, key}] = value;
     }
 
     void del(ustore_collection_t collection, ustore_key_t key) {
@@ -62,10 +62,9 @@ struct redis_txn_t {
         uncommited.erase({collection, key});
     }
 
-    redis::QueuedReplies exec() {
-        auto reply = native->exec();
+    void exec() {
+        native->exec();
         uncommited.clear();
-        return reply;
     }
 };
 
@@ -126,15 +125,17 @@ void ustore_read(ustore_read_t* c_ptr) {
         uninitialized_array_gt<byte_t> contents(arena);
         for (std::size_t i = 0; i != places.size(); ++i) {
             place_t place = places[i];
-            redis::OptionalString value;
+            auto key = to_string_view(place.key);
+            auto collection = redis_collection(place.collection);
 
+            redis::OptionalString value;
             if (c.transaction) {
                 value = txn.get_uncommited(place.collection, place.key);
                 if (!value)
-                    value = db.native->hget(redis_collection(place.collection), to_string_view(place.key));
+                    value = db.native->hget(collection, key);
             }
             else
-                value = db.native->hget(redis_collection(place.collection), to_string_view(place.key));
+                value = db.native->hget(collection, key);
 
             offs[i] = contents.size();
             presences[i] = bool(value);
@@ -176,22 +177,25 @@ void ustore_write(ustore_write_t* c_ptr) {
         for (std::size_t i = 0; i != places.size(); ++i) {
             auto place = places[i];
             auto content = contents[i];
+            auto key = to_string_view(place.key);
+            auto collection = redis_collection(place.collection);
+            auto value = to_string_view(content.data(), content.size());
+
             if (content) {
                 if (c.transaction)
-                    txn.set(place.collection, place.key, content);
+                    txn.set(place.collection, place.key, value);
                 else
-                    db.native->hset(redis_collection(place.collection),
-                                    to_string_view(place.key),
-                                    to_string_view(content.data(), content.size()));
+                    db.native->hset(collection, key, value);
             }
             else {
                 if (c.transaction)
                     txn.del(place.collection, place.key);
                 else
-                    db.native->hdel(redis_collection(place.collection), to_string_view(place.key));
+                    db.native->hdel(collection, key);
             }
         }
     });
+    return_if_error_m(c.error);
 }
 
 void ustore_scan(ustore_scan_t* c_ptr) {
