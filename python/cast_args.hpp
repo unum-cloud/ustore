@@ -322,7 +322,8 @@ struct parsed_adjacency_list_t {
                 edge_t result;
                 result.source_id = py_to_scalar<ustore_key_t>(PyTuple_GetItem(obj, 0));
                 result.target_id = py_to_scalar<ustore_key_t>(PyTuple_GetItem(obj, 1));
-                result.id = columns == 3 ? py_to_scalar<ustore_key_t>(PyTuple_GetItem(obj, 2)) : ustore_default_edge_id_k;
+                result.id =
+                    columns == 3 ? py_to_scalar<ustore_key_t>(PyTuple_GetItem(obj, 2)) : ustore_default_edge_id_k;
                 return result;
             };
             py_transform_n(adjacency_list, to_edge, std::back_inserter(edges_vec));
@@ -377,6 +378,35 @@ struct parsed_adjacency_list_t {
                 py_transform_n(edge_ids, &py_to_scalar<ustore_key_t>, edges_span.edge_ids.begin(), n);
 
             viewed_or_owned = std::move(edges_vec);
+        }
+    }
+
+    parsed_adjacency_list_t(int chunk_index,
+                            std::shared_ptr<arrow::ChunkedArray> source,
+                            std::shared_ptr<arrow::ChunkedArray> target,
+                            std::shared_ptr<arrow::ChunkedArray> edge) {
+
+        if ((source->chunk(chunk_index)->type_id() == arrow::Type::INT64 ||
+             source->chunk(chunk_index)->type_id() == arrow::Type::UINT64) &&
+            (target->chunk(chunk_index)->type_id() == arrow::Type::INT64 ||
+             target->chunk(chunk_index)->type_id() == arrow::Type::UINT64) &&
+            (edge->chunk(chunk_index)->type_id() == arrow::Type::INT64 ||
+             edge->chunk(chunk_index)->type_id() == arrow::Type::UINT64)) {
+
+            auto arrow_source_array = std::static_pointer_cast<arrow::UInt64Array>(source->chunk(chunk_index));
+            auto arrow_target_array = std::static_pointer_cast<arrow::UInt64Array>(target->chunk(chunk_index));
+            auto arrow_edge_array = std::static_pointer_cast<arrow::UInt64Array>(edge->chunk(chunk_index));
+
+            edges_view_t edges_view;
+            edges_view.source_ids = {reinterpret_cast<ustore_key_t const*>(arrow_source_array->raw_values()),
+                                     sizeof(ustore_key_t)};
+
+            edges_view.target_ids = {reinterpret_cast<ustore_key_t const*>(arrow_target_array->raw_values()),
+                                     sizeof(ustore_key_t)};
+
+            edges_view.edge_ids = {reinterpret_cast<ustore_key_t const*>(arrow_edge_array->raw_values()),
+                                   sizeof(ustore_key_t)};
+            viewed_or_owned = edges_view;
         }
     }
 };
