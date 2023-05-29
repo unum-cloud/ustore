@@ -244,7 +244,7 @@ void ustore_snapshot_list(ustore_snapshot_list_t* c_ptr) {
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
     return_error_if_m(c.count && c.ids, c.error, args_combo_k, "Need outputs!");
 
-    safe_section("Geting Snapshot List", c.error, [&] {
+    safe_section("Getting Snapshot List", c.error, [&] {
         linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
         return_if_error_m(c.error);
 
@@ -867,7 +867,7 @@ void ustore_collection_list(ustore_collection_list_t* c_ptr) {
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
     return_error_if_m(c.count && c.names, c.error, args_combo_k, "Need names and outputs!");
 
-    safe_section("Geting Collection List", c.error, [&] {
+    safe_section("Getting  Collection List", c.error, [&] {
         linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
         return_if_error_m(c.error);
 
