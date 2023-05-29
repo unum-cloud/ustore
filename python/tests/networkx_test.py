@@ -1,5 +1,6 @@
 import ustore.ucset as ustore
 import numpy as np
+import pyarrow as pa
 import pytest
 import networkx as nx
 
@@ -60,7 +61,6 @@ def test_triangle():
 
     net.clear()
 
-
 def test_triangle_batch():
     net = ustore.DataBase().main.graph
 
@@ -83,6 +83,33 @@ def test_triangle_batch():
 
     assert not net.has_edge(1, 2) and not net.has_edge(2, 3)
     assert net.has_edge(3, 1)
+
+    net.clear()
+
+def test_batch_attributes():
+    net = ustore.DataBase().main.graph
+
+    source = pa.array([1, 2, 3])
+    target = pa.array([2, 3, 1])
+    edge = pa.array([1, 2, 3])
+    attr = pa.array([0, 1, 2])
+    
+    names = ['source', 'target', 'edge', 'attr'] 
+
+    table = pa.Table.from_arrays([source, target, edge, attr], names=names)
+    net.add_edges_from(table, 'source', 'target', 'edge')
+
+    assert net.has_node(1) and net.has_node(2) and net.has_node(3)
+    assert not 4 in net
+
+    assert net.has_edge(1, 2) and net.has_edge(2, 3) and net.has_edge(3, 1)
+    assert not net.has_edge(2, 1)
+
+    index = 0
+    for node, neighbor, data in net.edges(data=True):
+        assert node == source[index] and neighbor == target[index]
+        assert data == {'attr': index}
+        index += 1
 
     net.clear()
 
