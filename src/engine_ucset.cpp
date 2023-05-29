@@ -557,7 +557,7 @@ void ustore_write(ustore_write_t* c_ptr) {
     if (!c.tasks_count) {
         if (c.keys == nullptr && c.values == nullptr && //
             c.options == ustore_option_write_flush_k && !db.persisted_directory.empty())
-            safe_section("Saving to disk", c.error, [&] { write(db, db.persisted_directory, c.error); });
+            safe_section("Flushing to disk", c.error, [&] { write(db, db.persisted_directory, c.error); });
         return;
     }
 

@@ -335,6 +335,8 @@ void ustore_write(ustore_write_t* c_ptr) {
 
     ustore_write_t& c = *c_ptr;
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    if (!c.tasks_count)
+        return_error_if_m(false, c.error, missing_feature_k, "Not implemented!");
 
     level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
     strided_iterator_gt<ustore_collection_t const> collections {c.collections, c.collections_stride};
