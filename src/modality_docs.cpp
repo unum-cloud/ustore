@@ -1589,12 +1589,11 @@ void ustore_docs_write(ustore_docs_write_t* c_ptr) {
                             c.error,
                             uninitialized_state_k,
                             "Keys and values is uninitialized");
-            try {
-                tape[idx] = result;
-            }
-            catch (std::exception const&) {
-                return_error_if_m(false, c.error, args_wrong_k, "The id field does not have the ustore key type");
-            }
+            return_error_if_m(result.type() == simdjson::ondemand::json_type::number,
+                              c.error,
+                              args_wrong_k,
+                              "The id field does not have the ustore key type");
+            tape[idx] = result;
         }
         c.keys_stride = sizeof(ustore_key_t);
     }
