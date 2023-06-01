@@ -172,12 +172,12 @@ endif()
 # > USTORE_BUILD_ENGINE_UCSET: Uses Arrow Parquet format to save binary collections on disk.
 # > USTORE_BUILD_API_FLIGHT: Uses Arrow Flight RPC as a client-server communication protocol.
 # > USTORE_BUILD_SDK_PYTHON: Uses Arrow for zero-copy data exchage with the Python runtime.
-if(${USTORE_BUILD_SDK_PYTHON} OR ${USTORE_BUILD_API_FLIGHT_CLIENT} OR ${USTORE_BUILD_API_FLIGHT_SERVER} OR ${USTORE_BUILD_ENGINE_UCSET} OR ${USTORE_BUILD_TESTS})
-  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/arrow.cmake")
-endif()
-
 if(${USTORE_BUILD_API_FLIGHT_CLIENT} OR ${USTORE_BUILD_API_FLIGHT_SERVER})
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/openssl.cmake")
+endif()
+
+if(${USTORE_BUILD_SDK_PYTHON} OR ${USTORE_BUILD_API_FLIGHT_CLIENT} OR ${USTORE_BUILD_API_FLIGHT_SERVER} OR ${USTORE_BUILD_ENGINE_UCSET} OR ${USTORE_BUILD_TESTS})
+  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/arrow.cmake")
 endif()
 
 if(${USTORE_BUILD_API_FLIGHT_SERVER})
@@ -268,7 +268,7 @@ if(${USTORE_BUILD_API_FLIGHT_SERVER})
 
     string(CONCAT server_exe_name "ustore_flight_server_" ${engine_name})
     add_executable(${server_exe_name} src/flight_server.cpp)
-    target_link_libraries(${server_exe_name} pthread yyjson simdjson bson arrow::flight arrow::bundled arrow::dataset arrow::arrow openssl::ssl openssl::crypto crypto ${embedded_lib_name} ${embedded_dependencies})
+    target_link_libraries(${server_exe_name} pthread yyjson simdjson bson arrow::flight arrow::bundled arrow::dataset arrow::arrow openssl::ssl openssl::crypto ${embedded_lib_name} ${embedded_dependencies})
     target_compile_definitions(${server_exe_name} INTERFACE USTORE_ENGINE_NAME=${engine_name})
 
     if(${engine_name} STREQUAL "ucset")

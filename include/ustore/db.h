@@ -322,6 +322,19 @@ typedef struct ustore_snapshot_create_t {
 
 void ustore_snapshot_create(ustore_snapshot_create_t*);
 
+typedef struct ustore_snapshot_export_t {
+    /** @brief Already open database instance. */
+    ustore_database_t db;
+    /** @brief Pointer to exported error message. */
+    ustore_error_t* error;
+    /** @brief Snapshot id. */
+    ustore_snapshot_t id;
+    /** @brief The specified directory path. */
+    ustore_str_view_t path;
+} ustore_snapshot_export_t;
+
+void ustore_snapshot_export(ustore_snapshot_export_t*);
+
 typedef struct ustore_snapshot_drop_t {
     /** @brief Already open database instance. */
     ustore_database_t db;
