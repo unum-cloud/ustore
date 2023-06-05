@@ -1,9 +1,5 @@
 /**
  * @file cli.cpp
- * @author Ashot Vardanian
- * @date 25 May 2023
- * @addtogroup Cpp
- *
  * @brief CLI tool for UStore.
  */
 
