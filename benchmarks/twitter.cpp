@@ -768,11 +768,12 @@ int main(int argc, char** argv) {
     }
 
     std::printf("Will benchmark...\n");
-    bm::RegisterBenchmark("construct_docs", &construct_docs) //
-        ->Iterations(pass_through_size(dataset_docs) / (settings.threads_count * settings.big_batch_size))
-        ->UseRealTime()
-        ->Threads(settings.threads_count)
-        ->Arg(settings.big_batch_size);
+    if (ustore_supports_transactions_k)
+        bm::RegisterBenchmark("construct_docs", &construct_docs) //
+            ->Iterations(pass_through_size(dataset_docs) / (settings.threads_count * settings.big_batch_size))
+            ->UseRealTime()
+            ->Threads(settings.threads_count)
+            ->Arg(settings.big_batch_size);
 
     if (can_build_graph)
         bm::RegisterBenchmark("construct_graph", &construct_graph) //
