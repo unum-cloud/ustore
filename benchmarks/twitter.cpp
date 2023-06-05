@@ -96,7 +96,7 @@ void parse_args(int argc, char* argv[], settings_t& settings) {
     program.add_argument("-t", "--threads")
         .default_value(std::to_string((std::thread::hardware_concurrency() / 2)))
         .help("Threads count");
-    program.add_argument("-tw", "--max_tweets_count").default_value("1'000'000").help("Maximum tweets count");
+    program.add_argument("-tw", "--max_tweets_count").default_value("1000000").help("Maximum tweets count");
     program.add_argument("-i", "--max_input_files").default_value("1000").help("Maximum input files count");
     program.add_argument("-c", "--con_factor").default_value("4").help("Connectivity factor");
     program.add_argument("-n", "--min_seconds").default_value("10").help("Minimal seconds");
@@ -734,6 +734,8 @@ int main(int argc, char** argv) {
     db.open(R"({"version": "1.0", "directory": "/mnt/md0/Twitter/RocksDB"})").throw_unhandled();
 #elif defined(USTORE_ENGINE_IS_UDISK)
     db.open(R"({"version": "1.0", "directory": "/mnt/md0/Twitter/UnumDB"})").throw_unhandled();
+#elif defined(USTORE_ENGINE_IS_UCSET)
+    db.open(R"({"version": "1.0", "directory": "/mnt/md0/Twitter/UCSet"})").throw_unhandled();
 #else
     db.open().throw_unhandled();
 #endif
@@ -766,11 +768,12 @@ int main(int argc, char** argv) {
     }
 
     std::printf("Will benchmark...\n");
-    bm::RegisterBenchmark("construct_docs", &construct_docs) //
-        ->Iterations(pass_through_size(dataset_docs) / (settings.threads_count * settings.big_batch_size))
-        ->UseRealTime()
-        ->Threads(settings.threads_count)
-        ->Arg(settings.big_batch_size);
+    if (ustore_supports_transactions_k)
+        bm::RegisterBenchmark("construct_docs", &construct_docs) //
+            ->Iterations(pass_through_size(dataset_docs) / (settings.threads_count * settings.big_batch_size))
+            ->UseRealTime()
+            ->Threads(settings.threads_count)
+            ->Arg(settings.big_batch_size);
 
     if (can_build_graph)
         bm::RegisterBenchmark("construct_graph", &construct_graph) //
