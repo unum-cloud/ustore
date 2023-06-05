@@ -86,27 +86,7 @@ static std::string config() {
     return fmt::format(R"({{"version": "1.0", "directory": "{}"}})", dir);
 }
 
-#if defined(USTORE_FLIGHT_CLIENT)
-static pid_t srv_id = -1;
-static std::string srv_path;
-#endif
-
 void clear_environment() {
-#if defined(USTORE_FLIGHT_CLIENT)
-    if (srv_id > 0) {
-        kill(srv_id, SIGKILL);
-        waitpid(srv_id, nullptr, 0);
-    }
-
-    srv_id = fork();
-    if (srv_id == 0) {
-        usleep(1); // TODO Any statement is requiered to be run for successful `execl` run...
-        execl(srv_path.c_str(), srv_path.c_str(), "--quiet", (char*)(NULL));
-        exit(0);
-    }
-    usleep(100000); // 0.1 sec
-#endif
-
     namespace stdfs = std::filesystem;
     auto directory_str = path() ? std::string_view(path()) : "";
     if (!directory_str.empty()) {
@@ -276,7 +256,6 @@ void check_binary_collection(blobs_collection_t& collection) {
  */
 TEST(db, open_clear_close) {
 
-    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
     EXPECT_TRUE(db.clear());
@@ -293,9 +272,9 @@ TEST(db, open_clear_close) {
  */
 TEST(db, clear_collection_by_clearing_db) {
 
-    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    EXPECT_TRUE(db.clear());
 
     blobs_collection_t collection = db.main();
     triplet_t triplet;
@@ -316,7 +295,6 @@ TEST(db, clear_collection_by_clearing_db) {
  */
 TEST(db, overwrite_with_step) {
 
-    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
     EXPECT_TRUE(db.clear());
@@ -360,9 +338,9 @@ TEST(db, persistency) {
     if (!path())
         return;
 
-    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    EXPECT_TRUE(db.clear());
 
     triplet_t triplet;
     {
@@ -411,9 +389,9 @@ TEST(db, persistency) {
  */
 TEST(db, named_collections) {
 
-    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    EXPECT_TRUE(db.clear());
 
     // We can't drop a missing collection, or the main one.
     EXPECT_FALSE(*db.contains("unknown"));
@@ -452,9 +430,9 @@ TEST(db, named_collections_list) {
     if (!ustore_supports_named_collections_k)
         return;
 
-    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    EXPECT_TRUE(db.clear());
 
     blobs_collection_t col1 = *db.create("col1");
     blobs_collection_t col2 = *db.create("col2");
@@ -495,9 +473,9 @@ TEST(db, named_collections_list) {
  * but empty the binary strings.
  */
 TEST(db, clear_values) {
-    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    EXPECT_TRUE(db.clear());
 
     triplet_t triplet;
     blobs_collection_t col = db.main();
@@ -511,17 +489,15 @@ TEST(db, clear_values) {
     check_length(collection_ref, 0);
     EXPECT_TRUE(col.clear());
     check_length(collection_ref, ustore_length_missing_k);
-
-    EXPECT_TRUE(db.clear());
 }
 
 /**
  * Tests presences with C and C++ Interfaces.
  */
 TEST(db, presences) {
-    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    EXPECT_TRUE(db.clear());
     auto main = db.main();
 
     constexpr std::size_t keys_count = 1000;
@@ -570,9 +546,9 @@ TEST(db, presences) {
 }
 
 TEST(db, scan) {
-    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    EXPECT_TRUE(db.clear());
     blobs_collection_t collection = db.main();
 
     constexpr std::size_t keys_size = 1000;
@@ -597,9 +573,9 @@ TEST(db, scan) {
  */
 TEST(db, batch_scan) {
 
-    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    EXPECT_TRUE(db.clear());
     blobs_collection_t collection = db.main();
 
     std::array<ustore_key_t, 512> keys;
@@ -638,9 +614,9 @@ TEST(db, transaction_read_commited) {
     if (!ustore_supports_transactions_k)
         return;
 
-    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    EXPECT_TRUE(db.clear());
     EXPECT_TRUE(db.transact());
     transaction_t txn = *db.transact();
 
@@ -674,9 +650,9 @@ TEST(db, transaction_snapshot_isolation) {
     if (!ustore_supports_snapshots_k)
         return;
 
-    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    EXPECT_TRUE(db.clear());
 
     triplet_t triplet;
     triplet_t triplet_same_v;
@@ -711,17 +687,15 @@ TEST(db, transaction_snapshot_isolation) {
     snap = *db.snapshot();
     auto ref = snap[triplet_same_v.keys];
     round_trip(ref, triplet_same_v);
-
-    EXPECT_TRUE(db.clear());
 }
 
 TEST(db, snapshots_list) {
     if (!ustore_supports_snapshots_k)
         return;
 
-    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    EXPECT_TRUE(db.clear());
 
     auto snap_1 = *db.snapshot();
     auto snapshots = snap_1.snapshots();
@@ -750,17 +724,15 @@ TEST(db, snapshots_list) {
     snapshots = snap_1.snapshots();
     snaps = *snapshots;
     EXPECT_EQ(snaps.size(), 0u);
-
-    EXPECT_TRUE(db.clear());
 }
 
 TEST(db, transaction_with_snapshot) {
     if (!ustore_supports_snapshots_k)
         return;
 
-    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    EXPECT_TRUE(db.clear());
 
     triplet_t triplet;
     triplet_t triplet_same_v;
@@ -791,16 +763,15 @@ TEST(db, transaction_with_snapshot) {
 
     auto txn_ref_3 = txn[triplet.keys];
     check_equalities(txn_ref_3, triplet_same_v);
-    EXPECT_TRUE(db.clear());
 }
 
 TEST(db, set_wrong_snapshot) {
     if (!ustore_supports_snapshots_k)
         return;
 
-    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    EXPECT_TRUE(db.clear());
 
     triplet_t triplet;
     blobs_collection_t collection = db.main();
@@ -829,8 +800,6 @@ TEST(db, set_wrong_snapshot) {
     snap.set_snapshot(snapshot);
     auto right_snap_ref = snap[triplet.keys];
     EXPECT_TRUE(right_snap_ref.value());
-
-    EXPECT_TRUE(db.clear());
 }
 
 /**
@@ -840,10 +809,12 @@ TEST(db, export_snapshot) {
     if (!ustore_supports_snapshots_k)
         return;
 
-    clear_environment();
     std::string dir = fmt::format("{}/original/", path());
     std::string dir1 = fmt::format("{}/export1/", path());
     std::string dir2 = fmt::format("{}/export2/", path());
+    std::filesystem::remove_all(dir);
+    std::filesystem::remove_all(dir1);
+    std::filesystem::remove_all(dir2);
     std::filesystem::create_directory(dir);
     std::filesystem::create_directory(dir1);
     std::filesystem::create_directory(dir2);
@@ -851,6 +822,7 @@ TEST(db, export_snapshot) {
     database_t db;
     auto config = fmt::format(R"({{"version": "1.0", "directory": "{}"}})", dir);
     EXPECT_TRUE(db.open(config.c_str()));
+    EXPECT_TRUE(db.clear());
 
     triplet_t triplet;
     triplet_t triplet_same_v;
@@ -900,10 +872,6 @@ TEST(db, export_snapshot) {
     // Check snapshots
     check_equalities(collection_ref1, triplet_same_v);
     check_equalities(collection_ref2, triplet);
-
-    EXPECT_TRUE(db.clear());
-    EXPECT_TRUE(db1.clear());
-    EXPECT_TRUE(db2.clear());
 }
 
 /**
@@ -914,10 +882,9 @@ TEST(db, snapshot_with_threads) {
     if (!ustore_supports_snapshots_k)
         return;
 
-    clear_environment();
-
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    EXPECT_TRUE(db.clear());
 
     triplet_t triplet;
     triplet_t triplet_same_v;
@@ -956,17 +923,15 @@ TEST(db, snapshot_with_threads) {
     std::thread t2(task_reset);
     t1.join();
     t2.join();
-
-    EXPECT_TRUE(db.clear());
 }
 
 TEST(db, transaction_erase_missing) {
     if (!ustore_supports_transactions_k)
         return;
 
-    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    EXPECT_TRUE(db.clear());
     EXPECT_TRUE(db.transact());
     transaction_t txn1 = *db.transact();
     transaction_t txn2 = *db.transact();
@@ -985,9 +950,9 @@ TEST(db, transaction_write_conflicting) {
     if (!ustore_supports_transactions_k)
         return;
 
-    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    EXPECT_TRUE(db.clear());
     EXPECT_TRUE(db.transact());
     transaction_t txn1 = *db.transact();
     transaction_t txn2 = *db.transact();
@@ -1005,9 +970,9 @@ TEST(db, transaction_sequenced_commit) {
     if (!ustore_supports_transactions_k)
         return;
 
-    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    EXPECT_TRUE(db.clear());
 
     EXPECT_TRUE(db.transact());
     transaction_t txn = *db.transact();
@@ -1047,9 +1012,9 @@ TEST(db, transaction_sequenced_commit) {
  */
 TEST(db, paths) {
 
-    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    EXPECT_TRUE(db.clear());
 
     char const* keys[] {"Facebook", "Apple", "Amazon", "Netflix", "Google", "Nvidia", "Adobe"};
     char const* vals[] {"F", "A", "A", "N", "G", "N", "A"};
@@ -1208,9 +1173,9 @@ TEST(db, paths) {
  */
 TEST(db, paths_linked_list) {
     constexpr std::size_t count = 1000;
-    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    EXPECT_TRUE(db.clear());
 
     arena_t arena(db);
     ustore_char_t separator = '\0';
@@ -1333,9 +1298,9 @@ std::vector<std::string> make_three_nested_docs() {
  */
 TEST(db, docs_flat) {
 
-    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    EXPECT_TRUE(db.clear());
 
     // JSON
     docs_collection_t collection = db.main<docs_collection_t>();
@@ -1376,9 +1341,9 @@ TEST(db, docs_flat) {
  */
 TEST(db, docs_nested_batch) {
 
-    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    EXPECT_TRUE(db.clear());
     docs_collection_t collection = db.main<docs_collection_t>();
 
     auto jsons = make_three_nested_docs();
@@ -1460,12 +1425,12 @@ TEST(db, docs_nested_batch) {
 }
 
 /**
- * Performs basic JSON Pathes, JSON Merge-Patches, and sub-document level updates.
+ * Performs basic JSON Paths, JSON Merge-Patches, and sub-document level updates.
  */
 TEST(db, docs_modify) {
-    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    EXPECT_TRUE(db.clear());
     docs_collection_t collection = db.main<docs_collection_t>();
     auto jsons = make_three_nested_docs();
     collection[1] = jsons[0].c_str();
@@ -1521,9 +1486,9 @@ TEST(db, docs_modify) {
  */
 TEST(db, docs_merge_and_patch) {
     using json_t = nlohmann::json;
-    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    EXPECT_TRUE(db.clear());
     docs_collection_t collection = db.main<docs_collection_t>();
 
     std::ifstream f_patch("tests/patch.json");
@@ -1560,9 +1525,9 @@ TEST(db, docs_merge_and_patch) {
  */
 TEST(db, docs_table) {
     using json_t = nlohmann::json;
-    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    EXPECT_TRUE(db.clear());
 
     // Inject basic data
     docs_collection_t collection = db.main<docs_collection_t>();
@@ -1731,12 +1696,12 @@ std::vector<edge_t> make_edges(std::size_t vertices_count = 2, std::size_t next_
 }
 
 /**
- * Upserts disconnected vertices into the graph.
+ * Upsert disconnected vertices into the graph.
  */
 TEST(db, graph_upsert_vertices) {
-    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    EXPECT_TRUE(db.clear());
 
     graph_collection_t net = db.main<graph_collection_t>();
     std::vector<ustore_key_t> vertices {1, 4, 5, 2};
@@ -1749,12 +1714,12 @@ TEST(db, graph_upsert_vertices) {
 }
 
 /**
- * Upserts an edge and its member vertices into the graph.
+ * Upsert an edge and its member vertices into the graph.
  */
 TEST(db, graph_upsert_edge) {
-    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    EXPECT_TRUE(db.clear());
 
     graph_collection_t net = db.main<graph_collection_t>();
     edge_t edge {1, 2, 9};
@@ -1771,13 +1736,13 @@ TEST(db, graph_upsert_edge) {
 /**
  * Tests "Graphs" Modality, with on of the simplest network designs - a triangle.
  * Three vertices, three connections between them, forming 3 undirected, or 6 directed edges.
- * Tests edge upserts, existence checks, degree computation, vertex removals.
+ * Tests edge upsert, existence checks, degree computation, vertex removals.
  */
 TEST(db, graph_triangle) {
 
-    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    EXPECT_TRUE(db.clear());
 
     graph_collection_t net = db.main<graph_collection_t>();
 
@@ -1883,9 +1848,9 @@ TEST(db, graph_triangle) {
  */
 TEST(db, graph_triangle_batch) {
 
-    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    EXPECT_TRUE(db.clear());
 
     blobs_collection_t main = db.main();
     graph_collection_t net = db.main<graph_collection_t>();
@@ -1984,9 +1949,9 @@ TEST(db, graph_transaction_watch) {
     if (!ustore_supports_transactions_k)
         return;
 
-    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    EXPECT_TRUE(db.clear());
     graph_collection_t net = db.main<graph_collection_t>();
 
     edge_t edge_ab {'A', 'B', 19};
@@ -2007,9 +1972,9 @@ TEST(db, graph_transaction_watch) {
  * Constructs a larger graph, validating the degrees in a resulting network afterward.
  */
 TEST(db, graph_random_fill) {
-    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    EXPECT_TRUE(db.clear());
 
     graph_collection_t graph = db.main<graph_collection_t>();
 
@@ -2031,9 +1996,9 @@ TEST(db, graph_conflicting_transactions) {
     if (!ustore_supports_transactions_k)
         return;
 
-    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    EXPECT_TRUE(db.clear());
 
     transaction_t txn = *db.transact();
     graph_collection_t txn_net = txn.main<graph_collection_t>();
@@ -2054,9 +2019,9 @@ TEST(db, graph_conflicting_transactions) {
  * a star, a pentagon, and five self-loops.
  */
 TEST(db, graph_layering_shapes) {
-    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    EXPECT_TRUE(db.clear());
 
     graph_collection_t graph = db.main<graph_collection_t>();
 
@@ -2121,9 +2086,9 @@ TEST(db, graph_layering_shapes) {
  * as they trigger updates in all nodes connected to the removed one.
  */
 TEST(db, graph_remove_vertices) {
-    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    EXPECT_TRUE(db.clear());
 
     graph_collection_t graph = db.main<graph_collection_t>();
 
@@ -2154,9 +2119,9 @@ TEST(db, graph_remove_vertices) {
  * in the graph, even though entirely disconnected.
  */
 TEST(db, graph_remove_edges_keep_vertices) {
-    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    EXPECT_TRUE(db.clear());
 
     graph_collection_t graph = db.main<graph_collection_t>();
 
@@ -2176,9 +2141,9 @@ TEST(db, graph_remove_edges_keep_vertices) {
  * connected to each other anymore.
  */
 TEST(db, graph_get_vertex_edges) {
-    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    EXPECT_TRUE(db.clear());
 
     graph_collection_t graph = db.main<graph_collection_t>();
 
@@ -2206,9 +2171,9 @@ TEST(db, graph_get_vertex_edges) {
  * Getting the degrees of multiple vertices simultaneously.
  */
 TEST(db, graph_degrees) {
-    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    EXPECT_TRUE(db.clear());
 
     graph_collection_t graph = db.main<graph_collection_t>();
 
@@ -2224,9 +2189,9 @@ TEST(db, graph_degrees) {
 }
 
 TEST(db, graph_neighbors) {
-    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    EXPECT_TRUE(db.clear());
 
     graph_collection_t graph = db.main<graph_collection_t>();
     edge_t edge1 {1, 1, 17};
@@ -2255,9 +2220,9 @@ TEST(db, graph_neighbors) {
  * operations with just three distinctly different vectors in R3 space with Cosine metric.
  */
 TEST(db, vectors) {
-    clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    EXPECT_TRUE(db.clear());
 
     constexpr std::size_t dims_k = 3;
     ustore_key_t keys[3] = {'a', 'b', 'c'};
@@ -2312,8 +2277,16 @@ TEST(db, vectors) {
 int main(int argc, char** argv) {
 
 #if defined(USTORE_FLIGHT_CLIENT)
-    srv_path = argv[0];
+    std::string srv_path = argv[0];
     srv_path = srv_path.substr(0, srv_path.find_last_of("/") + 1) + "ustore_flight_server_ucset";
+
+    auto srv_id = fork();
+    if (srv_id == 0) {
+        usleep(1); // TODO Any statement is required to be run for successful `execl` run...
+        execl(srv_path.c_str(), srv_path.c_str(), "--quiet", (char*)(NULL));
+        exit(0);
+    }
+    usleep(100000); // 0.1 sec
 #endif
 
     auto directory_str = path() ? std::string_view(path()) : "";
@@ -2324,6 +2297,8 @@ int main(int argc, char** argv) {
 
     ::testing::InitGoogleTest(&argc, argv);
     int status = RUN_ALL_TESTS();
+    clear_environment();
+
 #if defined(USTORE_FLIGHT_CLIENT)
     kill(srv_id, SIGKILL);
     waitpid(srv_id, nullptr, 0);
