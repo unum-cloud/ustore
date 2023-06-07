@@ -147,6 +147,8 @@ class BuildPyi(Command):
 setup(
     name=__lib_name__,
     version=__version__,
+    packages=['ustore'],
+    package_dir={'ustore': 'python/ustore'},
 
     author='Ashot Vardanian',
     author_email='info@unum.cloud',
