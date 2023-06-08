@@ -70,9 +70,7 @@ static char const* path() {
     if (path)
         return std::strlen(path) ? path : nullptr;
 
-#if defined(USTORE_FLIGHT_CLIENT)
-    return nullptr;
-#elif defined(USTORE_TEST_PATH)
+#if defined(USTORE_TEST_PATH)
     return USTORE_TEST_PATH;
 #else
     return nullptr;
@@ -80,6 +78,9 @@ static char const* path() {
 }
 
 static std::string config() {
+#if defined(USTORE_FLIGHT_CLIENT)
+    return "grpc://0.0.0.0:38709";
+#endif
     auto dir = path();
     if (!dir)
         return {};
@@ -100,8 +101,13 @@ void clear_environment() {
 
     srv_id = fork();
     if (srv_id == 0) {
-        usleep(1); // TODO Any statement is requiered to be run for successful `execl` run...
-        execl(srv_path.c_str(), srv_path.c_str(), "--quiet", (char*)(NULL));
+        usleep(1); // TODO Any statement is required to be run for successful `execl` run...
+        execl(srv_path.c_str(),
+              srv_path.c_str(),
+              "--quiet",
+              "--config",
+              fmt::format(R"({{"version": "1.0", "directory": "{}"}})", path()),
+              (char*)(NULL));
         exit(0);
     }
     usleep(100000); // 0.1 sec
@@ -1460,7 +1466,7 @@ TEST(db, docs_nested_batch) {
 }
 
 /**
- * Performs basic JSON Pathes, JSON Merge-Patches, and sub-document level updates.
+ * Performs basic JSON Paths, JSON Merge-Patches, and sub-document level updates.
  */
 TEST(db, docs_modify) {
     clear_environment();
@@ -1731,7 +1737,7 @@ std::vector<edge_t> make_edges(std::size_t vertices_count = 2, std::size_t next_
 }
 
 /**
- * Upserts disconnected vertices into the graph.
+ * Upsert disconnected vertices into the graph.
  */
 TEST(db, graph_upsert_vertices) {
     clear_environment();
@@ -1749,7 +1755,7 @@ TEST(db, graph_upsert_vertices) {
 }
 
 /**
- * Upserts an edge and its member vertices into the graph.
+ * Upsert an edge and its member vertices into the graph.
  */
 TEST(db, graph_upsert_edge) {
     clear_environment();
@@ -1771,7 +1777,7 @@ TEST(db, graph_upsert_edge) {
 /**
  * Tests "Graphs" Modality, with on of the simplest network designs - a triangle.
  * Three vertices, three connections between them, forming 3 undirected, or 6 directed edges.
- * Tests edge upserts, existence checks, degree computation, vertex removals.
+ * Tests edge upsert, existence checks, degree computation, vertex removals.
  */
 TEST(db, graph_triangle) {
 
