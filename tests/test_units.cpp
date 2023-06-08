@@ -2268,7 +2268,7 @@ TEST(db, vectors) {
 int main(int argc, char** argv) {
 
 #if defined(USTORE_FLIGHT_CLIENT)
-    auto srv_path = argv[0];
+    std::string srv_path = argv[0];
     srv_path = srv_path.substr(0, srv_path.find_last_of("/") + 1) + "ustore_flight_server_ucset";
 
     auto srv_id = fork();
