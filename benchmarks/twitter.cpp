@@ -404,25 +404,20 @@ static void docs_sample_keys(bm::State& state) {
 
     std::size_t received_bytes = 0;
     native_sample(state, [&](ustore_size_t count) {
-        ustore_length_t* offsets = nullptr;
-        ustore_byte_t* values = nullptr;
-
-        ustore_read_t read {};
         ustore_length_t limit_count = 1;
         ustore_length_t* found_offsets = nullptr;
-        ustore_length_t* found_lengths = nullptr;
         ustore_length_t* found_counts = nullptr;
         ustore_key_t* found_keys = nullptr;
 
         status_t status;
         ustore_sample_t sample {};
-
         sample.db = db;
         sample.error = status.member_ptr();
         sample.arena = arena.member_ptr();
         sample.tasks_count = count;
         sample.collections = &collection_docs_k;
         sample.count_limits = &limit_count;
+        sample.count_limits_stride = 0;
         sample.offsets = &found_offsets;
         sample.counts = &found_counts;
         sample.keys = &found_keys;
@@ -431,7 +426,7 @@ static void docs_sample_keys(bm::State& state) {
         if (!status)
             return false;
 
-        received_bytes += offsets[count];
+        received_bytes += found_offsets[count];
         return true;
     });
 
@@ -788,13 +783,13 @@ int main(int argc, char** argv) {
 
 // 4. Run the actual benchmarks
 #if defined(USTORE_ENGINE_IS_LEVELDB)
-    db.open(R"({"version": "1.0", "directory": "/mnt/md0/Twitter/LevelDB"})").throw_unhandled();
+    db.open(R"({"version": "1.0", "directory": "./tmp/ustore_embedded_leveldb"})").throw_unhandled();
 #elif defined(USTORE_ENGINE_IS_ROCKSDB)
-    db.open(R"({"version": "1.0", "directory": "/mnt/md0/Twitter/RocksDB"})").throw_unhandled();
+    db.open(R"({"version": "1.0", "directory": "./tmp/ustore_embedded_rocksdb"})").throw_unhandled();
 #elif defined(USTORE_ENGINE_IS_UDISK)
     db.open(R"({"version": "1.0", "directory": "/mnt/md0/Twitter/UnumDB"})").throw_unhandled();
 #elif defined(USTORE_ENGINE_IS_UCSET)
-    db.open(R"({"version": "1.0", "directory": "/mnt/md0/Twitter/UCSet"})").throw_unhandled();
+    db.open(R"({"version": "1.0", "directory": "./tmp/ustore_embedded_ucset"})").throw_unhandled();
 #else
     db.open().throw_unhandled();
 #endif
@@ -857,14 +852,13 @@ int main(int argc, char** argv) {
             ->Arg(settings.mid_batch_size)
             ->Arg(settings.big_batch_size);
 
-    if (ustore_doc_field_default_k != ustore_doc_field_json_k)
-        bm::RegisterBenchmark("docs_sample_keys", &docs_sample_keys) //
-            ->MinTime(settings.min_seconds)
-            ->UseRealTime()
-            ->Threads(settings.threads_count)
-            ->Arg(settings.small_batch_size)
-            ->Arg(settings.mid_batch_size)
-            ->Arg(settings.big_batch_size);
+    bm::RegisterBenchmark("docs_sample_keys", &docs_sample_keys) //
+        ->MinTime(settings.min_seconds)
+        ->UseRealTime()
+        ->Threads(settings.threads_count)
+        ->Arg(settings.small_batch_size)
+        ->Arg(settings.mid_batch_size)
+        ->Arg(settings.big_batch_size);
 
     bm::RegisterBenchmark("docs_sample_objects", &docs_sample_objects) //
         ->MinTime(settings.min_seconds)
