@@ -1,15 +1,15 @@
-#include <fcntl.h>      // `open` files
-#include <sys/stat.h>   // `stat` to obtain file metadata
-#include <sys/mman.h>   // `mmap` to read datasets faster
+#include <fcntl.h>    // `open` files
+#include <sys/stat.h> // `stat` to obtain file metadata
+#include <sys/mman.h> // `mmap` to read datasets faster
 
-#include <cstring>      // `std::memchr`
-#include <algorithm>    // `std::search`
-#include <filesystem>   // Listing directories is too much pain in C
-#include <string_view>  //
-#include <vector>       //
-#include <thread>       //
-#include <random>       // `std::random_device` for each thread
-#include <fstream>      // `std::ifstream`, `std::istreambuf_iterator`
+#include <cstring>     // `std::memchr`
+#include <algorithm>   // `std::search`
+#include <filesystem>  // Listing directories is too much pain in C
+#include <string_view> //
+#include <vector>      //
+#include <thread>      //
+#include <random>      // `std::random_device` for each thread
+#include <fstream>     // `std::ifstream`, `std::istreambuf_iterator`
 
 #include <fmt/printf.h> // `fmt::sprintf`
 #include <benchmark/benchmark.h>
@@ -782,13 +782,13 @@ int main(int argc, char** argv) {
     std::printf("- indexed %zu paths\n", pass_through_size(dataset_paths));
 
 #if defined(USTORE_ENGINE_IS_LEVELDB)
-    db.open(R"({"version": "1.0", "directory": "./tmp/ustore_embedded_leveldb"})").throw_unhandled();
+    db.open(R"({"version": "1.0", "directory": "/mnt/md0/Twitter/LevelDB"})").throw_unhandled();
 #elif defined(USTORE_ENGINE_IS_ROCKSDB)
-    db.open(R"({"version": "1.0", "directory": "./tmp/ustore_embedded_rocksdb"})").throw_unhandled();
+    db.open(R"({"version": "1.0", "directory": "/mnt/md0/Twitter/RocksDB"})").throw_unhandled();
 #elif defined(USTORE_ENGINE_IS_UDISK)
     db.open(R"({"version": "1.0", "directory": "/mnt/md0/Twitter/UnumDB"})").throw_unhandled();
 #elif defined(USTORE_ENGINE_IS_UCSET)
-    db.open(R"({"version": "1.0", "directory": "./tmp/ustore_embedded_rocksdb"})").throw_unhandled();
+    db.open(R"({"version": "1.0", "directory": "/mnt/md0/Twitter/UCSet"})").throw_unhandled();
 #else
     db.open().throw_unhandled();
 #endif
