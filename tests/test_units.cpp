@@ -70,7 +70,9 @@ static char const* path() {
     if (path)
         return std::strlen(path) ? path : nullptr;
 
-#if defined(USTORE_TEST_PATH)
+#if defined(USTORE_FLIGHT_CLIENT)
+    return nullptr;
+#elif defined(USTORE_TEST_PATH)
     return USTORE_TEST_PATH;
 #else
     return nullptr;
@@ -78,9 +80,6 @@ static char const* path() {
 }
 
 static std::string config() {
-#if defined(USTORE_FLIGHT_CLIENT)
-    return "grpc://0.0.0.0:38709";
-#endif
     auto dir = path();
     if (!dir)
         return {};
@@ -102,12 +101,7 @@ void clear_environment() {
     srv_id = fork();
     if (srv_id == 0) {
         usleep(1); // TODO Any statement is required to be run for successful `execl` run...
-        execl(srv_path.c_str(),
-              srv_path.c_str(),
-              "--quiet",
-              "--config",
-              fmt::format(R"({{"version": "1.0", "directory": "{}"}})", path()),
-              (char*)(NULL));
+        execl(srv_path.c_str(), srv_path.c_str(), "--quiet", (char*)(NULL));
         exit(0);
     }
     usleep(100000); // 0.1 sec
@@ -606,6 +600,7 @@ TEST(db, batch_scan) {
     clear_environment();
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    EXPECT_TRUE(db.clear());
     blobs_collection_t collection = db.main();
 
     std::array<ustore_key_t, 512> keys;
