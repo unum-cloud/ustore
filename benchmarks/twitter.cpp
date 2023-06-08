@@ -781,7 +781,6 @@ int main(int argc, char** argv) {
     std::printf("- indexed %zu relations\n", pass_through_size(dataset_graph));
     std::printf("- indexed %zu paths\n", pass_through_size(dataset_paths));
 
-// 4. Run the actual benchmarks
 #if defined(USTORE_ENGINE_IS_LEVELDB)
     db.open(R"({"version": "1.0", "directory": "./tmp/ustore_embedded_leveldb"})").throw_unhandled();
 #elif defined(USTORE_ENGINE_IS_ROCKSDB)
@@ -789,7 +788,7 @@ int main(int argc, char** argv) {
 #elif defined(USTORE_ENGINE_IS_UDISK)
     db.open(R"({"version": "1.0", "directory": "/mnt/md0/Twitter/UnumDB"})").throw_unhandled();
 #elif defined(USTORE_ENGINE_IS_UCSET)
-    db.open(R"({"version": "1.0", "directory": "./tmp/ustore_embedded_ucset"})").throw_unhandled();
+    db.open(R"({"version": "1.0", "directory": "./tmp/ustore_embedded_rocksdb"})").throw_unhandled();
 #else
     db.open().throw_unhandled();
 #endif
