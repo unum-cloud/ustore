@@ -403,11 +403,12 @@ static void docs_sample_keys(bm::State& state) {
     arena_t arena(db);
 
     std::size_t received_bytes = 0;
-    native_sample(state, [&](ustore_key_t const* ids_tweets, ustore_size_t count) {
+    native_sample(state, [&](ustore_size_t count) {
         ustore_length_t* offsets = nullptr;
         ustore_byte_t* values = nullptr;
 
         ustore_read_t read {};
+        ustore_length_t limit_count = 1;
         ustore_length_t* found_offsets = nullptr;
         ustore_length_t* found_lengths = nullptr;
         ustore_length_t* found_counts = nullptr;
@@ -420,12 +421,8 @@ static void docs_sample_keys(bm::State& state) {
         sample.error = status.member_ptr();
         sample.arena = arena.member_ptr();
         sample.tasks_count = count;
-        // sample.transaction = c.transaction;
-        // sample.options = c.options;
         sample.collections = &collection_docs_k;
-        // sample.collections_stride = sizeof(entry_t);
-        // sample.count_limits = &count;
-        sample.count_limits_stride = 0;
+        sample.count_limits = &limit_count;
         sample.offsets = &found_offsets;
         sample.counts = &found_counts;
         sample.keys = &found_keys;
