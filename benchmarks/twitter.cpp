@@ -901,5 +901,8 @@ int main(int argc, char** argv) {
     // Clear DB after benchmark
     db.clear().throw_unhandled();
 
+    // Close DB
+    db.close();
+    
     return 0;
 }
