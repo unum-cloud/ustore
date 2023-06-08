@@ -86,6 +86,15 @@ static std::string config() {
     return fmt::format(R"({{"version": "1.0", "directory": "{}"}})", dir);
 }
 
+void clear_environment() {
+    namespace stdfs = std::filesystem;
+    auto directory_str = path() ? std::string_view(path()) : "";
+    if (!directory_str.empty()) {
+        stdfs::remove_all(directory_str);
+        stdfs::create_directories(stdfs::path(directory_str));
+    }
+}
+
 inline std::ostream& operator<<(std::ostream& os, collection_key_t obj) {
     return os << obj.collection << obj.key;
 }
@@ -2288,6 +2297,8 @@ int main(int argc, char** argv) {
 
     ::testing::InitGoogleTest(&argc, argv);
     int status = RUN_ALL_TESTS();
+    clear_environment();
+
 #if defined(USTORE_FLIGHT_CLIENT)
     kill(srv_id, SIGKILL);
     waitpid(srv_id, nullptr, 0);
