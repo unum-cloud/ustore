@@ -14,7 +14,7 @@ class CollectionSampler(Sampler):
     Custom Sampler for samplig collection keys
     """
 
-    def __init__(self, dataset: Collection, batch_size: int, num_samples: int, random: bool = False) -> Generator[list, None, None]:
+    def __init__(self, dataset: Collection, batch_size: int, num_samples: int, random: bool = False):
         """
         Custom Sampler for samplig collection keys
         """
@@ -23,7 +23,7 @@ class CollectionSampler(Sampler):
         self.num_samples = num_samples
         self.random = random
 
-    def __iter__(self):
+    def __iter__(self) -> Generator[list, None, None]:
         """
         Sample keys with batch size
         """
