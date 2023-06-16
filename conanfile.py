@@ -42,7 +42,7 @@ class ConanUStore(ConanFile):
     
     default_options = {
         'with_arrow': False,
-        'openssl:shared': True,
+        'openssl:shared': False,
         'arrow:shared': True,
         'arrow:parquet': True,
         'arrow:dataset_modules': True,
@@ -90,8 +90,8 @@ class ConanUStore(ConanFile):
         tc.variables["ARROW_BUILD_BENCHMARKS"] = False
         tc.variables["ARROW_BUILD_INTEGRATION"] = False
         tc.variables["PARQUET_REQUIRE_ENCRYPTION"] = bool(
-            self.options['arrow'].encryption)
-        tc.variables["ARROW_BUILD_UTILITIES"] = bool(self.options['arrow'].cli)
+            self.options['arrow:encryption'])
+        tc.variables["ARROW_BUILD_UTILITIES"] = bool(self.options['arrow:cli'])
         tc.variables["re2_SOURCE"] = "BUNDLED"
         tc.variables["Protobuf_SOURCE"] = "BUNDLED"
         tc.variables["Snappy_SOURCE"] = "BUNDLED"
@@ -192,6 +192,12 @@ class ConanUStore(ConanFile):
         self.runenv_info.define_path("OPENSSL_MODULES", openssl_modules_dir)
         # For legacy 1.x downstream consumers, remove once recipe is 2.0 only:
         self.env_info.OPENSSL_MODULES = openssl_modules_dir
+        
+        if !self.options.shared:
+            libdir = os.path.join(self.package_folder, "lib")
+            for file in os.listdir(libdir):
+                if !file.endswith(".a"):
+                    os.unlink(os.path.join(libdir, file))
             
 
     def requirements(self):
