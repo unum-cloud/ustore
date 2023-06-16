@@ -192,12 +192,6 @@ class ConanUStore(ConanFile):
         self.runenv_info.define_path("OPENSSL_MODULES", openssl_modules_dir)
         # For legacy 1.x downstream consumers, remove once recipe is 2.0 only:
         self.env_info.OPENSSL_MODULES = openssl_modules_dir
-        
-        if !self.options.shared:
-            libdir = os.path.join(self.package_folder, "lib")
-            for file in os.listdir(libdir):
-                if !file.endswith(".a"):
-                    os.unlink(os.path.join(libdir, file))
             
 
     def requirements(self):
