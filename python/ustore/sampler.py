@@ -2,8 +2,9 @@
     Sampler for DataBase collection
 """
 
-from torch.utils.data import Sampler
 from typing import Generator
+
+from torch.utils.data import Sampler
 
 from ustore.ucset import Collection
 
