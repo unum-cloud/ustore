@@ -297,7 +297,7 @@
             "miDebuggerPath": "/usr/bin/gdb"
         },
         {
-            "name": "C++: Test Arrow Client",
+            "name": "C++: Test Arrow Client Server",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build_debug/build/bin/test_units_ustore_flight_client",
@@ -315,7 +315,7 @@
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Debug Arrow Client",
+            "preLaunchTask": "Build Debug Arrow Client Server",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         },
