@@ -305,8 +305,13 @@
                 "--gtest_break_on_failure",
                 "--gtest_catch_exceptions=0"
             ],
+            "environment": [
+                {
+                    "name": "USTORE_ENGINE_NAME",
+                    "value": "${input:USTORE_ENGINE_NAME}"
+                }
+            ],
             "cwd": "${workspaceFolder}",
-            "environment": [],
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
@@ -392,5 +397,18 @@
                 "C++: Test Arrow Client"
             ]
         }
-    ]
+    ],
+    "inputs": [
+        {
+            "id": "USTORE_ENGINE_NAME",
+            "type": "pickString",
+            "description": "Enter the engine name:",
+            "default": "ucset",
+            "options": [
+                "ucset",
+                "rocksdb",
+                "leveldb"
+            ]
+        }
+    ],
 }
