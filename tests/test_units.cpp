@@ -2277,8 +2277,12 @@ TEST(db, vectors) {
 int main(int argc, char** argv) {
 
 #if defined(USTORE_FLIGHT_CLIENT)
+
+    char* ustore_engine_name = std::getenv("USTORE_ENGINE_NAME");
+    std::string engine_name = ustore_engine_name ? ustore_engine_name : "ucset";
+
     std::string srv_path = argv[0];
-    srv_path = srv_path.substr(0, srv_path.find_last_of("/") + 1) + "ustore_flight_server_ucset";
+    srv_path = srv_path.substr(0, srv_path.find_last_of("/") + 1) + "ustore_flight_server_" + engine_name;
 
     auto srv_id = fork();
     if (srv_id == 0) {
@@ -2286,7 +2290,7 @@ int main(int argc, char** argv) {
         execl(srv_path.c_str(), srv_path.c_str(), "--quiet", (char*)(NULL));
         exit(0);
     }
-    usleep(100000); // 0.1 sec
+    usleep(1000000); // 1 sec
 #endif
 
     auto directory_str = path() ? std::string_view(path()) : "";
