@@ -651,8 +651,13 @@ void ustore_collection_list(ustore_collection_list_t* c_ptr) {
     *c.count = 0;
     if (c.ids)
         *c.ids = nullptr;
-    if (c.offsets)
-        *c.offsets = nullptr;
+    if (c.offsets) {
+        // Set the first offset to 0
+        linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
+        return_if_error_m(c.error);
+        arena.alloc_or_dummy(1, c.error, c.offsets);
+        *c.offsets[0] = 0;
+    }
     if (c.names)
         *c.names = nullptr;
 }
