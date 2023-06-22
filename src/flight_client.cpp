@@ -31,7 +31,7 @@ ustore_length_t const ustore_length_missing_k = std::numeric_limits<ustore_lengt
 ustore_key_t const ustore_key_unknown_k = std::numeric_limits<ustore_key_t>::max();
 bool const ustore_supports_transactions_k = true;
 bool const ustore_supports_named_collections_k = true;
-bool const ustore_supports_snapshots_k = true;
+bool const ustore_supports_snapshots_k = false;
 
 /*********************************************************/
 /*****************	 C++ Implementation	  ****************/
