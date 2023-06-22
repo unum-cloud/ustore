@@ -244,7 +244,7 @@ void ustore_snapshot_list(ustore_snapshot_list_t* c_ptr) {
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
     return_error_if_m(c.count && c.ids, c.error, args_combo_k, "Need outputs!");
 
-    safe_section("Getting Snapshot List", c.error, [&] {
+    auto list_snap = [&] {
         linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
         return_if_error_m(c.error);
 
@@ -260,7 +260,8 @@ void ustore_snapshot_list(ustore_snapshot_list_t* c_ptr) {
         std::size_t i = 0;
         for (const auto& [id, _] : db.snapshots)
             ids[i++] = id;
-    });
+    };
+    safe_section("Getting Snapshot List", c.error, list_snap);
 }
 
 void ustore_snapshot_create(ustore_snapshot_create_t* c_ptr) {
@@ -268,7 +269,7 @@ void ustore_snapshot_create(ustore_snapshot_create_t* c_ptr) {
     ustore_snapshot_create_t& c = *c_ptr;
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    safe_section("Creating Snapshot", c.error, [&] {
+    auto create_snap = [&] {
         rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
         std::lock_guard<std::mutex> locker(db.mutex);
         auto it = db.snapshots.find(*c.id);
@@ -285,7 +286,8 @@ void ustore_snapshot_create(ustore_snapshot_create_t* c_ptr) {
 
         *c.id = reinterpret_cast<ustore_snapshot_t>(rocks_snapshot);
         db.snapshots[*c.id] = rocks_snapshot;
-    });
+    };
+    safe_section("Creating Snapshot", c.error, create_snap);
 }
 
 void ustore_snapshot_export(ustore_snapshot_export_t* c_ptr) {
@@ -293,7 +295,7 @@ void ustore_snapshot_export(ustore_snapshot_export_t* c_ptr) {
     ustore_snapshot_export_t& c = *c_ptr;
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    safe_section("Exporting Snapshot", c.error, [&] {
+    auto export_snap = [&] {
         rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
 
         rocksdb::Checkpoint* chp_ptr = nullptr;
@@ -311,7 +313,8 @@ void ustore_snapshot_export(ustore_snapshot_export_t* c_ptr) {
         rocks_status_t status = chp_ptr->CreateCheckpoint(c.path, 0, &snapshot_id);
 
         export_error(status, c.error);
-    });
+    };
+    safe_section("Exporting Snapshot", c.error, export_snap);
 }
 
 void ustore_snapshot_drop(ustore_snapshot_drop_t* c_ptr) {
@@ -320,7 +323,7 @@ void ustore_snapshot_drop(ustore_snapshot_drop_t* c_ptr) {
     if (!c.id)
         return;
 
-    safe_section("Dropping Snapshot", c.error, [&] {
+    auto drop_snap = [&] {
         rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
         rocks_snapshot_t& snap = *reinterpret_cast<rocks_snapshot_t*>(c.id);
         if (!snap.snapshot)
@@ -333,7 +336,8 @@ void ustore_snapshot_drop(ustore_snapshot_drop_t* c_ptr) {
         db.mutex.lock();
         db.snapshots.erase(id);
         db.mutex.unlock();
-    });
+    };
+    safe_section("Dropping Snapshot", c.error, drop_snap);
 }
 
 void write_one( //
