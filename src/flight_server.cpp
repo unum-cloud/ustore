@@ -1745,7 +1745,7 @@ int main(int argc, char* argv[]) {
     if (!quiet) {
         log_message("UStore is starting");
         log_message("UStore version 1.0");
-        std::ifstream file("logo.txt");
+        std::ifstream file("assets/ustore.txt");
         std::string line;
         while (std::getline(file, line))
             std::printf("%s\n", line.c_str());
