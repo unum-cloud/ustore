@@ -306,7 +306,7 @@ void add_key_value( //
     auto numeric_array = std::static_pointer_cast<array_type_at>(array);
 
     std::string jsons_str;
-    jsons_str.reserve(es.size() + column_name.size() + 2));
+    jsons_str.reserve(es.size() + column_name.size() + 2);
     std::vector<ustore_length_t> offsets(es.size() + 1);
     jsons_str += "{";
     for (size_t idx = 0; idx != es.size(); idx++) {
