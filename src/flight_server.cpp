@@ -1856,7 +1856,7 @@ int main(int argc, char* argv[]) {
     stdfs::file_status config_status = stdfs::status(config_path);
     if (config_status.type() == stdfs::file_type::not_found) {
         if (!quiet)
-            log_message("Warning: no config file specified, using the default config");
+            log_message("Warning: Using the default config");
 
         stdfs::create_directories("./tmp/ustore/");
         config.assign(R"({
