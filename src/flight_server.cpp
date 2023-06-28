@@ -580,6 +580,8 @@ class UStoreService : public arf::FlightServerBase {
 
         // Locating the collection ID
         if (is_query(action.type, kActionColOpen.type)) {
+            if (!quiet)
+                log_message("Action start: Collection create");
             if (!params.collection_name) {
                 if (!quiet)
                     log_message("Missing collection name argument");
@@ -609,11 +611,15 @@ class UStoreService : public arf::FlightServerBase {
             }
 
             *results_ptr = return_scalar<ustore_collection_t>(collection_id);
+            if (!quiet)
+                log_message("Action end: Collection create");
             return ar::Status::OK();
         }
 
         // Dropping a collection
         if (is_query(action.type, kActionColDrop.type)) {
+            if (!quiet)
+                log_message("Action start: Collection drop");
             if (!params.collection_id) {
                 if (!quiet)
                     log_message("Missing collection ID argument");
@@ -644,11 +650,15 @@ class UStoreService : public arf::FlightServerBase {
                 return ar::Status::ExecutionError(status.message());
             }
             *results_ptr = return_empty();
+            if (!quiet)
+                log_message("Action end: Collection drop");
             return ar::Status::OK();
         }
 
         // Create a snapshot
         if (is_query(action.type, kActionSnapOpen.type)) {
+            if (!quiet)
+                log_message("Action start: Snapshot create");
             if (params.snapshot_id) {
                 if (!quiet)
                     log_message("Missing snapshot ID argument");
@@ -670,11 +680,15 @@ class UStoreService : public arf::FlightServerBase {
             }
 
             *results_ptr = return_scalar<ustore_snapshot_t>(snapshot_id);
+            if (!quiet)
+                log_message("Action end: Snapshot create");
             return ar::Status::OK();
         }
 
         // Export a snapshot
         if (is_query(action.type, kActionSnapExport.type)) {
+            if (!quiet)
+                log_message("Action start: Snapshot export");
             if (params.snapshot_id) {
                 if (!quiet)
                     log_message("Missing snapshot ID argument");
@@ -701,11 +715,15 @@ class UStoreService : public arf::FlightServerBase {
             }
 
             *results_ptr = return_empty();
+            if (!quiet)
+                log_message("Action end: Snapshot export");
             return ar::Status::OK();
         }
 
         // Dropping a snapshot
         if (is_query(action.type, kActionSnapDrop.type)) {
+            if (!quiet)
+                log_message("Action start: Snapshot drop");
             if (!params.snapshot_id) {
                 if (!quiet)
                     log_message("Missing snapshot ID argument");
@@ -729,11 +747,15 @@ class UStoreService : public arf::FlightServerBase {
                 return ar::Status::ExecutionError(status.message());
             }
             *results_ptr = return_empty();
+            if (!quiet)
+                log_message("Action end: Snapshot drop");
             return ar::Status::OK();
         }
 
         // Starting a transaction
         if (is_query(action.type, kActionTxnBegin.type)) {
+            if (!quiet)
+                log_message("Action start: Transaction create");
             if (!params.transaction_id)
                 params.session_id.txn_id = static_cast<txn_id_t>(std::rand());
 
@@ -763,10 +785,14 @@ class UStoreService : public arf::FlightServerBase {
             // Don't forget to add the transaction to active sessions
             sessions_.hold_txn(params.session_id, session);
             *results_ptr = return_scalar<txn_id_t>(params.session_id.txn_id);
+            if (!quiet)
+                log_message("Action end: Transaction create");
             return ar::Status::OK();
         }
 
         if (is_query(action.type, kActionTxnCommit.type)) {
+            if (!quiet)
+                log_message("Action start: Transaction commit");
             if (!params.transaction_id) {
                 if (!quiet)
                     log_message("Missing transaction ID argument");
@@ -797,6 +823,8 @@ class UStoreService : public arf::FlightServerBase {
 
             sessions_.release_txn(params.session_id);
             *results_ptr = return_empty();
+            if (!quiet)
+                log_message("Action end: Transaction commit");
             return ar::Status::OK();
         }
 
@@ -848,7 +876,8 @@ class UStoreService : public arf::FlightServerBase {
         }
 
         if (is_query(desc.cmd, kFlightRead)) {
-
+            if (!quiet)
+                log_message("Process start: Read");
             /// @param `keys`
             auto input_keys = get_keys(input_schema_c, input_batch_c, kArgKeys);
             if (!input_keys) {
@@ -947,8 +976,13 @@ class UStoreService : public arf::FlightServerBase {
                     log_message(status.message());
                 return ar::Status::ExecutionError(status.message());
             }
+
+            if (!quiet)
+                log_message("Process end: Read");
         }
         else if (is_query(desc.cmd, kFlightReadPath)) {
+            if (!quiet)
+                log_message("Process start: Read path");
 
             /// @param `keys`
             auto input_paths = get_contents(input_schema_c, input_batch_c, kArgPaths.c_str());
@@ -1044,8 +1078,13 @@ class UStoreService : public arf::FlightServerBase {
                     log_message(status.message());
                 return ar::Status::ExecutionError(status.message());
             }
+            if (!quiet)
+                log_message("Process end: Read path");
         }
         else if (is_query(desc.cmd, kFlightMatchPath)) {
+            if (!quiet)
+                log_message("Process start: Match path");
+
             /// @param `previous`
             auto input_prevs = get_contents(input_schema_c, input_batch_c, kArgPrevPatterns.c_str());
 
@@ -1174,8 +1213,12 @@ class UStoreService : public arf::FlightServerBase {
                     log_message(status.message());
                 return ar::Status::ExecutionError(status.message());
             }
+            if (!quiet)
+                log_message("Process end: Match path");
         }
         else if (is_query(desc.cmd, kFlightScan)) {
+            if (!quiet)
+                log_message("Process start: Scan");
 
             /// @param `start_keys`
             auto input_start_keys = get_keys(input_schema_c, input_batch_c, kArgScanStarts);
@@ -1263,8 +1306,12 @@ class UStoreService : public arf::FlightServerBase {
                     log_message(status.message());
                 return ar::Status::ExecutionError(status.message());
             }
+            if (!quiet)
+                log_message("Process end: Scan");
         }
         else if (is_query(desc.cmd, kFlightSample)) {
+            if (!quiet)
+                log_message("Process start: Sample");
 
             /// @param `limits`
             auto input_limits = get_lengths(input_schema_c, input_batch_c, kArgCountLimits);
@@ -1342,6 +1389,8 @@ class UStoreService : public arf::FlightServerBase {
                 output_schema_c.children[1],
                 output_batch_c.children[1],
                 status.member_ptr());
+            if (!quiet)
+                log_message("Process end: Sample");
         }
 
         if (is_empty_values)
@@ -1386,6 +1435,8 @@ class UStoreService : public arf::FlightServerBase {
             return ar_status;
 
         if (is_query(desc.cmd, kFlightWrite)) {
+            if (!quiet)
+                log_message("Process start: Write");
 
             /// @param `keys`
             auto input_keys = get_keys(input_schema_c, input_batch_c, kArgKeys);
@@ -1442,8 +1493,13 @@ class UStoreService : public arf::FlightServerBase {
                     log_message(status.message());
                 return ar::Status::ExecutionError(status.message());
             }
+            if (!quiet)
+                log_message("Process end: Write");
         }
         else if (is_query(desc.cmd, kFlightWritePath)) {
+            if (!quiet)
+                log_message("Process start: Write path");
+
             /// @param `keys`
             auto input_paths = get_contents(input_schema_c, input_batch_c, kArgPaths.c_str());
             if (!input_paths.contents_begin) {
@@ -1503,6 +1559,8 @@ class UStoreService : public arf::FlightServerBase {
                     log_message(status.message());
                 return ar::Status::ExecutionError(status.message());
             }
+            if (!quiet)
+                log_message("Process end: Write path");
         }
         return ar::Status::OK();
     }
@@ -1517,6 +1575,8 @@ class UStoreService : public arf::FlightServerBase {
         status_t status;
 
         if (is_query(ticket.ticket, kFlightListCols)) {
+            if (!quiet)
+                log_message("Process start: List collections");
 
             // We will need some temporary memory for exports
             auto session = sessions_.lock(params.session_id, status.member_ptr());
@@ -1605,9 +1665,13 @@ class UStoreService : public arf::FlightServerBase {
             // TODO: Pass right IPC options
             auto stream = std::make_unique<arf::RecordBatchStream>(maybe_reader.ValueUnsafe());
             *response_ptr = std::move(stream);
+            if (!quiet)
+                log_message("Process end: List collections");
             return ar::Status::OK();
         }
         else if (is_query(ticket.ticket, kFlightListSnap)) {
+            if (!quiet)
+                log_message("Process start: List snapshots");
             // We will need some temporary memory for exports
             auto session = sessions_.lock(params.session_id, status.member_ptr());
             if (!status) {
@@ -1675,6 +1739,8 @@ class UStoreService : public arf::FlightServerBase {
             // TODO: Pass right IPC options
             auto stream = std::make_unique<arf::RecordBatchStream>(maybe_reader.ValueUnsafe());
             *response_ptr = std::move(stream);
+            if (!quiet)
+                log_message("Process end: List snapshots");
             return ar::Status::OK();
         }
         return ar::Status::OK();
