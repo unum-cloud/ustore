@@ -831,10 +831,10 @@ class UStoreService : public arf::FlightServerBase {
             return ar::Status::OK();
         }
 
-        auto message = "Unknown action type: " + action.type;
         if (!quiet)
-            log_message(message.c_str());
-        return ar::Status::NotImplemented(message);
+            log_message("Unknown action type: %s", action.type.c_str());
+
+        return ar::Status::NotImplemented("Unknown action type: ", action.type);
     }
 
     ar::Status DoExchange( //
@@ -1803,11 +1803,8 @@ ar::Status run_server(ustore_str_view_t config, int port, bool quiet) {
 
     server->SetShutdownOnSignals({SIGINT});
 
-    if (!quiet) {
-        char message[25];
-        sprintf(message, "Listening on port: %i", server->port());
-        log_message(message);
-    }
+    if (!quiet)
+        log_message("Listening on port: %i", server->port());
 
     return server->Serve();
 }
