@@ -1410,7 +1410,7 @@ class UStoreService : public arf::FlightServerBase {
                 kArgNames.c_str(),
                 ustore_doc_field_str_k,
                 nullptr,
-                offsets,
+                offsets ? offsets : reinterpret_cast<ustore_length_t*>(&zero_size_data_k),
                 ustore_bytes_ptr_t(names),
                 schema_c.children[1],
                 array_c.children[1],
