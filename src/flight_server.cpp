@@ -1452,13 +1452,10 @@ class UStoreService : public arf::FlightServerBase {
             if (!status)
                 return ar::Status::ExecutionError(status.message());
 
-            if (count == 0)
-                return ar::Status::OK();
-
             // Pack two columns into a Table
             ArrowSchema schema_c;
             ArrowArray array_c;
-            ustore_to_arrow_schema(count, 2, &schema_c, &array_c, status.member_ptr());
+            ustore_to_arrow_schema(count, 1, &schema_c, &array_c, status.member_ptr());
             if (!status)
                 return ar::Status::ExecutionError(status.message());
 

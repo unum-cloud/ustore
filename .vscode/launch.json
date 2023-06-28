@@ -396,6 +396,14 @@
                 "C++: Test Arrow Server",
                 "C++: Test Arrow Client"
             ]
+        },
+        {
+            "name": "C++: Test All Tools",
+            "stopAll": true,
+            "configurations": [
+                "C++: Test Arrow Server",
+                "C++: Test Tools"
+            ]
         }
     ],
     "inputs": [

@@ -67,15 +67,6 @@ class context_t : public std::enable_shared_from_this<context_t> {
     inline ~context_t() noexcept {
         ustore_transaction_free(txn_);
         txn_ = nullptr;
-
-        status_t status;
-        ustore_snapshot_drop_t snap_drop {
-            .db = db_,
-            .error = status.member_ptr(),
-            .id = snap_,
-        };
-        ustore_snapshot_drop(&snap_drop);
-        snap_ = 0;
     }
 
     inline ustore_database_t db() const noexcept { return db_; }
@@ -146,7 +137,6 @@ class context_t : public std::enable_shared_from_this<context_t> {
 
     expected_gt<snapshots_list_t> snapshots() noexcept {
         ustore_size_t count = 0;
-        ustore_str_span_t names = nullptr;
         ustore_snapshot_t* ids = nullptr;
         status_t status;
         ustore_snapshot_list_t snapshots_list {};
@@ -341,6 +331,17 @@ class database_t : public std::enable_shared_from_this<database_t> {
             return {std::move(status), context_t {db_, nullptr}};
         else
             return context_t {db_, nullptr, raw};
+    }
+
+    status_t drop_snapshot(ustore_snapshot_t id) noexcept {
+        status_t status;
+        ustore_snapshot_drop_t snap_drop {
+            .db = db_,
+            .error = status.member_ptr(),
+            .id = id,
+        };
+        ustore_snapshot_drop(&snap_drop);
+        return status;
     }
 
     template <typename collection_at = blobs_collection_t>
