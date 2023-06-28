@@ -61,6 +61,7 @@ def test_triangle():
 
     net.clear()
 
+
 def test_triangle_batch():
     net = ustore.DataBase().main.graph
 
@@ -86,18 +87,21 @@ def test_triangle_batch():
 
     net.clear()
 
+
 def test_batch_attributes():
-    net = ustore.DataBase().main.graph
+    db = ustore.DataBase()
+    net = ustore.Network(db, 'graph', 'nodes', 'edges')
 
     source = pa.array([1, 2, 3])
     target = pa.array([2, 3, 1])
-    edge = pa.array([1, 2, 3])
-    attr = pa.array([0, 1, 2])
-    
-    names = ['source', 'target', 'edge', 'attr'] 
+    edge_id = pa.array([1, 2, 3])
+    weight = pa.array([0, 1, 2])
+    name = pa.array(['edge0', 'edge1', 'edge2'])
 
-    table = pa.Table.from_arrays([source, target, edge, attr], names=names)
-    net.add_edges_from(table, 'source', 'target', 'edge')
+    names = ['source', 'target', 'edge_id', 'weight', 'name']
+
+    table = pa.Table.from_arrays([source, target, edge_id, weight, name], names=names)
+    net.add_edges_from(table, 'source', 'target', 'edge_id')
 
     assert net.has_node(1) and net.has_node(2) and net.has_node(3)
     assert not 4 in net
@@ -107,8 +111,8 @@ def test_batch_attributes():
 
     index = 0
     for node, neighbor, data in net.edges(data=True):
-        assert node == source[index] and neighbor == target[index]
-        assert data == {'attr': index}
+        assert node == source[index].as_py() and neighbor == target[index].as_py()
+        assert data == {'weight': index, 'name': f'edge{index}'}
         index += 1
 
     net.clear()
