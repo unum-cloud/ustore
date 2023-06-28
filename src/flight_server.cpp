@@ -45,12 +45,15 @@ inline static arf::ActionType const kActionSnapDrop {kFlightSnapDrop, "Delete a 
 inline static arf::ActionType const kActionTxnBegin {kFlightTxnBegin, "Starts an ACID transaction and returns its ID."};
 inline static arf::ActionType const kActionTxnCommit {kFlightTxnCommit, "Commit a previously started transaction."};
 
-void log_message(const char* message) {
+template <typename... args_at>
+void log_message(const char* message, args_at&&... args) {
     auto now = std::chrono::system_clock::now();
     std::time_t current_time = std::chrono::system_clock::to_time_t(now);
     std::string time_str = std::ctime(&current_time);
     time_str.pop_back();
-    std::printf("%s: %s\n", time_str.c_str(), message);
+    std::printf("%s: ", time_str.c_str());
+    std::printf(message, std::forward<args_at>(args)...);
+    std::printf("\n");
 }
 
 /**
@@ -903,6 +906,10 @@ class UStoreService : public arf::FlightServerBase {
             ustore_length_t* found_lengths = nullptr;
             ustore_octet_t* found_presences = nullptr;
             ustore_size_t tasks_count = static_cast<ustore_size_t>(input_batch_c.length);
+
+            if (!quiet)
+                log_message("Reading %zu key", tasks_count);
+
             ustore_read_t read {};
             read.db = db_;
             read.error = status.member_ptr();
@@ -1003,6 +1010,10 @@ class UStoreService : public arf::FlightServerBase {
             ustore_length_t* found_lengths = nullptr;
             ustore_octet_t* found_presences = nullptr;
             ustore_size_t tasks_count = static_cast<ustore_size_t>(input_batch_c.length);
+
+            if (!quiet)
+                log_message("Reading %zu path", tasks_count);
+
             ustore_paths_read_t read {};
             read.db = db_;
             read.error = status.member_ptr();
@@ -1108,6 +1119,10 @@ class UStoreService : public arf::FlightServerBase {
             ustore_length_t* found_offsets = nullptr;
             ustore_length_t* found_counts = nullptr;
             ustore_size_t tasks_count = static_cast<ustore_size_t>(input_batch_c.length);
+
+            if (!quiet)
+                log_message("Matching %zu path", tasks_count);
+
             ustore_paths_match_t match {};
             match.db = db_;
             match.error = status.member_ptr();
@@ -1238,6 +1253,10 @@ class UStoreService : public arf::FlightServerBase {
             ustore_length_t* found_counts = nullptr;
             ustore_key_t* found_keys = nullptr;
             ustore_size_t tasks_count = static_cast<ustore_size_t>(input_batch_c.length);
+
+            if (!quiet)
+                log_message("Scanning %zu key", tasks_count);
+
             ustore_scan_t scan {};
             scan.db = db_;
             scan.error = status.member_ptr();
@@ -1329,6 +1348,10 @@ class UStoreService : public arf::FlightServerBase {
             ustore_length_t* found_counts = nullptr;
             ustore_key_t* found_keys = nullptr;
             ustore_size_t tasks_count = static_cast<ustore_size_t>(input_batch_c.length);
+
+            if (!quiet)
+                log_message("Sampling %zu collection", tasks_count);
+
             ustore_sample_t sample {};
             sample.db = db_;
             sample.error = status.member_ptr();
@@ -1467,6 +1490,10 @@ class UStoreService : public arf::FlightServerBase {
             }
 
             ustore_size_t tasks_count = static_cast<ustore_size_t>(input_batch_c.length);
+
+            if (!quiet)
+                log_message("Writing %zu key", tasks_count);
+
             ustore_write_t write {};
             write.db = db_;
             write.error = status.member_ptr();
@@ -1528,6 +1555,10 @@ class UStoreService : public arf::FlightServerBase {
             }
 
             ustore_size_t tasks_count = static_cast<ustore_size_t>(input_batch_c.length);
+
+            if (!quiet)
+                log_message("Writing %zu path", tasks_count);
+
             ustore_paths_write_t write {};
             write.db = db_;
             write.error = status.member_ptr();
