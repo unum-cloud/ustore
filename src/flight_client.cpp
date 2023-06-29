@@ -79,7 +79,7 @@ void ustore_database_init(ustore_database_init_t* c_ptr) {
         if (!c.config || !std::strlen(c.config))
             c.config = "grpc://0.0.0.0:38709";
 
-        auto db_ptr = new rpc_client_t {};
+        auto db_ptr = std::make_unique<rpc_client_t>();
         auto maybe_location = arf::Location::Parse(c.config);
         return_error_if_m(maybe_location.ok(), c.error, args_wrong_k, "Server URI");
 
@@ -89,7 +89,7 @@ void ustore_database_init(ustore_database_init_t* c_ptr) {
         linked_memory(reinterpret_cast<ustore_arena_t*>(&db_ptr->arena), ustore_option_dont_discard_memory_k, c.error);
         return_error_if_m(maybe_location.ok(), c.error, args_wrong_k, "Failed to allocate default arena.");
         db_ptr->flight = maybe_flight_ptr.MoveValueUnsafe();
-        *c.db = db_ptr;
+        *c.db = db_ptr.release();
     });
 }
 
