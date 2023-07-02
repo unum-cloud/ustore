@@ -130,7 +130,7 @@ void ustore_database_init(ustore_database_init_t* c_ptr) {
 
     ustore_database_init_t& c = *c_ptr;
     safe_section("Opening RocksDB", c.error, [&] {
-        rocks_db_t* db_ptr = new rocks_db_t;
+        auto db_ptr = std::make_unique<rocks_db_t>();
         rocks_status_t status;
 
         return_error_if_m(c.config, c.error, args_wrong_k, "Null config specified");
@@ -234,7 +234,7 @@ void ustore_database_init(ustore_database_init_t* c_ptr) {
         return_error_if_m(status.ok(), c.error, error_unknown_k, "Opening RocksDB with options");
 
         db_ptr->native = std::unique_ptr<rocks_native_t>(native_db);
-        *c.db = db_ptr;
+        *c.db = db_ptr.release();
     });
 }
 
