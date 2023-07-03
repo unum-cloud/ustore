@@ -20,6 +20,12 @@
             "type": "shell"
         },
         {
+            "label": "Build Debug Test Tools",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUSTORE_BUILD_TESTS=1 -DUSTORE_BUILD_BENCHMARKS=0 -DUSTORE_BUILD_ENGINE_UCSET=1 -DUSTORE_BUILD_ENGINE_LEVELDB=0 -DUSTORE_BUILD_ENGINE_ROCKSDB=0 -B ./build_debug && make test_tools_ustore_embedded_ucset -j --silent -C ./build_debug",
+            "args": [],
+            "type": "shell"
+        },
+        {
             "label": "Build Debug LevelDB Test",
             "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUSTORE_BUILD_TESTS=1 -DUSTORE_BUILD_BENCHMARKS=0 -DUSTORE_BUILD_ENGINE_UCSET=0 -DUSTORE_BUILD_ENGINE_LEVELDB=1 -DUSTORE_BUILD_ENGINE_ROCKSDB=0 -B ./build_debug && make test_units_ustore_embedded_leveldb -j --silent -C ./build_debug",
             "args": [],

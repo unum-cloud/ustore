@@ -283,6 +283,7 @@ struct indexed_range_gt {
     indexed_range_gt(pointer_t begin, pointer_t end) noexcept : begin_(begin), end_(end) {}
     indexed_range_gt(pointer_t ptr, std::size_t sz) noexcept : begin_(ptr), end_(ptr + sz) {}
 
+    pointer_t data() const noexcept { return begin_; }
     pointer_t begin() const noexcept { return begin_; }
     pointer_t end() const noexcept { return end_; }
     decltype(auto) operator[](std::size_t i) noexcept { return begin_[i]; }

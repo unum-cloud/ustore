@@ -383,7 +383,7 @@
             "showDisplayString": true,
             "stopAtEntry": false,
             "externalConsole": false,
-            "preLaunchTask": "Build Debug Tools Test",
+            "preLaunchTask": "Build Debug Test Tools",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb"
         }
