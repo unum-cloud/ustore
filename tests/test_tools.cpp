@@ -96,12 +96,61 @@ static constexpr ustore_str_view_t edge_field_k = "user_followers_count";
 static constexpr ustore_str_view_t doc_k = "doc";
 static constexpr ustore_str_view_t id_k = "_id";
 
+static char const* path() {
+    char* path = std::getenv("USTORE_TEST_PATH");
+    if (path)
+        return std::strlen(path) ? path : nullptr;
+
+#if defined(USTORE_CLI)
+    return nullptr;
+#elif defined(USTORE_TEST_PATH)
+    return USTORE_TEST_PATH;
+#else
+    return nullptr;
+#endif // USTORE_CLI
+}
+
+static std::string config() {
+    auto dir = path();
+    if (!dir)
+        return {};
+    return fmt::format(R"({{"version": "1.0", "directory": "{}"}})", dir);
+}
+
+#if defined(USTORE_CLI)
+static pid_t srv_id = -1;
+static std::string srv_path;
+static std::string cli_path;
+#endif // USTORE_CLI
+
+void clear_environment() {
+#if defined(USTORE_CLI)
+    if (srv_id > 0) {
+        kill(srv_id, SIGKILL);
+        waitpid(srv_id, nullptr, 0);
+    }
+
+    srv_id = fork();
+    if (srv_id == 0) {
+        usleep(1); // TODO Any statement is requiered to be run for successful `execl` run...
+        execl(srv_path.c_str(), srv_path.c_str(), "--quiet", (char*)(NULL));
+        exit(0);
+    }
+    usleep(100000); // 0.1 sec
+#endif // USTORE_CLI
+
+    namespace stdfs = std::filesystem;
+    auto directory_str = path() ? std::string_view(path()) : "";
+    if (!directory_str.empty()) {
+        stdfs::remove_all(directory_str);
+        stdfs::create_directories(stdfs::path(directory_str));
+    }
+}
+
 std::filesystem::path home_path(std::getenv("HOME"));
 std::vector<std::string> paths;
 graph_t expected_edges;
 docs_t docs_w_keys;
-
-static database_t db;
 
 simdjson::ondemand::object& rewind(simdjson::ondemand::object& doc) noexcept {
     doc.reset();
@@ -212,15 +261,9 @@ class arrow_visitor_at {
         fmt::format_to(std::back_inserter(json), "{},", reinterpret_cast<char const*>(arr.Value(idx)));
         return arrow::Status::OK();
     }
-    arrow::Status Visit(arrow::ListArray const& arr) {
-        return arrow::VisitArrayInline(*arr.values().get(), this);
-    }
-    arrow::Status Visit(arrow::LargeListArray const& arr) {
-        return arrow::VisitArrayInline(*arr.values().get(), this);
-    }
-    arrow::Status Visit(arrow::MapArray const& arr) {
-        return arrow::VisitArrayInline(*arr.values().get(), this);
-    }
+    arrow::Status Visit(arrow::ListArray const& arr) { return arrow::VisitArrayInline(*arr.values().get(), this); }
+    arrow::Status Visit(arrow::LargeListArray const& arr) { return arrow::VisitArrayInline(*arr.values().get(), this); }
+    arrow::Status Visit(arrow::MapArray const& arr) { return arrow::VisitArrayInline(*arr.values().get(), this); }
     arrow::Status Visit(arrow::FixedSizeListArray const& arr) {
         return arrow::VisitArrayInline(*arr.values().get(), this);
     }
@@ -930,7 +973,10 @@ bool cmp_table_docs_sub(ustore_str_view_t lhs, ustore_str_view_t rhs) {
 
 template <typename comparator>
 bool test_sub_docs(ustore_str_view_t file, ustore_str_view_t ext, comparator cmp, bool state = false) {
+    clear_environment();
 
+    database_t db;
+    EXPECT_TRUE(db.open(config().c_str()));
     auto collection = db.main();
     arena_t arena(db);
     status_t status;
@@ -1003,7 +1049,10 @@ bool test_sub_docs(ustore_str_view_t file, ustore_str_view_t ext, comparator cmp
 
 template <typename comparator>
 bool test_whole_docs(ustore_str_view_t file, ustore_str_view_t ext, comparator cmp, bool state = false) {
+    clear_environment();
 
+    database_t db;
+    EXPECT_TRUE(db.open(config().c_str()));
     auto collection = db.main();
     arena_t arena(db);
     status_t status;
@@ -1273,6 +1322,10 @@ bool test_crash_cases_graph_export(ustore_str_view_t ext) {
 }
 
 bool test_crash_cases_docs_import(ustore_str_view_t file) {
+    clear_environment();
+
+    database_t db;
+    EXPECT_TRUE(db.open(config().c_str()));
     auto collection = db.main();
     arena_t arena(db);
     status_t status;
@@ -1370,6 +1423,10 @@ bool test_crash_cases_docs_import(ustore_str_view_t file) {
 }
 
 bool test_crash_cases_docs_export(ustore_str_view_t ext) {
+    clear_environment();
+
+    database_t db;
+    EXPECT_TRUE(db.open(config().c_str()));
     auto collection = db.main();
     arena_t arena(db);
     status_t status;
@@ -1580,16 +1637,146 @@ TEST(crash_cases, docs_export) {
     test_crash_cases_docs_export(ext_csv_k);
 }
 
+
+#if defined(USTORE_CLI)
+template <typename... args>
+void run_command(const char* command, args... arguments) {
+    pid_t pid = fork();
+    if (pid == -1)
+        EXPECT_TRUE(false) << "Failed to run command";
+    else if (pid == 0)
+        EXPECT_NE(execl(command, command, arguments..., (char*)(NULL)), -1) << "Fail to execute command";
+    else
+        wait(NULL);
+}
+
+bool test_import_export_cli(database_t& db, ustore_str_view_t url, ustore_str_view_t coll_name = nullptr) {
+
+    std::vector<std::string> updated_paths;
+    std::string new_file;
+
+    if (coll_name) {
+        run_command(cli_path.c_str(),
+                    "--url",
+                    url,
+                    "collection",
+                    "import",
+                    "--input",
+                    ndjson_path_k,
+                    "--id",
+                    "id",
+                    "--mlimit",
+                    "1073741824",
+                    "--name",
+                    coll_name);
+
+        run_command(cli_path.c_str(),
+                    "--url",
+                    url,
+                    "collection",
+                    "export",
+                    "--output",
+                    ".ndjson",
+                    "--mlimit",
+                    "1073741824",
+                    "--name",
+                    coll_name);
+    }
+    else {
+        run_command(cli_path.c_str(),
+                    "--url",
+                    url,
+                    "collection",
+                    "import",
+                    "--input",
+                    ndjson_path_k,
+                    "--id",
+                    "id",
+                    "--mlimit",
+                    "1073741824");
+
+        run_command(cli_path.c_str(),
+                    "--url",
+                    url,
+                    "collection",
+                    "export",
+                    "--output",
+                    ".ndjson",
+                    "--mlimit",
+                    "1073741824",
+                    "--name",
+                    coll_name);
+    }
+
+    for (const auto& entry : fs::directory_iterator(path_k))
+        updated_paths.push_back(entry.path());
+
+    EXPECT_GT(updated_paths.size(), paths.size());
+
+    for (size_t idx = 0; idx < paths.size(); ++idx) {
+        if (paths[idx] != updated_paths[idx]) {
+            new_file = updated_paths[idx];
+            break;
+        }
+    }
+    if (new_file.size() == 0)
+        new_file = updated_paths.back();
+
+    new_file.erase(0, 2);
+    EXPECT_TRUE(cmp_ndjson_docs_whole(ndjson_path_k, new_file.data()));
+
+    std::remove(new_file.data());
+    return true;
+}
+
+TEST(db, cli) {
+    clear_environment();
+
+    database_t db;
+    auto url = "grpc://0.0.0.0:38709";
+    EXPECT_TRUE(db.open(url));
+    EXPECT_TRUE(db.clear());
+    auto context = context_t {db, nullptr};
+    auto maybe_cols = context.collections();
+    EXPECT_TRUE(maybe_cols);
+    EXPECT_EQ(maybe_cols->ids.size(), 0);
+
+    run_command(cli_path.c_str(), "--url", url, "collection", "create", "--name", "collection1");
+    EXPECT_TRUE(db.contains("collection1"));
+    EXPECT_TRUE(*db.contains("collection1"));
+
+    EXPECT_TRUE(test_import_export_cli(db, url, "collection1"));
+
+    run_command(cli_path.c_str(), "--url", url, "collection", "drop", "--name", "collection1");
+    EXPECT_TRUE(db.contains("collection1"));
+    EXPECT_FALSE(*db.contains("collection1"));
+
+    EXPECT_TRUE(test_import_export_cli(db, url));
+}
+
+#endif // USTORE_CLI
+
 int main(int argc, char** argv) {
+
+#if defined(USTORE_CLI)
+    std::string exec_path = argv[0];
+    cli_path = exec_path.substr(0, exec_path.find_last_of("/") + 1) + "ustore";
+    srv_path = exec_path.substr(0, exec_path.find_last_of("/") + 1) + "ustore_flight_server_ucset";
+#endif // USTORE_CLI
+
     make_ndjson_docs();
     fill_expected();
     for (const auto& entry : fs::directory_iterator(path_k))
         paths.push_back(ustore_str_span_t(entry.path().c_str()));
 
-    db.open().throw_unhandled();
     ::testing::InitGoogleTest(&argc, argv);
     int result = RUN_ALL_TESTS();
-    
+
+#if defined(USTORE_CLI)
+    kill(srv_id, SIGKILL);
+    waitpid(srv_id, nullptr, 0);
+#endif // USTORE_CLI
+
     delete_test_file();
     return result;
 }

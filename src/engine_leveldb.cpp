@@ -173,13 +173,13 @@ void ustore_database_init(ustore_database_init_t* c_ptr) {
         if (!config.engine.config.empty())
             fill_options(config.engine.config, options);
 
-        level_db_t* db_ptr = new level_db_t;
+        auto db_ptr = std::make_unique<level_db_t>();
         level_native_t* native_db = nullptr;
         level_status_t status = leveldb::DB::Open(options, root, &native_db);
         return_error_if_m(status.ok(), c.error, args_wrong_k, "Couldn't open LevelDB");
         db_ptr->native = std::unique_ptr<level_native_t>(native_db);
         db_ptr->options = options;
-        *c.db = db_ptr;
+        *c.db = db_ptr.release();
     }
     catch (json_t::type_error const&) {
         *c.error = "Unsupported type in LevelDB configuration key";

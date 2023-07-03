@@ -300,60 +300,56 @@ py::object wrap_into_buffer(py_graph_t& g, strided_range_gt<element_at> range) {
 template <typename array_type_at>
 void add_key_value( //
     py_graph_t& g,
-    edges_view_t es,
-    std::shared_ptr<arrow::Array> array,
-    std::string_view column_name) {
-    auto numeric_array = std::static_pointer_cast<array_type_at>(array);
+    strided_range_gt<ustore_key_t const> keys,
+    std::shared_ptr<arrow::Array> values,
+    std::string_view attr) {
+    auto numeric_values = std::static_pointer_cast<array_type_at>(values);
 
     std::string jsons_str;
-    jsons_str.reserve(es.size() + column_name.size() + 2));
-    std::vector<ustore_length_t> offsets(es.size() + 1);
-    jsons_str += "{";
-    for (size_t idx = 0; idx != es.size(); idx++) {
+    jsons_str.reserve(keys.size() * (attr.size() + 4));
+    std::vector<ustore_length_t> offsets(keys.size() + 1);
+    for (size_t idx = 0; idx != keys.size(); idx++) {
         offsets[idx] = jsons_str.size();
-        fmt::format_to(std::back_inserter(jsons_str), "\"{}\": {},", column_name.data(), numeric_array->Value(idx));
+        fmt::format_to(std::back_inserter(jsons_str), "{{\"{}\": {}}}", attr.data(), numeric_values->Value(idx));
     }
-    jsons_str.back() = '}';
     offsets.back() = jsons_str.size();
 
-    contents_arg_t values {};
-    values.offsets_begin = {offsets.data(), sizeof(ustore_length_t)};
+    contents_arg_t contents {};
+    contents.offsets_begin = {offsets.data(), sizeof(ustore_length_t)};
     auto vals_begin = reinterpret_cast<ustore_bytes_ptr_t>(jsons_str.data());
-    values.contents_begin = {&vals_begin, 0};
+    contents.contents_begin = {&vals_begin, 0};
 
-    g.relations_attrs[es.edge_ids].assign(values).throw_unhandled();
+    g.relations_attrs[keys].merge(contents).throw_unhandled();
 }
 
 template <>
 void add_key_value<arrow::BinaryArray>( //
     py_graph_t& g,
-    edges_view_t es,
-    std::shared_ptr<arrow::Array> array,
-    std::string_view column_name) {
-    auto binary_array = std::static_pointer_cast<arrow::BinaryArray>(array);
+    strided_range_gt<ustore_key_t const> keys,
+    std::shared_ptr<arrow::Array> values,
+    std::string_view attr) {
+    auto binary_values = std::static_pointer_cast<arrow::BinaryArray>(values);
 
     std::string jsons_str;
-    jsons_str.reserve(es.size() * (column_name.size() + 2));
-    std::vector<ustore_length_t> offsets(es.size() + 1);
+    jsons_str.reserve(keys.size() * (attr.size() + 4));
+    std::vector<ustore_length_t> offsets(keys.size() + 1);
 
-    jsons_str += "{";
-    for (size_t idx = 0; idx != es.size(); idx++) {
+    for (size_t idx = 0; idx != keys.size(); idx++) {
         offsets[idx] = jsons_str.size();
-        auto value = binary_array->Value(idx);
+        auto value = binary_values->Value(idx);
         fmt::format_to(std::back_inserter(jsons_str),
-                       "\"{}\":\"{}\",",
-                       column_name.data(),
+                       "{{\"{}\":\"{}\"}}",
+                       attr.data(),
                        std::string_view(value.data(), value.size()));
     }
-    jsons_str.back() = '}';
     offsets.back() = jsons_str.size();
 
-    contents_arg_t values {};
-    values.offsets_begin = {offsets.data(), sizeof(ustore_length_t)};
+    contents_arg_t contents {};
+    contents.offsets_begin = {offsets.data(), sizeof(ustore_length_t)};
     auto vals_begin = reinterpret_cast<ustore_bytes_ptr_t>(jsons_str.data());
-    values.contents_begin = {&vals_begin, 0};
+    contents.contents_begin = {&vals_begin, 0};
 
-    g.relations_attrs[es.edge_ids].assign(values).throw_unhandled();
+    g.relations_attrs[keys].merge(contents).throw_unhandled();
 }
 
 void ustore::wrap_networkx(py::module& m) {
@@ -1098,44 +1094,54 @@ void ustore::wrap_networkx(py::module& m) {
             auto target_col = table_ptr->GetColumnByName(target);
             auto edge_col = table_ptr->GetColumnByName(edge);
 
-            size_t chunk_idx = 0;
-            auto chunks_count = source_col->num_chunks();
+            if (source_col->type()->id() != arrow::Type::INT64 || target_col->type()->id() != arrow::Type::INT64 ||
+                edge_col->type()->id() != arrow::Type::INT64)
+                throw std::runtime_error("Nodes and edge ids must be int64");
+
             auto column_names = table_ptr->ColumnNames();
-            while (chunk_idx != chunks_count) {
-                edges_view_t edges = parsed_adjacency_list_t(chunk_idx, source_col, target_col, edge_col);
+            for (std::size_t chunk_idx = 0; chunk_idx != source_col->num_chunks(); ++chunk_idx) {
+
+                auto source_array = std::static_pointer_cast<arrow::Int64Array>(source_col->chunk(chunk_idx));
+                auto target_array = std::static_pointer_cast<arrow::Int64Array>(target_col->chunk(chunk_idx));
+                auto edge_array = std::static_pointer_cast<arrow::Int64Array>(edge_col->chunk(chunk_idx));
+
+                edges_view_t edges;
+                edges.source_ids = {{source_array->raw_values(), sizeof(ustore_key_t)}, source_array->length()};
+                edges.target_ids = {{target_array->raw_values(), sizeof(ustore_key_t)}, target_array->length()};
+                edges.edge_ids = {{edge_array->raw_values(), sizeof(ustore_key_t)}, edge_array->length()};
+
                 g.ref().upsert_edges(edges).throw_unhandled();
 
-                if (count_column < 3)
+                if (count_column == 3)
                     continue;
 
                 for (size_t col_idx = 0; col_idx != count_column; col_idx++) {
-                    auto attr_name = column_names[col_idx];
-                    if (attr_name == source || attr_name == target, attr_name == edge)
+                    auto attr = column_names[col_idx];
+                    if (attr == source || attr == target || attr == edge)
                         continue;
 
-                    auto attr_col = table_ptr->GetColumnByName(attr_name);
-                    auto array = attr_col->chunk(chunk_idx);
+                    auto attr_col = table_ptr->GetColumnByName(attr);
+                    auto values = attr_col->chunk(chunk_idx);
+                    auto keys = edges.edge_ids;
 
                     using type = arrow::Type;
-                    switch (attr_col->chunk(chunk_idx)->type_id()) {
-                    case type::HALF_FLOAT: add_key_value<arrow::HalfFloatArray>(g, edges, array, attr_name); break;
-                    case type::FLOAT: add_key_value<arrow::FloatArray>(g, edges, array, attr_name); break;
-                    case type::DOUBLE: add_key_value<arrow::DoubleArray>(g, edges, array, attr_name); break;
-                    case type::BOOL: add_key_value<arrow::BooleanArray>(g, edges, array, attr_name); break;
-                    case type::UINT8: add_key_value<arrow::UInt8Array>(g, edges, array, attr_name); break;
-                    case type::INT8: add_key_value<arrow::Int8Array>(g, edges, array, attr_name); break;
-                    case type::UINT16: add_key_value<arrow::UInt16Array>(g, edges, array, attr_name); break;
-                    case type::INT16: add_key_value<arrow::Int16Array>(g, edges, array, attr_name); break;
-                    case type::UINT32: add_key_value<arrow::UInt32Array>(g, edges, array, attr_name); break;
-                    case type::INT32: add_key_value<arrow::Int32Array>(g, edges, array, attr_name); break;
-                    case type::UINT64: add_key_value<arrow::UInt64Array>(g, edges, array, attr_name); break;
-                    case type::INT64: add_key_value<arrow::Int64Array>(g, edges, array, attr_name); break;
+                    switch (values->type_id()) {
+                    case type::HALF_FLOAT: add_key_value<arrow::HalfFloatArray>(g, keys, values, attr); break;
+                    case type::FLOAT: add_key_value<arrow::FloatArray>(g, keys, values, attr); break;
+                    case type::DOUBLE: add_key_value<arrow::DoubleArray>(g, keys, values, attr); break;
+                    case type::BOOL: add_key_value<arrow::BooleanArray>(g, keys, values, attr); break;
+                    case type::UINT8: add_key_value<arrow::UInt8Array>(g, keys, values, attr); break;
+                    case type::INT8: add_key_value<arrow::Int8Array>(g, keys, values, attr); break;
+                    case type::UINT16: add_key_value<arrow::UInt16Array>(g, keys, values, attr); break;
+                    case type::INT16: add_key_value<arrow::Int16Array>(g, keys, values, attr); break;
+                    case type::UINT32: add_key_value<arrow::UInt32Array>(g, keys, values, attr); break;
+                    case type::INT32: add_key_value<arrow::Int32Array>(g, keys, values, attr); break;
+                    case type::UINT64: add_key_value<arrow::UInt64Array>(g, keys, values, attr); break;
+                    case type::INT64: add_key_value<arrow::Int64Array>(g, keys, values, attr); break;
                     case type::STRING:
-                    case type::BINARY: add_key_value<arrow::BinaryArray>(g, edges, array, attr_name); break;
+                    case type::BINARY: add_key_value<arrow::BinaryArray>(g, keys, values, attr); break;
                     }
                 }
-
-                ++chunk_idx;
             }
         },
         py::arg("table"),

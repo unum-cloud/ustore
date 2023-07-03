@@ -1410,7 +1410,7 @@ class UStoreService : public arf::FlightServerBase {
                 kArgNames.c_str(),
                 ustore_doc_field_str_k,
                 nullptr,
-                offsets,
+                offsets ? offsets : reinterpret_cast<ustore_length_t*>(&zero_size_data_k),
                 ustore_bytes_ptr_t(names),
                 schema_c.children[1],
                 array_c.children[1],
@@ -1452,13 +1452,10 @@ class UStoreService : public arf::FlightServerBase {
             if (!status)
                 return ar::Status::ExecutionError(status.message());
 
-            if (count == 0)
-                return ar::Status::OK();
-
             // Pack two columns into a Table
             ArrowSchema schema_c;
             ArrowArray array_c;
-            ustore_to_arrow_schema(count, 2, &schema_c, &array_c, status.member_ptr());
+            ustore_to_arrow_schema(count, 1, &schema_c, &array_c, status.member_ptr());
             if (!status)
                 return ar::Status::ExecutionError(status.message());
 

@@ -430,7 +430,7 @@ void ustore_database_init(ustore_database_init_t* c_ptr) {
         auto maybe_pairs = ucset_t::make();
         return_error_if_m(maybe_pairs, c.error, error_unknown_k, "Couldn't build consistent set");
         auto db = database_t(std::move(maybe_pairs).value());
-        auto db_ptr = std::make_unique<database_t>(std::move(db)).release();
+        auto db_ptr = std::make_unique<database_t>(std::move(db));
 
         if (c.config && std::strlen(c.config) > 0) {
             // Load config
@@ -477,7 +477,7 @@ void ustore_database_init(ustore_database_init_t* c_ptr) {
             db_ptr->persisted_directory = root;
             read(*db_ptr, db_ptr->persisted_directory, c.error);
         }
-        *c.db = db_ptr;
+        *c.db = db_ptr.release();
     });
 }
 
