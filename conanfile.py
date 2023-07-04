@@ -1,19 +1,18 @@
 import os
 
-from conans import ConanFile
-from conans.tools import SystemPackageTool
-from conan.tools.cmake import CMakeToolchain, CMake, cmake_layout
+from conan import ConanFile
+from conan.errors import ConanInvalidConfiguration
+from conan.tools.build import check_min_cppstd, cross_building
+from conan.tools.cmake import CMake, CMakeDeps, CMakeToolchain, cmake_layout
+from conan.tools.files import apply_conandata_patches, copy, export_conandata_patches, get, rmdir
+from conan.tools.microsoft import is_msvc, is_msvc_static_runtime
+from conan.tools.scm import Version
 
 
 class ConanUStore(ConanFile):
 
     exports = 'VERSION', 'LICENSE', 'README.md'
     exports_sources = 'CMakeLists.txt', 'src/*', 'include/*', 'cmake/*', 'VERSION'
-    options = {'with_arrow': [True, False]}
-    default_options = {
-        'with_arrow': False,
-    }
-
     name = 'ustore'
     version = open('VERSION').read()
     # Take just the first line
@@ -37,64 +36,141 @@ class ConanUStore(ConanFile):
         'build_type': ['Release'],
         'arch': ['x86', 'x86_64', 'armv8', 'armv8_32', 'armv8.3'],
     }
-    generators = 'CMakeToolchain',
-
+    generators = 'CMakeDeps', 'deploy'
+    options = {'with_arrow': [True, False]}
+    default_options = {
+        'with_arrow': False,
+    }
+    
+    
     def layout(self):
         cmake_layout(self)
-
+        
+        
     def generate(self):
-        tc = CMakeToolchain(self)
-        tc.generate()
-
-    def build(self):
-        # https://docs.conan.io/en/1.50/reference/build_helpers/cmake.html#constructor
-        cmake = CMake(self)
-        cmake.configure(variables={
-            'USTORE_BUILD_SDK_PYTHON': 0,
-            'USTORE_BUILD_TESTS': 0,
-            'USTORE_BUILD_BENCHMARKS': 0,
-            'USTORE_BUILD_API_FLIGHT_CLIENT': self.options['with_arrow'],
-        })
-        cmake.build()
-
-    def package(self):
-        cmake = CMake(self)
-        cmake.install()
-
-        self.copy('*.a', dst='lib',
-                  src=os.path.join(self.source_folder, 'build/lib'))
-
-    def package_info(self):
-        # Larger projects like UStore or Boost would have a lot of parts,
-        # but it is recommended to ship one library per component
-        # https://docs.conan.io/en/1.26/creating_packages/package_information.html#using-components
-        self.cpp_info.name = 'ustore'
-        self.cpp_info.includedirs = ['include/']
-        self.cpp_info.components['ucset'].libs = ['libustore_embedded_ucset']
-        self.cpp_info.components['leveldb'].libs = [
-            'libustore_embedded_leveldb']
-        self.cpp_info.components['rocksdb'].libs = [
-            'libustore_embedded_rocksdb']
-        if self.options['with_arrow']:
-            self.cpp_info.components['flight_client'].libs = [
-                'ustore_flight_client']
-
+        tc = CMakeToolchain(self)      
+        if cross_building(self):
+            cmake_system_processor = {
+                "armv8": "aarch64",
+                "armv8.3": "aarch64",
+            }.get(str(self.settings.arch), str(self.settings.arch))
+            if cmake_system_processor == "aarch64":
+                tc.variables["ARROW_CPU_FLAG"] = "armv8"
+        tc.variables["ARROW_DEPENDENCY_SOURCE"] = "BUNDLED"
+        tc.variables["ARROW_BUILD_TESTS"] = False
+        tc.variables["ARROW_ENABLE_TIMING_TESTS"] = False
+        tc.variables["ARROW_BUILD_EXAMPLES"] = False
+        tc.variables["ARROW_BUILD_BENCHMARKS"] = False
+        tc.variables["ARROW_BUILD_INTEGRATION"] = False
+        tc.variables["PARQUET_REQUIRE_ENCRYPTION"] = bool(
+            self.options['arrow:encryption'])
+        tc.variables["ARROW_BUILD_UTILITIES"] = bool(self.options['arrow:cli'])
+        tc.variables["re2_SOURCE"] = "BUNDLED"
+        tc.variables["Protobuf_SOURCE"] = "BUNDLED"
+        tc.variables["Snappy_SOURCE"] = "BUNDLED"
+        tc.variables["gRPC_SOURCE"] = "BUNDLED"
+        tc.variables["ZLIB_SOURCE"] = "BUNDLED"
+        tc.variables["Thrift_SOURCE"] = "BUNDLED"
+        tc.variables["utf8proc_SOURCE"] = "BUNDLED"
+        tc.variables["ARROW_INCLUDE_DIR"] = True
+        tc.variables["ARROW_WITH_THRIFT"] = self._with_thrift()
+        tc.variables["ARROW_UTF8PROC_USE_SHARED"] = False
+        tc.variables["Thrift_SOURCE"] = "SYSTEM"
+        if self._with_thrift():
+            tc.variables["THRIFT_VERSION"] = bool(self.dependencies["thrift"].ref.version) # a recent thrift does not require boost
+            tc.variables["ARROW_THRIFT_USE_SHARED"] = bool(self.dependencies["thrift"].options.shared)
+        tc.variables['ARROW_BUILD_STATIC'] = True
+        tc.cache_variables["ENABLE_STATIC"] = "ON"
+        tc.cache_variables["ENABLE_BSON"] = "ON"
+        tc.cache_variables["ENABLE_TESTS"] = "OFF"
+        tc.cache_variables["ENABLE_EXAMPLES"] = "OFF"
+        tc.cache_variables["ENABLE_TRACING"] = "OFF"
+        tc.cache_variables["ENABLE_COVERAGE"] = "OFF"
+        tc.cache_variables["ENABLE_SHM_COUNTERS"] = "OFF"
+        tc.cache_variables["ENABLE_MONGOC"] = "OFF"
+        tc.cache_variables["ENABLE_MAN_PAGES"] = "OFF"
+        tc.cache_variables["ENABLE_HTML_DOCS"] = "OFF"
+        tc.generate()        
+        
+        
+    def configure(self):
+        self.options["openssl"].shared = False
+        self.options["arrow"].shared = False
+        self.options["arrow"].parquet = True
+        self.options["arrow"].dataset_modules = True
+        self.options["arrow"].with_re2 = True
+        self.options["arrow"].compute = True
+        self.options["arrow"].with_flight_rpc = True
+        self.options["arrow"].with_utf8proc = True
+        self.options["arrow"].encryption = False
+        self.options["arrow"].with_openssl = True
+        self.options["arrow"].with_csv = True
+        self.options["arrow"].simd_level = 'avx2'
+        self.options["arrow"].compute = True
+        self.options["arrow"].with_jemalloc = False
+        self.options["arrow"].with_json = True
+        self.options["arrow"].with_flight_sql = True
+        self.options["arrow"].with_snappy = False
+        self.options["arrow"].cli = False
+        self.options["arrow"].gandiva = False
+        self.options["arrow"].with_s3 = False
+        self.options["pcre2"].fPIC = True
+        self.options["pcre2"].support_jit = True
+        self.options["pcre2"].build_pcre2grep = True
+        self.options["mongo-c-driver"].with_ssl = False
+        self.options["mongo-c-driver"].with_sasl = False
+        self.options["mongo-c-driver"].srv = False
+        self.options["mongo-c-driver"].with_snappy = False
+        self.options["mongo-c-driver"].with_zlib = False
+        self.options["mongo-c-driver"].with_zstd = False
+        
     def requirements(self):
-        # Most of our dependencies come from `CMake`
-        # https://docs.conan.io/en/latest/reference/conanfile/methods.html#requirements
+        self.requires('arrow/10.0.0')
+        self.requires('openssl/1.1.1t')
+        self.requires('pcre2/10.42')
+        self.requires('fmt/9.1.0')
+        self.requires('mongo-c-driver/1.23.2')
+        self.requires('nlohmann_json/3.11.2')
+        self.requires('yyjson/0.6.0')
+        self.requires('simdjson/3.1.7')
+        self.requires('jemalloc/5.3.0')
+        self.requires('clipp/1.2.3')
+        self.requires('gtest/1.13.0')
+        self.requires('benchmark/1.7.1')
+        self.requires('argparse/2.9')
+        self.requires('re2/20220601')
+        self.requires('xsimd/9.0.1')
+        # https://conan.io/center/openssl
+    
+    
+    # def build(self):
+    #     cmake = CMake(self)
+    #     cmake.configure()
+    #     cmake.build()
 
-        if self.options['with_arrow']:
-            # https://conan.io/center/arrow
-            self.requires('arrow/8.0.1')
-
-            # We are overriding this to avoid collisions within Arrow libraries
-            self.requires('protobuf/3.21.4')
 
     def system_requirements(self):
-        # If we need a fresher version of Arrow, we can get it from the default package manager.
-        # https://docs.conan.io/en/latest/reference/conanfile/methods.html?#system-requirements
-
-        # https://arrow.apache.org/install/
-        # SystemPackageTool().install('libarrow-dev ')
-        # SystemPackageTool().install('libarrow-flight-dev')
         pass
+    
+    
+    def package_info(self):
+        
+        self.cpp_info.components["libarrow_flight.a"].set_property("pkg_config_name", "flight_rpc")
+        self.cpp_info.components["libarrow_flight.a"].libs = [f"arrow_flight.a"]
+    
+    def package(self):
+        if self.options['arrow'].shared:
+            self.copy(pattern="*.dll", dst="bin", keep_path=False)
+            self.copy(pattern="*.dylib", dst="lib", keep_path=False)
+        self.copy(pattern="*.a", dst="lib", keep_path=False)
+    
+    def _with_thrift(self, required=False):
+        # No self.options.with_thift exists
+        return bool(required or self._parquet())
+    
+    
+    def _parquet(self, required=False):
+        if required or self.options['arrow'].parquet == "auto":
+            return bool(self.options.get_safe("substrait", False))
+        else:
+            return bool(self.options['arrow'].parquet)
