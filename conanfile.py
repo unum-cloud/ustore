@@ -57,6 +57,7 @@ class ConanUStore(ConanFile):
             if cmake_system_processor == "aarch64":
                 tc.variables["ARROW_CPU_FLAG"] = "armv8"
         tc.variables["ARROW_DEPENDENCY_SOURCE"] = "BUNDLED"
+        tc.variables["ARROW_DEPENDENCY_USE_SHARED"] = False
         tc.variables["ARROW_BUILD_TESTS"] = False
         tc.variables["ARROW_ENABLE_TIMING_TESTS"] = False
         tc.variables["ARROW_BUILD_EXAMPLES"] = False
@@ -71,11 +72,12 @@ class ConanUStore(ConanFile):
         tc.variables["gRPC_SOURCE"] = "BUNDLED"
         tc.variables["ZLIB_SOURCE"] = "BUNDLED"
         tc.variables["Thrift_SOURCE"] = "BUNDLED"
-        tc.variables["utf8proc_SOURCE"] = "BUNDLED"
+        tc.variables["utf8proc_SOURCE"] = "SYSTEM"
+        tc.variables["ARROW_WITH_UTF8PROC"] = True
         tc.variables["ARROW_INCLUDE_DIR"] = True
         tc.variables["ARROW_WITH_THRIFT"] = self._with_thrift()
         tc.variables["ARROW_UTF8PROC_USE_SHARED"] = False
-        tc.variables["Thrift_SOURCE"] = "SYSTEM"
+        tc.variables["Thrift_SOURCE"] = "BUNDLED"
         if self._with_thrift():
             tc.variables["THRIFT_VERSION"] = bool(self.dependencies["thrift"].ref.version) # a recent thrift does not require boost
             tc.variables["ARROW_THRIFT_USE_SHARED"] = bool(self.dependencies["thrift"].options.shared)
@@ -106,10 +108,9 @@ class ConanUStore(ConanFile):
         self.options["arrow"].with_openssl = True
         self.options["arrow"].with_csv = True
         self.options["arrow"].simd_level = 'avx2'
-        self.options["arrow"].compute = True
         self.options["arrow"].with_jemalloc = False
         self.options["arrow"].with_json = False
-        self.options["arrow"].with_flight_sql = True
+        self.options["arrow"].with_flight_sql = False
         self.options["arrow"].with_snappy = True
         self.options["arrow"].cli = True
         self.options["arrow"].gandiva = False
