@@ -37,6 +37,20 @@ jobs:
     - run: cp .github/workflows/package.json . && npm install && npx semantic-release
 
 
+  build_wheel:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: main-dev
+
+      - uses: pypa/cibuildwheel@v2.11.3
+        with:
+          output-dir: dist
+
+
+
   # Single deploy job since we're just deploying
   deploy:
     name: Deploy Docs
