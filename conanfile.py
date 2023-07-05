@@ -14,7 +14,7 @@ class ConanUStore(ConanFile):
     exports = 'VERSION', 'LICENSE', 'README.md'
     exports_sources = 'CMakeLists.txt', 'src/*', 'include/*', 'cmake/*', 'VERSION'
     name = 'ustore'
-    version = open('VERSION').read()
+    version = '0.12.3'
     # Take just the first line
     license = open('LICENSE').read().split('\n', 1)[0]
     description = open('README.md').read()
@@ -95,7 +95,7 @@ class ConanUStore(ConanFile):
         
     def configure(self):
         self.options["openssl"].shared = False
-        self.options["arrow"].shared = False
+        self.options["arrow"].shared = True
         self.options["arrow"].parquet = True
         self.options["arrow"].dataset_modules = True
         self.options["arrow"].with_re2 = True
@@ -163,6 +163,8 @@ class ConanUStore(ConanFile):
             self.copy(pattern="*.dll", dst="bin", keep_path=False)
             self.copy(pattern="*.dylib", dst="lib", keep_path=False)
         self.copy(pattern="*.a", dst="lib", keep_path=False)
+        self.copy(pattern="*.h", dst="lib", keep_path=False)
+        self.copy(pattern="*.hpp", dst="lib", keep_path=False)
     
     def _with_thrift(self, required=False):
         # No self.options.with_thift exists
