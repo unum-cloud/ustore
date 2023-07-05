@@ -95,7 +95,7 @@ class ConanUStore(ConanFile):
         
     def configure(self):
         self.options["openssl"].shared = False
-        self.options["arrow"].shared = True
+        self.options["arrow"].shared = False
         self.options["arrow"].parquet = True
         self.options["arrow"].dataset_modules = True
         self.options["arrow"].with_re2 = True
