@@ -55,9 +55,7 @@ void log_message(const char* message, args_at&&... args) {
     std::time_t current_time = std::chrono::system_clock::to_time_t(now);
     std::string time_str = std::ctime(&current_time);
     time_str.pop_back();
-    std::string format = "%s: ";
-    format += message;
-    format += "\n";
+    std::string format = std::string("%s: ") + message + "\n";
     std::printf(format.c_str(), time_str.c_str(), std::forward<args_at>(args)...);
 }
 
