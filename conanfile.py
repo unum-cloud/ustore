@@ -108,10 +108,10 @@ class ConanUStore(ConanFile):
         self.options["arrow"].simd_level = 'avx2'
         self.options["arrow"].compute = True
         self.options["arrow"].with_jemalloc = False
-        self.options["arrow"].with_json = True
+        self.options["arrow"].with_json = False
         self.options["arrow"].with_flight_sql = True
-        self.options["arrow"].with_snappy = False
-        self.options["arrow"].cli = False
+        self.options["arrow"].with_snappy = True
+        self.options["arrow"].cli = True
         self.options["arrow"].gandiva = False
         self.options["arrow"].with_s3 = False
         self.options["pcre2"].fPIC = True
