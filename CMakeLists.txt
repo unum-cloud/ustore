@@ -139,10 +139,6 @@ include_directories(include/)
 include_directories(src/tools)
 include_directories(src/helpers)
 include_directories(${CONAN_INCLUDE_DIRS_ARROW})
-include_directories(/root/.conan/data/arrow/10.0.0/_/_/build/7af142fba24322ef836ae239ba490137be64745d/src/cpp/src/)
-
-
-
 
 if(CMAKE_BUILD_TYPE MATCHES "Debug")
   set(FETCHCONTENT_QUIET OFF)
@@ -210,8 +206,8 @@ endif()
 
 if(${USTORE_BUILD_BENCHMARKS})
   include_directories(${CONAN_INCLUDE_DIRS_GTEST})
-  include(${CONAN_INCLUDE_DIRS_BENCHMARK})
-  include(${CONAN_INCLUDE_DIRS_ARGPARSE})
+  include_directories(${CONAN_INCLUDE_DIRS_BENCHMARK})
+  include_directories(${CONAN_INCLUDE_DIRS_ARGPARSE})
 endif()
 
 set(USTORE_ENGINE_NAMES)
