@@ -141,6 +141,10 @@ include_directories(src/helpers)
 include_directories(${CONAN_INCLUDE_DIRS_ARROW})
 include_directories(/root/.conan/data/arrow/10.0.0/_/_/build/7af142fba24322ef836ae239ba490137be64745d/src/cpp/src/)
 
+add_library(arrow::bundled STATIC IMPORTED)
+set_property(TARGET arrow::bundled PROPERTY IMPORTED_LOCATION ${CONAN_LIB_DIRS_ARROW}/libarrow_bundled_dependencies.a)
+add_dependencies(arrow::bundled Arrow-external)
+
 add_library(arrow::arrow STATIC IMPORTED)
 set_property(TARGET arrow::arrow PROPERTY IMPORTED_LOCATION ${CONAN_LIB_DIRS_ARROW}/libarrow.a)
 add_dependencies(arrow::arrow Arrow-external)
@@ -161,9 +165,7 @@ add_library(arrow::parquet STATIC IMPORTED)
 set_property(TARGET arrow::parquet PROPERTY IMPORTED_LOCATION ${CONAN_LIB_DIRS_ARROW}/libparquet.a)
 add_dependencies(arrow::parquet Arrow-external)
 
-add_library(arrow::bundled STATIC IMPORTED)
-set_property(TARGET arrow::bundled PROPERTY IMPORTED_LOCATION ${CONAN_LIB_DIRS_ARROW}/libarrow_bundled_dependencies.a)
-add_dependencies(arrow::bundled Arrow-external)
+
 
 if(CMAKE_BUILD_TYPE MATCHES "Debug")
   set(FETCHCONTENT_QUIET OFF)
