@@ -41,14 +41,12 @@ class ConanUStore(ConanFile):
     default_options = {
         'with_arrow': False,
     }
-    
-    
+
     def layout(self):
         cmake_layout(self)
-        
-        
+
     def generate(self):
-        tc = CMakeToolchain(self)      
+        tc = CMakeToolchain(self)
         if cross_building(self):
             cmake_system_processor = {
                 "armv8": "aarch64",
@@ -79,8 +77,11 @@ class ConanUStore(ConanFile):
         tc.variables["ARROW_UTF8PROC_USE_SHARED"] = False
         tc.variables["Thrift_SOURCE"] = "BUNDLED"
         if self._with_thrift():
-            tc.variables["THRIFT_VERSION"] = bool(self.dependencies["thrift"].ref.version) # a recent thrift does not require boost
-            tc.variables["ARROW_THRIFT_USE_SHARED"] = bool(self.dependencies["thrift"].options.shared)
+            # a recent thrift does not require boost
+            tc.variables["THRIFT_VERSION"] = bool(
+                self.dependencies["thrift"].ref.version)
+            tc.variables["ARROW_THRIFT_USE_SHARED"] = bool(
+                self.dependencies["thrift"].options.shared)
         tc.variables['ARROW_BUILD_STATIC'] = True
         tc.cache_variables["ENABLE_STATIC"] = "ON"
         tc.cache_variables["ENABLE_BSON"] = "ON"
@@ -92,12 +93,12 @@ class ConanUStore(ConanFile):
         tc.cache_variables["ENABLE_MONGOC"] = "OFF"
         tc.cache_variables["ENABLE_MAN_PAGES"] = "OFF"
         tc.cache_variables["ENABLE_HTML_DOCS"] = "OFF"
-        tc.generate()        
-        
-        
+        tc.generate()
+
     def configure(self):
         self.options["openssl"].shared = False
         self.options["arrow"].shared = False
+        self.options["arrow"].with_orc = False
         self.options["arrow"].parquet = True
         self.options["arrow"].dataset_modules = True
         self.options["arrow"].with_re2 = True
@@ -125,7 +126,7 @@ class ConanUStore(ConanFile):
         self.options["mongo-c-driver"].with_snappy = False
         self.options["mongo-c-driver"].with_zlib = False
         self.options["mongo-c-driver"].with_zstd = False
-        
+
     def requirements(self):
         self.requires('arrow/10.0.0')
         self.requires('openssl/1.1.1t')
@@ -143,23 +144,22 @@ class ConanUStore(ConanFile):
         self.requires('re2/20220601')
         self.requires('xsimd/9.0.1')
         # https://conan.io/center/openssl
-    
-    
+
     # def build(self):
     #     cmake = CMake(self)
     #     cmake.configure()
     #     cmake.build()
 
-
     def system_requirements(self):
         pass
-    
-    
+
     def package_info(self):
-        
-        self.cpp_info.components["libarrow_flight.a"].set_property("pkg_config_name", "flight_rpc")
-        self.cpp_info.components["libarrow_flight.a"].libs = [f"arrow_flight.a"]
-    
+
+        self.cpp_info.components["libarrow_flight.a"].set_property(
+            "pkg_config_name", "flight_rpc")
+        self.cpp_info.components["libarrow_flight.a"].libs = [
+            f"arrow_flight.a"]
+
     def package(self):
         if self.options['arrow'].shared:
             self.copy(pattern="*.dll", dst="bin", keep_path=False)
@@ -167,12 +167,11 @@ class ConanUStore(ConanFile):
         self.copy(pattern="*.a", dst="lib", keep_path=False)
         self.copy(pattern="*.h", dst="lib", keep_path=False)
         self.copy(pattern="*.hpp", dst="lib", keep_path=False)
-    
+
     def _with_thrift(self, required=False):
         # No self.options.with_thift exists
         return bool(required or self._parquet())
-    
-    
+
     def _parquet(self, required=False):
         if required or self.options['arrow'].parquet == "auto":
             return bool(self.options.get_safe("substrait", False))
