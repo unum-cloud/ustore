@@ -141,29 +141,6 @@ include_directories(src/helpers)
 include_directories(${CONAN_INCLUDE_DIRS_ARROW})
 include_directories(/root/.conan/data/arrow/10.0.0/_/_/build/7af142fba24322ef836ae239ba490137be64745d/src/cpp/src/)
 
-add_library(arrow::bundled STATIC IMPORTED)
-set_property(TARGET arrow::bundled PROPERTY IMPORTED_LOCATION ${CONAN_LIB_DIRS_ARROW}/libarrow_bundled_dependencies.a)
-add_dependencies(arrow::bundled Arrow-external)
-
-add_library(arrow::arrow STATIC IMPORTED)
-set_property(TARGET arrow::arrow PROPERTY IMPORTED_LOCATION ${CONAN_LIB_DIRS_ARROW}/libarrow.a)
-add_dependencies(arrow::arrow Arrow-external)
-
-add_library(arrow::flight STATIC IMPORTED)
-set_property(TARGET arrow::flight PROPERTY IMPORTED_LOCATION ${CONAN_LIB_DIRS_ARROW}/libarrow_flight.a)
-add_dependencies(arrow::flight Arrow-external)
-
-add_library(arrow::cuda STATIC IMPORTED)
-set_property(TARGET arrow::cuda PROPERTY IMPORTED_LOCATION ${CONAN_LIB_DIRS_ARROW}/libarrow_cuda.a)
-add_dependencies(arrow::cuda Arrow-external)
-
-add_library(arrow::dataset STATIC IMPORTED)
-set_property(TARGET arrow::dataset PROPERTY IMPORTED_LOCATION ${CONAN_LIB_DIRS_ARROW}/libarrow_dataset.a)
-add_dependencies(arrow::dataset Arrow-external)
-
-add_library(arrow::parquet STATIC IMPORTED)
-set_property(TARGET arrow::parquet PROPERTY IMPORTED_LOCATION ${CONAN_LIB_DIRS_ARROW}/libparquet.a)
-add_dependencies(arrow::parquet Arrow-external)
 
 
 
@@ -244,7 +221,7 @@ set(USTORE_TEST_NAMES "test_tools" "test_compilation" "test_units" "stress_atomi
 # Define the Engine libraries we will need to build
 if(${USTORE_BUILD_ENGINE_UCSET})
   add_library(ustore_embedded_ucset src/engine_ucset.cpp src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp src/modality_vectors.cpp)
-  target_link_libraries(ustore_embedded_ucset pthread yyjson simdjson bson-static-1.0 pcre2-8 parquet arrow::arrow  ${JEMALLOC_LIBRARIES} ${TBB_LIBRARIES})
+  target_link_libraries(ustore_embedded_ucset pthread yyjson simdjson bson-static-1.0 pcre2-8 parquet arrow  ${JEMALLOC_LIBRARIES} ${TBB_LIBRARIES})
   target_compile_definitions(ustore_embedded_ucset INTERFACE USTORE_VERSION="${USTORE_VERSION}")
   target_compile_definitions(ustore_embedded_ucset INTERFACE USTORE_ENGINE_IS_UCSET=1)
 
@@ -280,7 +257,7 @@ if(EXISTS ${USTORE_ENGINE_UDISK_PATH})
   set_property(TARGET udisk PROPERTY LINK_LIBRARIES "")
 
   add_library(ustore_embedded_udisk src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp src/modality_vectors.cpp)
-  target_link_libraries(ustore_embedded_udisk udisk pthread yyjson simdjson bson-static-1.0 pcre2-8 nlohmann_json::nlohmann_json ${JEMALLOC_LIBRARIES})
+  target_link_libraries(ustore_embedded_udisk udisk pthread yyjson simdjson bson-static-1.0 pcre2-8 nlohmann_json ${JEMALLOC_LIBRARIES})
   target_compile_definitions(ustore_embedded_udisk INTERFACE USTORE_VERSION="${USTORE_VERSION}")
   target_compile_definitions(ustore_embedded_udisk INTERFACE USTORE_ENGINE_IS_UDISK=1)
 
@@ -294,7 +271,7 @@ set(USTORE_CLIENT_NAMES ${USTORE_ENGINE_NAMES})
 
 if(${USTORE_BUILD_API_FLIGHT_CLIENT})
   add_library(ustore_flight_client src/flight_client.cpp src/modality_docs.cpp src/modality_graph.cpp src/modality_vectors.cpp)
-  target_link_libraries(ustore_flight_client pthread yyjson simdjson bson-static-1.0 pcre2-8 fmt arrow::flight  arrow::dataset arrow::arrow ssl crypto ${JEMALLOC_LIBRARIES})
+  target_link_libraries(ustore_flight_client pthread yyjson simdjson bson-static-1.0 pcre2-8 fmt arrow_flight  arrow_dataset arrow ssl crypto ${JEMALLOC_LIBRARIES})
   target_compile_definitions(ustore_flight_client INTERFACE USTORE_FLIGHT_CLIENT=TRUE)
   list(APPEND USTORE_CLIENT_NAMES "flight_client")
   list(APPEND USTORE_CLIENT_LIBS "ustore_flight_client")
@@ -307,7 +284,7 @@ if(${USTORE_BUILD_API_FLIGHT_SERVER})
 
     string(CONCAT server_exe_name "ustore_flight_server_" ${engine_name})
     add_executable(${server_exe_name} src/flight_server.cpp)
-    target_link_libraries(${server_exe_name} pthread yyjson simdjson bson-static-1.0 arrow::flight  arrow::dataset arrow::arrow ssl crypto ${embedded_lib_name} ${embedded_dependencies})
+    target_link_libraries(${server_exe_name} pthread yyjson simdjson bson-static-1.0 arrow_flight  arrow_dataset arrow ssl crypto ${embedded_lib_name} ${embedded_dependencies})
     target_compile_definitions(${server_exe_name} INTERFACE USTORE_ENGINE_NAME=${engine_name})
 
     if(${engine_name} STREQUAL "ucset")
@@ -348,7 +325,7 @@ if(${USTORE_BUILD_TESTS})
         add_executable(${test_exe} tests/${test_name}.cpp)
       endif()
       target_compile_definitions(${test_exe} PUBLIC USTORE_TEST_PATH="tmp/${client_lib}")
-      target_link_libraries(${test_exe} gtest simdjson fmt arrow::flight parquet arrow::arrow  ${client_lib} ${client_dependencies})
+      target_link_libraries(${test_exe} gtest simdjson fmt arrow_flight parquet arrow  ${client_lib} ${client_dependencies})
       add_test(NAME "${test_exe}" COMMAND "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${test_exe}")
     endforeach()
   endforeach()
@@ -365,7 +342,7 @@ if(${USTORE_BUILD_BENCHMARKS})
 
     string(CONCAT bench_name "bench_tabular_graph_" ${client_lib})
     add_executable(${bench_name} benchmarks/tabular_graph.cpp src/tools/dataset.cpp)
-    target_link_libraries(${bench_name} benchmark argparse fmt arrow::flight parquet arrow::arrow  ${client_lib} ${client_dependencies})
+    target_link_libraries(${bench_name} benchmark argparse fmt arrow_flight parquet arrow  ${client_lib} ${client_dependencies})
   endforeach()
 endif()
 
@@ -389,7 +366,7 @@ if(${USTORE_BUILD_SDK_PYTHON})
     pybind11_add_module(${wrap_lib} MODULE python/pybind.cpp python/database.cpp python/networkx.cpp python/documents.cpp python/pandas.cpp)
     target_include_directories(${wrap_lib} PUBLIC python/ ${PYARROW_DIR}/include)
     target_link_directories(${wrap_lib} PUBLIC ${PYARROW_DIR})
-    target_link_libraries(${wrap_lib} PRIVATE pthread fmt arrow::dataset arrow_python arrow::flight  arrow::arrow ${client_lib} ${client_dependencies})
+    target_link_libraries(${wrap_lib} PRIVATE pthread fmt arrow_dataset arrow_python arrow_flight  arrow ${client_lib} ${client_dependencies})
     target_compile_definitions(${wrap_lib} PRIVATE USTORE_VERSION="${USTORE_VERSION}" USTORE_PYTHON_MODULE_NAME=${client_lib_name})
     set_target_properties(${wrap_lib} PROPERTIES OUTPUT_NAME ${client_lib_name})
   endforeach()
