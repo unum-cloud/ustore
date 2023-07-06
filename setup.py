@@ -79,8 +79,8 @@ class CMakeBuild(build_ext):
             if hasattr(self, 'parallel') and self.parallel:
                 build_args += [f'-j{self.parallel}']
                 
-        command = ['conan', 'remote', 'list']
-        result = subprocess.run(command, capture_output=True, text=True)
+        conan_command = ['conan', 'remote', 'list']
+        result = subprocess.run(conan_command, capture_output=True, text=True)
         output = result.stdout.strip()
         lines = output.split('\n')
         if not any('artifactory:' in line for line in lines):
@@ -93,8 +93,8 @@ class CMakeBuild(build_ext):
 
     def run(self):
         build_ext.run(self)
-        if 'USTORE_DEBUG_PYTHON' not in os.environ:
-            self.run_command('build_pyi')
+        # if 'USTORE_DEBUG_PYTHON' not in os.environ:
+        #     self.run_command('build_pyi')
 
 
 class BuildPyi(Command):
@@ -201,7 +201,7 @@ setup(
     ],
     cmdclass={
         'build_ext': CMakeBuild,
-        'build_pyi': BuildPyi,
+        # 'build_pyi': BuildPyi,
     },
     zip_safe=False,
     install_requires=[
