@@ -50,6 +50,7 @@ So the engine only implements the functions from "db.h" and "blobs.h", and the r
 With this in mind, if you were to implement an engine based on ETCD, FoundationDB, Redis, DragonFly, LMDB, or WiredTiger, you would start with the following functions:
 
 1. To open and close DB: `ustore_database_init()`, `ustore_database_free()`.
+1. Retrieving metadata: `ustore_get_metadata()`.
 2. To access binary values in the main collection: `ustore_write()`, `ustore_read()`.
 3. Supporting multiple named collections: `ustore_collection_list()`, `ustore_collection_create()`, `ustore_collection_drop()`.
 4. Supporting transactions: `ustore_transaction_init()`, `ustore_transaction_stage()`, `ustore_transaction_commit()`, `ustore_transaction_free()`.
@@ -57,12 +58,6 @@ With this in mind, if you were to implement an engine based on ETCD, FoundationD
 6. Machine Learning: `ustore_sample()`. Rarely supported, generally faked via reservoir sampling of bulk scans.
 7. Metadata: `ustore_database_control()`, `ustore_measure()`. Can be simply silenced.
 8. Memory management: `ustore_arena_free()`, `ustore_error_free()`.
-
-Additionally, you have to configure a few `extern` constants, depending on the range of supported functionality of the underlying engine:
-
-- `bool ustore_supports_transactions_k`.
-- `bool ustore_supports_named_collections_k`.
-- `bool ustore_supports_snapshots_k`.
 
 For RocksDB, all of those are `true`.
 For LevelDB, only the latter.
