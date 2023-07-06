@@ -126,11 +126,44 @@ if(${USTORE_BUILD_SANITIZE} AND NOT ${USTORE_BUILD_SDK_PYTHON})
   set(CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fsanitize=address -fsanitize-address-use-after-scope")
 endif()
 
+
+set(CONAN ON)
+if (${CONAN})
+  include(${CMAKE_SOURCE_DIR}/conanbuildinfo.cmake)
+  conan_basic_setup()
+endif()
+
 # Install 3rd Party Packages
 include(FetchContent)
 include_directories(include/)
 include_directories(src/tools)
 include_directories(src/helpers)
+include_directories(${CONAN_INCLUDE_DIRS_ARROW})
+include_directories(/root/.conan/data/arrow/10.0.0/_/_/build/7af142fba24322ef836ae239ba490137be64745d/src/cpp/src/)
+
+add_library(arrow::arrow STATIC IMPORTED)
+set_property(TARGET arrow::arrow PROPERTY IMPORTED_LOCATION ${CONAN_LIB_DIRS_ARROW}/libarrow.a)
+add_dependencies(arrow::arrow Arrow-external)
+
+add_library(arrow::flight STATIC IMPORTED)
+set_property(TARGET arrow::flight PROPERTY IMPORTED_LOCATION ${CONAN_LIB_DIRS_ARROW}/libarrow_flight.a)
+add_dependencies(arrow::flight Arrow-external)
+
+add_library(arrow::cuda STATIC IMPORTED)
+set_property(TARGET arrow::cuda PROPERTY IMPORTED_LOCATION ${CONAN_LIB_DIRS_ARROW}/libarrow_cuda.a)
+add_dependencies(arrow::cuda Arrow-external)
+
+add_library(arrow::dataset STATIC IMPORTED)
+set_property(TARGET arrow::dataset PROPERTY IMPORTED_LOCATION ${CONAN_LIB_DIRS_ARROW}/libarrow_dataset.a)
+add_dependencies(arrow::dataset Arrow-external)
+
+add_library(arrow::parquet STATIC IMPORTED)
+set_property(TARGET arrow::parquet PROPERTY IMPORTED_LOCATION ${CONAN_LIB_DIRS_ARROW}/libparquet.a)
+add_dependencies(arrow::parquet Arrow-external)
+
+add_library(arrow::bundled STATIC IMPORTED)
+set_property(TARGET arrow::bundled PROPERTY IMPORTED_LOCATION ${CONAN_LIB_DIRS_ARROW}/libarrow_bundled_dependencies.a)
+add_dependencies(arrow::bundled Arrow-external)
 
 if(CMAKE_BUILD_TYPE MATCHES "Debug")
   set(FETCHCONTENT_QUIET OFF)
@@ -181,12 +214,6 @@ endif()
 #   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/arrow.cmake")
 # endif()
 
-
-set(CONAN ON)
-if (${CONAN})
-  include(${CMAKE_SOURCE_DIR}/conanbuildinfo.cmake)
-  conan_basic_setup()
-endif()
 
 if(${USTORE_BUILD_API_FLIGHT_SERVER})
   include_directories(${CONAN_INCLUDE_DIRS_CLIPP}/include)
@@ -265,7 +292,7 @@ set(USTORE_CLIENT_NAMES ${USTORE_ENGINE_NAMES})
 
 if(${USTORE_BUILD_API_FLIGHT_CLIENT})
   add_library(ustore_flight_client src/flight_client.cpp src/modality_docs.cpp src/modality_graph.cpp src/modality_vectors.cpp)
-  target_link_libraries(ustore_flight_client pthread yyjson simdjson bson-static-1.0 pcre2-8 fmt arrow_flight  arrow_dataset arrow ssl crypto ${JEMALLOC_LIBRARIES})
+  target_link_libraries(ustore_flight_client pthread yyjson simdjson bson-static-1.0 pcre2-8 fmt arrow::flight  arrow::dataset arrow::arrow ssl crypto ${JEMALLOC_LIBRARIES})
   target_compile_definitions(ustore_flight_client INTERFACE USTORE_FLIGHT_CLIENT=TRUE)
   list(APPEND USTORE_CLIENT_NAMES "flight_client")
   list(APPEND USTORE_CLIENT_LIBS "ustore_flight_client")
@@ -278,7 +305,7 @@ if(${USTORE_BUILD_API_FLIGHT_SERVER})
 
     string(CONCAT server_exe_name "ustore_flight_server_" ${engine_name})
     add_executable(${server_exe_name} src/flight_server.cpp)
-    target_link_libraries(${server_exe_name} pthread yyjson simdjson bson-static-1.0 arrow_flight  arrow_dataset arrow ssl crypto ${embedded_lib_name} ${embedded_dependencies})
+    target_link_libraries(${server_exe_name} pthread yyjson simdjson bson-static-1.0 arrow::flight  arrow::dataset arrow::arrow ssl crypto ${embedded_lib_name} ${embedded_dependencies})
     target_compile_definitions(${server_exe_name} INTERFACE USTORE_ENGINE_NAME=${engine_name})
 
     if(${engine_name} STREQUAL "ucset")
