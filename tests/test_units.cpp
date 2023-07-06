@@ -350,7 +350,7 @@ TEST(db, persistency) {
         round_trip(main_collection_ref, triplet);
         check_length(main_collection_ref, triplet_t::val_size_k);
 
-        if (ustore_supports_named_collections_k) {
+        if (db.supports_named_collections()) {
             blobs_collection_t named_collection = *db.create("collection");
             auto named_collection_ref = named_collection[triplet.keys];
             check_length(named_collection_ref, ustore_length_missing_k);
@@ -371,7 +371,7 @@ TEST(db, persistency) {
         EXPECT_EQ(main_collection.keys().size(), 3ul);
         EXPECT_EQ(main_collection.items().size(), 3ul);
 
-        if (ustore_supports_named_collections_k) {
+        if (db.supports_named_collections()) {
             EXPECT_TRUE(db.contains("collection"));
             EXPECT_TRUE(*db.contains("collection"));
             blobs_collection_t named_collection = *db["collection"];
@@ -398,7 +398,7 @@ TEST(db, named_collections) {
     EXPECT_FALSE(db.drop("unknown"));
     EXPECT_FALSE(db.drop(""));
 
-    if (ustore_supports_named_collections_k) {
+    if (db.supports_named_collections()) {
 
         EXPECT_TRUE(db["col1"]);
         EXPECT_TRUE(db["col2"]);
@@ -427,11 +427,10 @@ TEST(db, named_collections) {
  */
 TEST(db, named_collections_list) {
 
-    if (!ustore_supports_named_collections_k)
-        return;
-
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    if (!db.supports_named_collections())
+        return;
     EXPECT_TRUE(db.clear());
 
     blobs_collection_t col1 = *db.create("col1");
@@ -611,11 +610,10 @@ TEST(db, batch_scan) {
  * https://jepsen.io/consistency/models/read-committed
  */
 TEST(db, transaction_read_commited) {
-    if (!ustore_supports_transactions_k)
-        return;
-
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    if (!db.supports_transactions())
+        return;
     EXPECT_TRUE(db.clear());
     EXPECT_TRUE(db.transact());
     transaction_t txn = *db.transact();
@@ -647,11 +645,10 @@ TEST(db, transaction_read_commited) {
  * https://jepsen.io/consistency/models/snapshot-isolation
  */
 TEST(db, transaction_snapshot_isolation) {
-    if (!ustore_supports_snapshots_k)
-        return;
-
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    if (!db.supports_snapshots())
+        return;
     EXPECT_TRUE(db.clear());
 
     triplet_t triplet;
@@ -690,11 +687,11 @@ TEST(db, transaction_snapshot_isolation) {
 }
 
 TEST(db, snapshots_list) {
-    if (!ustore_supports_snapshots_k)
-        return;
 
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    if (!db.supports_snapshots())
+        return;
     EXPECT_TRUE(db.clear());
 
     auto snap_1 = *db.snapshot();
@@ -727,11 +724,11 @@ TEST(db, snapshots_list) {
 }
 
 TEST(db, transaction_with_snapshot) {
-    if (!ustore_supports_snapshots_k)
-        return;
 
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    if (!db.supports_snapshots())
+        return;
     EXPECT_TRUE(db.clear());
 
     triplet_t triplet;
@@ -766,11 +763,11 @@ TEST(db, transaction_with_snapshot) {
 }
 
 TEST(db, set_wrong_snapshot) {
-    if (!ustore_supports_snapshots_k)
-        return;
 
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    if (!db.supports_snapshots())
+        return;
     EXPECT_TRUE(db.clear());
 
     triplet_t triplet;
@@ -806,12 +803,19 @@ TEST(db, set_wrong_snapshot) {
  * Exports snapshot as a database, loads and checks contents
  */
 TEST(db, export_snapshot) {
-    if (!ustore_supports_snapshots_k)
+    if (!path())
         return;
 
+    database_t db;
     std::string dir = fmt::format("{}/original/", path());
     std::string dir1 = fmt::format("{}/export1/", path());
     std::string dir2 = fmt::format("{}/export2/", path());
+    auto config = fmt::format(R"({{"version": "1.0", "directory": "{}"}})", dir);
+    EXPECT_TRUE(db.open(config.c_str()));
+
+    if (!db.supports_snapshots())
+        return;
+
     std::filesystem::remove_all(dir);
     std::filesystem::remove_all(dir1);
     std::filesystem::remove_all(dir2);
@@ -819,9 +823,6 @@ TEST(db, export_snapshot) {
     std::filesystem::create_directory(dir1);
     std::filesystem::create_directory(dir2);
 
-    database_t db;
-    auto config = fmt::format(R"({{"version": "1.0", "directory": "{}"}})", dir);
-    EXPECT_TRUE(db.open(config.c_str()));
     EXPECT_TRUE(db.clear());
 
     triplet_t triplet;
@@ -879,11 +880,10 @@ TEST(db, export_snapshot) {
  * Fill data in collection. Checking/dropping/checking collection data by thread.
  */
 TEST(db, snapshot_with_threads) {
-    if (!ustore_supports_snapshots_k)
-        return;
-
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    if (!db.supports_snapshots())
+        return;
     EXPECT_TRUE(db.clear());
 
     triplet_t triplet;
@@ -926,11 +926,10 @@ TEST(db, snapshot_with_threads) {
 }
 
 TEST(db, transaction_erase_missing) {
-    if (!ustore_supports_transactions_k)
-        return;
-
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    if (!db.supports_transactions())
+        return;
     EXPECT_TRUE(db.clear());
     EXPECT_TRUE(db.transact());
     transaction_t txn1 = *db.transact();
@@ -947,11 +946,10 @@ TEST(db, transaction_erase_missing) {
 }
 
 TEST(db, transaction_write_conflicting) {
-    if (!ustore_supports_transactions_k)
-        return;
-
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    if (!db.supports_transactions())
+        return;
     EXPECT_TRUE(db.clear());
     EXPECT_TRUE(db.transact());
     transaction_t txn1 = *db.transact();
@@ -967,11 +965,10 @@ TEST(db, transaction_write_conflicting) {
  *
  */
 TEST(db, transaction_sequenced_commit) {
-    if (!ustore_supports_transactions_k)
-        return;
-
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    if (!db.supports_transactions())
+        return;
     EXPECT_TRUE(db.clear());
 
     EXPECT_TRUE(db.transact());
@@ -1946,14 +1943,13 @@ TEST(db, graph_triangle_batch) {
  * while A-B is updated externally, the commit will fail.
  */
 TEST(db, graph_transaction_watch) {
-    if (!ustore_supports_transactions_k)
-        return;
-
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    if (!db.supports_transactions())
+        return;
     EXPECT_TRUE(db.clear());
-    graph_collection_t net = db.main<graph_collection_t>();
 
+    graph_collection_t net = db.main<graph_collection_t>();
     edge_t edge_ab {'A', 'B', 19};
     edge_t edge_bc {'B', 'C', 31};
     EXPECT_TRUE(net.upsert_edge(edge_ab));
@@ -1993,11 +1989,10 @@ TEST(db, graph_random_fill) {
  * The latter insert must fail, as it depends on the preceding state of the vertex.
  */
 TEST(db, graph_conflicting_transactions) {
-    if (!ustore_supports_transactions_k)
-        return;
-
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
+    if (!db.supports_transactions())
+        return;
     EXPECT_TRUE(db.clear());
 
     transaction_t txn = *db.transact();

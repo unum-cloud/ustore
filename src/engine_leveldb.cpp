@@ -33,9 +33,6 @@ using json_t = nlohmann::json;
 ustore_collection_t const ustore_collection_main_k = 0;
 ustore_length_t const ustore_length_missing_k = std::numeric_limits<ustore_length_t>::max();
 ustore_key_t const ustore_key_unknown_k = std::numeric_limits<ustore_key_t>::max();
-bool const ustore_supports_transactions_k = false;
-bool const ustore_supports_named_collections_k = false;
-bool const ustore_supports_snapshots_k = true;
 
 using level_native_t = leveldb::DB;
 using level_status_t = leveldb::Status;
@@ -187,6 +184,11 @@ void ustore_database_init(ustore_database_init_t* c_ptr) {
     catch (...) {
         *c.error = "Open Failure";
     }
+}
+
+void ustore_get_metadata(ustore_get_metadata_t* c_ptr) {
+    ustore_get_metadata_t& c = *c_ptr;
+    *c.metadata = ustore_supports_snapshots_k;
 }
 
 void ustore_snapshot_list(ustore_snapshot_list_t* c_ptr) {

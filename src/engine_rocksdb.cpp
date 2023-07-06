@@ -44,9 +44,6 @@ using namespace unum;
 ustore_collection_t const ustore_collection_main_k = 0;
 ustore_length_t const ustore_length_missing_k = std::numeric_limits<ustore_length_t>::max();
 ustore_key_t const ustore_key_unknown_k = std::numeric_limits<ustore_key_t>::max();
-bool const ustore_supports_transactions_k = true;
-bool const ustore_supports_named_collections_k = true;
-bool const ustore_supports_snapshots_k = true;
 
 using rocks_native_t = rocksdb::OptimisticTransactionDB;
 using rocks_status_t = rocksdb::Status;
@@ -236,6 +233,12 @@ void ustore_database_init(ustore_database_init_t* c_ptr) {
         db_ptr->native = std::unique_ptr<rocks_native_t>(native_db);
         *c.db = db_ptr.release();
     });
+}
+
+void ustore_get_metadata(ustore_get_metadata_t* c_ptr) {
+    ustore_get_metadata_t& c = *c_ptr;
+    *c.metadata = ustore_metadata_t(ustore_supports_transactions_k | ustore_supports_named_collections_k |
+                                    ustore_supports_snapshots_k);
 }
 
 void ustore_snapshot_list(ustore_snapshot_list_t* c_ptr) {
