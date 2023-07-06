@@ -106,6 +106,7 @@ class ConanUStore(ConanFile):
         self.options["arrow"].with_utf8proc = True
         self.options["arrow"].encryption = False
         self.options["arrow"].with_openssl = True
+        self.options["arrow"].with_cuda = False
         self.options["arrow"].with_csv = True
         self.options["arrow"].simd_level = 'avx2'
         self.options["arrow"].with_jemalloc = False
