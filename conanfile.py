@@ -54,24 +54,56 @@ class ConanUStore(ConanFile):
             }.get(str(self.settings.arch), str(self.settings.arch))
             if cmake_system_processor == "aarch64":
                 tc.variables["ARROW_CPU_FLAG"] = "armv8"
-        tc.variables["ARROW_DEPENDENCY_SOURCE"] = "BUNDLED"
+
+        tc.variables["ARROW_DEPENDENCY_SOURCE"] = "AUTO"
+        tc.variables['ARROW_BUILD_STATIC'] = True
+        tc.variables['ARROW_BUILD_SHARED'] = False
+        tc.variables['ARROW_SIMD_LEVEL'] = "AVX2"
         tc.variables["ARROW_DEPENDENCY_USE_SHARED"] = False
+        tc.variables["ARROW_OPENSSL_USE_SHARED"] = True
+
         tc.variables["ARROW_BUILD_TESTS"] = False
         tc.variables["ARROW_ENABLE_TIMING_TESTS"] = False
         tc.variables["ARROW_BUILD_EXAMPLES"] = False
         tc.variables["ARROW_BUILD_BENCHMARKS"] = False
         tc.variables["ARROW_BUILD_INTEGRATION"] = False
+        tc.variables["ARROW_EXTRA_ERROR_CONTEXT"] = False
+
+        tc.variables['ARROW_DATASET'] = True
+        tc.variables['ARROW_PARQUET'] = True
+        tc.variables['ARROW_WITH_RE2'] = True
+        tc.variables['ARROW_COMPUTE'] = True
+        tc.variables['ARROW_FLIGHT'] = True
+        tc.variables['ARROW_WITH_UTF8PROC'] = True
+
         tc.variables["PARQUET_REQUIRE_ENCRYPTION"] = bool(
-            self.options['arrow:encryption'])
-        tc.variables["ARROW_BUILD_UTILITIES"] = bool(self.options['arrow:cli'])
+            self.options['arrow:encryption'])  # False
+        tc.variables["ARROW_CUDA"] = False
+        tc.variables["ARROW_JEMALLOC"] = False
+        tc.variables["ARROW_IPC"] = False
+        tc.variables["ARROW_JSON"] = False
+        tc.variables["ARROW_CSV"] = True
+        tc.variables["ARROW_FLIGHT_SQL"] = False
+        tc.variables["ARROW_WITH_UCX"] = False
+        tc.variables["ARROW_WITH_SNAPPY"] = True
+        tc.variables["ARROW_BUILD_UTILITIES"] = bool(
+            self.options['arrow:cli'])  # False
+        tc.variables["ARROW_GANDIVA"] = False
+        tc.variables["ARROW_S3"] = False
+
+        tc.variables["ABS_VENDORED"] = True
+
+        tc.variables["ARROW_DEPENDENCY_SOURCE"] = "BUNDLED"
+        tc.variables["c-ares_SOURCE"] = "BUNDLED"
         tc.variables["re2_SOURCE"] = "BUNDLED"
+        tc.variables["absl_SOURCE"] = "BUNDLED"
         tc.variables["Protobuf_SOURCE"] = "BUNDLED"
         tc.variables["Snappy_SOURCE"] = "BUNDLED"
         tc.variables["gRPC_SOURCE"] = "BUNDLED"
         tc.variables["ZLIB_SOURCE"] = "BUNDLED"
         tc.variables["Thrift_SOURCE"] = "BUNDLED"
-        tc.variables["utf8proc_SOURCE"] = "SYSTEM"
-        tc.variables["ARROW_WITH_UTF8PROC"] = True
+        tc.variables["utf8proc_SOURCE"] = "BUNDLED"
+
         tc.variables["ARROW_INCLUDE_DIR"] = True
         tc.variables["ARROW_WITH_THRIFT"] = self._with_thrift()
         tc.variables["ARROW_UTF8PROC_USE_SHARED"] = False
@@ -82,7 +114,7 @@ class ConanUStore(ConanFile):
                 self.dependencies["thrift"].ref.version)
             tc.variables["ARROW_THRIFT_USE_SHARED"] = bool(
                 self.dependencies["thrift"].options.shared)
-        tc.variables['ARROW_BUILD_STATIC'] = True
+
         tc.cache_variables["ENABLE_STATIC"] = "ON"
         tc.cache_variables["ENABLE_BSON"] = "ON"
         tc.cache_variables["ENABLE_TESTS"] = "OFF"
@@ -97,6 +129,11 @@ class ConanUStore(ConanFile):
 
     def configure(self):
         self.options["openssl"].shared = False
+
+        self.options["pcre2"].fPIC = True
+        self.options["pcre2"].support_jit = True
+        self.options["pcre2"].build_pcre2grep = True
+
         self.options["arrow"].shared = False
         self.options["arrow"].with_orc = False
         self.options["arrow"].parquet = True
@@ -105,21 +142,19 @@ class ConanUStore(ConanFile):
         self.options["arrow"].compute = True
         self.options["arrow"].with_flight_rpc = True
         self.options["arrow"].with_utf8proc = True
-        self.options["arrow"].encryption = False
         self.options["arrow"].with_openssl = True
+        self.options["arrow"].encryption = False
         self.options["arrow"].with_cuda = False
-        self.options["arrow"].with_csv = True
-        self.options["arrow"].simd_level = 'avx2'
         self.options["arrow"].with_jemalloc = False
         self.options["arrow"].with_json = False
+        self.options["arrow"].with_csv = True
+        self.options["arrow"].simd_level = 'avx2'
         self.options["arrow"].with_flight_sql = False
         self.options["arrow"].with_snappy = True
         self.options["arrow"].cli = True
         self.options["arrow"].gandiva = False
         self.options["arrow"].with_s3 = False
-        self.options["pcre2"].fPIC = True
-        self.options["pcre2"].support_jit = True
-        self.options["pcre2"].build_pcre2grep = True
+
         self.options["mongo-c-driver"].with_ssl = False
         self.options["mongo-c-driver"].with_sasl = False
         self.options["mongo-c-driver"].srv = False
