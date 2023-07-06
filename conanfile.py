@@ -14,7 +14,7 @@ class ConanUStore(ConanFile):
     exports = 'VERSION', 'LICENSE', 'README.md'
     exports_sources = 'CMakeLists.txt', 'src/*', 'include/*', 'cmake/*', 'VERSION'
     name = 'ustore'
-    version = '0.12.3'
+    version = open('VERSION').read()
     # Take just the first line
     license = open('LICENSE').read().split('\n', 1)[0]
     description = open('README.md').read()
@@ -134,7 +134,7 @@ class ConanUStore(ConanFile):
         self.options["pcre2"].support_jit = True
         self.options["pcre2"].build_pcre2grep = True
 
-        self.options["arrow"].shared = False
+        self.options["arrow"].shared = True
         self.options["arrow"].with_orc = False
         self.options["arrow"].parquet = True
         self.options["arrow"].dataset_modules = True
