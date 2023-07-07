@@ -35,4 +35,4 @@ skip = ["*musllinux*", "*i686*", "pp*", "cp36-*"]
 # test-extras = ["test"]
 
 [tool.cibuildwheel.linux]
-repair-wheel-command = "auditwheel repair --lib-sdir . -w {dest_dir} {wheel}"
+repair-wheel-command = ""
