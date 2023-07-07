@@ -162,7 +162,7 @@ class ConanUStore(ConanFile):
         self.options["mongo-c-driver"].with_zlib = False
         self.options["mongo-c-driver"].with_zstd = False
         
-        self.options["gtest"].shared = False
+        # self.options["gtest"].shared = False
 
     def requirements(self):
         self.requires('arrow/10.0.0')
@@ -175,7 +175,7 @@ class ConanUStore(ConanFile):
         self.requires('simdjson/3.1.7')
         self.requires('jemalloc/5.3.0')
         self.requires('clipp/1.2.3')
-        self.requires('gtest/1.13.0')
+        # self.requires('gtest/1.13.0')
         self.requires('benchmark/1.7.1')
         self.requires('argparse/2.9')
         self.requires('re2/20220601')
