@@ -79,14 +79,6 @@ class CMakeBuild(build_ext):
             if hasattr(self, 'parallel') and self.parallel:
                 build_args += [f'-j{self.parallel}']
                 
-        conan_command = ['conan', 'remote', 'list']
-        result = subprocess.run(conan_command, capture_output=True, text=True)
-        output = result.stdout.strip()
-        lines = output.split('\n')
-        if not any('artifactory:' in line for line in lines):
-            subprocess.check_call(['conan', 'remote', 'add', 'artifactory', 'http://192.168.4.143:8081/artifactory/api/conan/conan-local'])
-            subprocess.check_call(['conan', 'user', 'admin', '-r', 'artifactory', '-p', 'Yeg.1995'])
-            subprocess.check_call(['conan', 'install', 'ustore/0.12.1@demo/stable', '-r', 'artifactory', '-g', 'cmake'])
         subprocess.check_call(['cmake', ext.source_dir] + cmake_args)
         subprocess.check_call(
             ['cmake', '--build', '.', '--target', ext.name.replace('ustore.', 'py_')] + build_args)

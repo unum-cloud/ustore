@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=42", "wheel", "cmake>=3.22", "pybind11-stubgen", "pyarrow>=10.0.0,<11", "conan==1.57.0"]
+requires = ["setuptools>=42", "wheel", "cmake>=3.22", "pybind11-stubgen", "pyarrow>=10.0.0,<11"]
 build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]
@@ -19,10 +19,13 @@ before-all = [
 environment = "CMAKE_ARGS_F=/tmp/cmake_args"
 before-build = [
     "rm -rf {project}/CMakeCache.txt {project}/build {project}/CMakeFiles.txt {project}/_deps",
-    "pip install pyarrow==10.0.0",
+    "pip install pyarrow==10.0.0 conan==1.57.0",
     "export PYST=$(python -c 'import site; print(site.getsitepackages()[0])')",
     "echo \"-DCMAKE_BUILD_TYPE=Release -DPYARROW_DIR=${PYST}/pyarrow/\" > ${CMAKE_ARGS_F}",
     "mkdir -p build/ustore",
+    "conan remote add artifactory http://192.168.4.143:8081/artifactory/api/conan/conan-local",
+    "conan user admin -r artifactory -p Yeg.1995",
+    "conan install ustore/0.12.1@demo/stable -r artifactory -g cmake",
 ]
 
 skip = ["*musllinux*", "*i686*", "pp*", "cp36-*"]
