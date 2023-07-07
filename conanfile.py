@@ -161,6 +161,8 @@ class ConanUStore(ConanFile):
         self.options["mongo-c-driver"].with_snappy = False
         self.options["mongo-c-driver"].with_zlib = False
         self.options["mongo-c-driver"].with_zstd = False
+        
+        self.options["gtest"].shared = False
 
     def requirements(self):
         self.requires('arrow/10.0.0')
