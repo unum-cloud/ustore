@@ -605,6 +605,7 @@ bool cmp_graph(ustore_str_view_t left) {
 
 bool test_graph(ustore_str_view_t file, ustore_str_view_t ext) {
 
+    database_t db;
     auto collection = db.main();
     arena_t arena(db);
     status_t status;
@@ -1118,6 +1119,7 @@ bool test_whole_docs(ustore_str_view_t file, ustore_str_view_t ext, comparator c
 }
 
 bool test_crash_cases_graph_import(ustore_str_view_t file) {
+    database_t db;
     auto collection = db.main();
     arena_t arena(db);
     status_t status;
@@ -1219,6 +1221,7 @@ bool test_crash_cases_graph_import(ustore_str_view_t file) {
 }
 
 bool test_crash_cases_graph_export(ustore_str_view_t ext) {
+    database_t db;
     auto collection = db.main();
     arena_t arena(db);
     status_t status;
