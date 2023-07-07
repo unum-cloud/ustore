@@ -64,11 +64,11 @@ model {
                 }
 
                 if (buildType == buildTypes.ucset) {
-                    linker.args '-L', "${projectDir}/build/lib", "-l", "ustore_ucset_bundle", "-l", "c"
+                    linker.args '-L', "${projectDir}/lib", "-l", "ustore_ucset_bundle", "-l", "c"
                 } else if (buildType == buildTypes.rocksdb) {
-                    linker.args '-L', "${projectDir}/build/lib", "-l", "ustore_rocksdb_bundle", "-l", "c"
+                    linker.args '-L', "${projectDir}/lib", "-l", "ustore_rocksdb_bundle", "-l", "c"
                 } else if (buildType == buildTypes.leveldb) {
-                    linker.args '-L', "${projectDir}/build/lib", "-l", "ustore_leveldb_bundle", "-l", "c"
+                    linker.args '-L', "${projectDir}/lib", "-l", "ustore_leveldb_bundle", "-l", "c"
                 }
             }
         }
@@ -85,7 +85,7 @@ test {
 }
 
 jar {
-    dependsOn("ustoreUmemSharedLibrary")
+    dependsOn("ustoreUcsetSharedLibrary")
     dependsOn("ustoreRocksdbSharedLibrary")
     dependsOn("ustoreLeveldbSharedLibrary")
 
