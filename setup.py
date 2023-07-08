@@ -82,6 +82,7 @@ class CMakeBuild(build_ext):
         subprocess.check_call(['cmake', ext.source_dir] + cmake_args)
         subprocess.check_call(
             ['cmake', '--build', '.', '--target', ext.name.replace('ustore.', 'py_')] + build_args)
+        
 
     def run(self):
         build_ext.run(self)
@@ -92,6 +93,7 @@ class CMakeBuild(build_ext):
 class BuildPyi(Command):
     command_name = 'build_pyi'
     description = 'Generates pyi files from built extensions'
+
 
     def initialize_options(self):
         self.build_lib = None
