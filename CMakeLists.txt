@@ -9,9 +9,22 @@ project(UStore
   DESCRIPTION "Universal Binary DBMS Interface to manage Docs • Graphs • Blobs • Vectors × in Local • Remote × RocksDB • LevelDB • UCSet • UDisk × from C • C++ • Python • Java • GoLang"
 )
 
+
 option(USTORE_BUILD_ENGINE_UCSET "Building REST API server for all backends" ON)
 option(USTORE_BUILD_ENGINE_LEVELDB "Building REST API server for all backends")
 option(USTORE_BUILD_ENGINE_ROCKSDB "Building REST API server for all backends")
+
+set(CONAN ON)
+if (${CONAN})
+  include(${CMAKE_SOURCE_DIR}/conanbuildinfo.cmake)
+  conan_basic_setup(NO_OUTPUT_DIRS)
+endif()
+
+set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
+set(CMAKE_CACHEFILE_DIR "${CMAKE_SOURCE_DIR}/build")
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/build/lib" CACHE PATH "Path to static libs")
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/build/lib" CACHE PATH "Path to shared libs")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/build/bin")
 
 option(USTORE_BUILD_TESTS "Building C/C++ native tests" ON)
 option(USTORE_BUILD_SANITIZE "Use memory sanitizers for debug builds" ON)
@@ -48,12 +61,6 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS OFF)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-
-set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
-set(CMAKE_CACHEFILE_DIR "${CMAKE_SOURCE_DIR}/build")
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/build/lib" CACHE PATH "Path to static libs")
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/build/lib" CACHE PATH "Path to shared libs")
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/build/bin")
 
 message("CMAKE_CXX_COMPILER_ID: ${CMAKE_CXX_COMPILER_ID}")
 message("CMAKE_CXX_COMPILER_VERSION: ${CMAKE_CXX_COMPILER_VERSION}")
@@ -127,18 +134,14 @@ if(${USTORE_BUILD_SANITIZE} AND NOT ${USTORE_BUILD_SDK_PYTHON})
 endif()
 
 
-set(CONAN ON)
-if (${CONAN})
-  include(${CMAKE_SOURCE_DIR}/conanbuildinfo.cmake)
-  conan_basic_setup()
-endif()
+
 
 # Install 3rd Party Packages
 include(FetchContent)
 include_directories(include/)
 include_directories(src/tools)
 include_directories(src/helpers)
-include_directories(${CONAN_INCLUDE_DIRS_ARROW})
+#include_directories(${CONAN_INCLUDE_DIRS_ARROW})
 
 if(CMAKE_BUILD_TYPE MATCHES "Debug")
   set(FETCHCONTENT_QUIET OFF)
@@ -167,6 +170,7 @@ endif()
 # include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/simdjson.cmake")
 # include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/pcre2.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/mpack.cmake")
+
 
 if(${USTORE_USE_JEMALLOC})
   # include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/jemalloc.cmake")
