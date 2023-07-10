@@ -11,7 +11,7 @@ testpaths = ["python/tests"]
 
 
 [tool.cibuildwheel]
-build-verbosity = 3
+build-verbosity = 0
 before-all = [
     "yum install -y bzip2-devel libffi-devel zlib-devel wget python3-devel perl-IPC-Cmd perl-Test-Simple"
 ]
@@ -19,13 +19,13 @@ before-all = [
 environment = "CMAKE_ARGS_F=/tmp/cmake_args"
 before-build = [
     "rm -rf {project}/CMakeCache.txt {project}/build {project}/CMakeFiles.txt {project}/_deps",
-    "pip install pyarrow==10.0.0 conan==1.57.0",
-    "export PYST=$(python -c 'import site; print(site.getsitepackages()[0])')",
-    "echo \"-DCMAKE_BUILD_TYPE=Release -DPYARROW_DIR=${PYST}/pyarrow/\" > ${CMAKE_ARGS_F}",
-    "mkdir -p build/ustore",
+    "pip install pyarrow==10.0.1 conan==1.57.0 auditwheel",
     "conan remote add artifactory http://192.168.4.143:8081/artifactory/api/conan/conan-local",
     "conan user admin -r artifactory -p Yeg.1995",
     "conan install ustore/0.12.1@demo/stable -r artifactory -g cmake",
+    "export PYST=$(python -c 'import site; print(site.getsitepackages()[0])')",
+    "echo \"-DCMAKE_BUILD_TYPE=Release -DPYARROW_DIR=${PYST}/pyarrow/\" > ${CMAKE_ARGS_F}",
+    "mkdir -p build/ustore",
 ]
 
 skip = ["*musllinux*", "*i686*", "pp*", "cp36-*"]
