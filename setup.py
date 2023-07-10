@@ -72,28 +72,25 @@ class CMakeBuild(build_ext):
         # Set CMAKE_BUILD_PARALLEL_LEVEL to control the parallel build level
         # across all generators.
         build_args = []
-        
         if 'CMAKE_BUILD_PARALLEL_LEVEL' not in os.environ:
             # self.parallel is a Python 3 only way to set parallel jobs by hand
             # using -j in the build_ext call, not supported by pip or PyPA-build.
             if hasattr(self, 'parallel') and self.parallel:
                 build_args += [f'-j{self.parallel}']
-                
+
         subprocess.check_call(['cmake', ext.source_dir] + cmake_args)
         subprocess.check_call(
             ['cmake', '--build', '.', '--target', ext.name.replace('ustore.', 'py_')] + build_args)
-        
 
     def run(self):
         build_ext.run(self)
-        if 'USTORE_DEBUG_PYTHON' not in os.environ:
-            self.run_command('build_pyi')
+        # if 'USTORE_DEBUG_PYTHON' not in os.environ:
+        #     self.run_command('build_pyi')
 
 
 class BuildPyi(Command):
     command_name = 'build_pyi'
     description = 'Generates pyi files from built extensions'
-
 
     def initialize_options(self):
         self.build_lib = None
@@ -195,7 +192,7 @@ setup(
     ],
     cmdclass={
         'build_ext': CMakeBuild,
-        'build_pyi': BuildPyi,
+        #'build_pyi': BuildPyi,
     },
     zip_safe=False,
     install_requires=[
