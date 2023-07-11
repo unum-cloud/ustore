@@ -26,10 +26,7 @@ jobs:
   
   
   build_ustore:
-    runs-on: ubuntu-20.04
-    strategy:
-      matrix:
-        backend: [ucset, rocksdb, leveldb]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
         with:
@@ -57,7 +54,7 @@ jobs:
           conan profile new --detect default
           conan profile update settings.compiler.libcxx=libstdc++11 default
           tar -xzvf ustore_dependency.tar.gz -C ~/.conan
-          conan install ustore_dependency.tar.gz -g cmake
+          conan install ustore/1.1.1@admin/arrow-static -g cmake
 
       - name: Configure CMake
         run: |
@@ -128,7 +125,7 @@ jobs:
           conan profile new --detect default
           conan profile update settings.compiler.libcxx=libstdc++11 default
           tar -xzvf ustore_dependency.tar.gz -C ~/.conan
-          conan install ustore_dependency.tar.gz -g cmake
+          conan install ustore/1.1.1@admin/arrow-static -g cmake
 
       - uses: pypa/cibuildwheel@v2.11.3
         with:
@@ -168,7 +165,7 @@ jobs:
           conan profile new --detect default
           conan profile update settings.compiler.libcxx=libstdc++11 default
           tar -xzvf ustore_dependency.tar.gz -C ~/.conan
-          conan install ustore_dependency.tar.gz -g cmake
+          conan install ustore/1.1.1@admin/arrow-static -g cmake
       
       - name: Install default jdk
         run: sudo apt install default-jdk -y
@@ -214,7 +211,7 @@ jobs:
           conan profile new --detect default
           conan profile update settings.compiler.libcxx=libstdc++11 default
           tar -xzvf ustore_dependency.tar.gz -C ~/.conan
-          conan install ustore_dependency.tar.gz -g cmake
+          conan install ustore/1.1.1@admin/arrow-static -g cmake
       
       - name: Build golang
         run: bash go-ustore/pack.sh
