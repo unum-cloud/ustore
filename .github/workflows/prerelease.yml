@@ -141,10 +141,6 @@ jobs:
           persist-credentials: false
           ref: 'main-dev'
 
-      - uses: actions/setup-java@v3
-        with:
-          java-version: '17'
-
       - name: Prepare CMake, Conan and PyArrow
         run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.57.0
 
