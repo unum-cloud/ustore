@@ -54,6 +54,8 @@ jobs:
       - name: Install ustore dependencies using conan
         run: |
           aws s3 cp s3://ustore-test-conan/ustore_dependency.tar.gz ustore_dependency.tar.gz
+          conan profile new --detect default
+          conan profile update settings.compiler.libcxx=libstdc++11 default
           tar -xzvf ustore_dependency.tar.gz -C ~/.conan
           conan install ustore_dependency.tar.gz -g cmake
 
@@ -123,6 +125,8 @@ jobs:
       - name: Install ustore dependencies using conan
         run: |
           aws s3 cp s3://ustore-test-conan/ustore_dependency.tar.gz ustore_dependency.tar.gz
+          conan profile new --detect default
+          conan profile update settings.compiler.libcxx=libstdc++11 default
           tar -xzvf ustore_dependency.tar.gz -C ~/.conan
           conan install ustore_dependency.tar.gz -g cmake
 
@@ -161,6 +165,8 @@ jobs:
       - name: Install ustore dependencies using conan
         run: |
           aws s3 cp s3://ustore-test-conan/ustore_dependency.tar.gz ustore_dependency.tar.gz
+          conan profile new --detect default
+          conan profile update settings.compiler.libcxx=libstdc++11 default
           tar -xzvf ustore_dependency.tar.gz -C ~/.conan
           conan install ustore_dependency.tar.gz -g cmake
       
@@ -183,7 +189,7 @@ jobs:
           persist-credentials: false
           ref: 'main-dev'
 
-      - run: git submodule update --init --recursive --remote go-ustore/
+      - run: git submodule update --init --recursive
 
       - name: Install golang
         run: sudo apt update && sudo apt install golang
@@ -205,6 +211,8 @@ jobs:
       - name: Install ustore dependencies using conan
         run: |
           aws s3 cp s3://ustore-test-conan/ustore_dependency.tar.gz ustore_dependency.tar.gz
+          conan profile new --detect default
+          conan profile update settings.compiler.libcxx=libstdc++11 default
           tar -xzvf ustore_dependency.tar.gz -C ~/.conan
           conan install ustore_dependency.tar.gz -g cmake
       
