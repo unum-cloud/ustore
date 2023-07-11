@@ -105,7 +105,19 @@
         },
         {
             "label": "Build Debug Tools Test",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUSTORE_BUILD_CLI=1 -B ./build_debug && make ustore test_tools_ustore_embedded_ucset -j --silent -C ./build_debug && sleep 5",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -B ./build_debug && make test_tools_ustore_embedded_ucset -j --silent -C ./build_debug && sleep 5",
+            "args": [],
+            "type": "shell"
+        },
+        {
+            "label": "Build Debug Tools Test RocksDB",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUSTORE_BUILD_TESTS=1 -DUSTORE_BUILD_ENGINE_ROCKSDB=1 -B ./build_debug && make test_tools_ustore_embedded_rocksdb -j --silent -C ./build_debug",
+            "args": [],
+            "type": "shell"
+        },
+        {
+            "label": "Build Debug Tools Test LevelDB",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DUSTORE_BUILD_TESTS=1 -DUSTORE_BUILD_ENGINE_LEVELDB=1 -B ./build_debug && make test_tools_ustore_embedded_leveldb -j --silent -C ./build_debug",
             "args": [],
             "type": "shell"
         },
