@@ -19,10 +19,14 @@ before-all = [
 environment = "CMAKE_ARGS_F=/tmp/cmake_args"
 before-build = [
     "rm -rf {project}/CMakeCache.txt {project}/build {project}/CMakeFiles.txt {project}/_deps",
-    "pip install pyarrow==10.0.1 conan==1.57.0 auditwheel",
-    "conan remote add artifactory http://192.168.4.143:8081/artifactory/api/conan/conan-local",
-    "conan user admin -r artifactory -p Yeg.1995",
-    "conan install ustore/0.12.1@demo/stable -r artifactory -g cmake",
+    "pip install pyarrow==10.0.1 conan==1.57.0 auditwheel awscli",
+    "aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }} && \
+        aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }} && \
+        aws configure set region us-east-1 && \
+        aws configure set output json",
+    "aws s3 cp s3://ustore-test-conan/ustore_dependency.tar.gz ustore_dependency.tar.gz",
+    "tar -xzvf ustore_dependency.tar.gz -C ~/.conan",
+    "conan install ustore_dependency.tar.gz -g cmake",
     "export PYST=$(python -c 'import site; print(site.getsitepackages()[0])')",
     "echo \"-DCMAKE_BUILD_TYPE=Release -DPYARROW_DIR=${PYST}/pyarrow/\" > ${CMAKE_ARGS_F}",
     "mkdir -p build/ustore",
