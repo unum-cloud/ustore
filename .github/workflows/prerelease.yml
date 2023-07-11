@@ -2,30 +2,27 @@ name: Pre-Release
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main-dev"]
 
 # Must change after discuss
 env:
   GH_TOKEN: ${{ secrets.SEMANTIC_RELEASE_TOKEN }}
   BUILD_TYPE: Release
-  ARTIFACTORY_NAME: artifactory
-  ARTIFACTORY_USERNAME: 
-  USTORE_CONAN_PACKAGE: 
-  IP_ADDRESS:
+  AWS_DEFAULT_REGION: us-east-1
 
 
 jobs:
 
-  versioning:
-    name: Semantic Release
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        persist-credentials: false
-        ref: 'main-dev'
-    - uses: actions/setup-node@v3
-    - run: cp .github/workflows/package.json . && npm install && npx semantic-release
+  # versioning:
+  #   name: Semantic Release
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #   - uses: actions/checkout@v3
+  #     with:
+  #       persist-credentials: false
+  #       ref: 'main-dev'
+  #   - uses: actions/setup-node@v3
+  #   - run: cp .github/workflows/package.json . && npm install && npx semantic-release
   
   
   build_ustore:
@@ -40,16 +37,25 @@ jobs:
           ref: 'main-dev'
       - run: git submodule update --init --recursive
 
-      # Can store our package recipe in aws intance.
-      #  Run before conan commands and stop after execute.
       - name: Prepare CMake, Conan and PyArrow
         run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.57.0
 
+      - name: install aws cli
+        uses: unfor19/install-aws-cli-action@master
+        with:
+          version: 2.11.0
+
+      - name: Configure AWS CLI
+        run: |
+          aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws configure set default.region $AWS_DEFAULT_REGION
+
       - name: Install ustore dependencies using conan
         run: |
-          conan remote add $ARTIFACTORY_NAME http://$IP_ADDRESS:8081/artifactory/api/conan/conan-local
-          conan user $ARTIFACTORY_USERNAME -r $ARTIFACTORY_NAME -p ${{ secrets.ARTIFACTORY_PASSWORD }}
-          conan install $USTORE_CONAN_PACKAGE -r $ARTIFACTORY_NAME -g cmake
+          aws s3 cp s3://ustore-test-conan/ustore_dependency.tar.gz ustore_dependency.tar.gz
+          tar -xzvf ustore_dependency.tar.gz -C ~/.conan
+          conan install ustore_dependency.tar.gz -g cmake
 
       - name: Configure CMake
         run: |
@@ -62,7 +68,7 @@ jobs:
               -B ./build_release
 
       - name: Build
-        run: make -j 32 -C --silent ./build_release
+        run: make -j 4 -C --silent ./build_release
 
       - name: Upload Binaries
         uses: actions/upload-artifact@v3.1.1
@@ -100,11 +106,25 @@ jobs:
           persist-credentials: false
           ref: 'main-dev'
 
+      - name: Prepare CMake, Conan and PyArrow
+        run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.57.0
+
+      - name: install aws cli
+        uses: unfor19/install-aws-cli-action@master
+        with:
+          version: 2.11.0
+
+      - name: Configure AWS CLI
+        run: |
+          aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws configure set default.region $AWS_DEFAULT_REGION
+
       - name: Install ustore dependencies using conan
         run: |
-          conan remote add $ARTIFACTORY_NAME http://$IP_ADDRESS:8081/artifactory/api/conan/conan-local
-          conan user $ARTIFACTORY_USERNAME -r $ARTIFACTORY_NAME -p ${{ secrets.ARTIFACTORY_PASSWORD }}
-          conan install $USTORE_CONAN_PACKAGE -r $ARTIFACTORY_NAME -g cmake
+          aws s3 cp s3://ustore-test-conan/ustore_dependency.tar.gz ustore_dependency.tar.gz
+          tar -xzvf ustore_dependency.tar.gz -C ~/.conan
+          conan install ustore_dependency.tar.gz -g cmake
 
       - uses: pypa/cibuildwheel@v2.11.3
         with:
@@ -124,11 +144,28 @@ jobs:
         with:
           java-version: '17'
 
+      - name: Prepare CMake, Conan and PyArrow
+        run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.57.0
+
+      - name: install aws cli
+        uses: unfor19/install-aws-cli-action@master
+        with:
+          version: 2.11.0
+
+      - name: Configure AWS CLI
+        run: |
+          aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws configure set default.region $AWS_DEFAULT_REGION
+
       - name: Install ustore dependencies using conan
         run: |
-          conan remote add $ARTIFACTORY_NAME http://$IP_ADDRESS:8081/artifactory/api/conan/conan-local
-          conan user $ARTIFACTORY_USERNAME -r $ARTIFACTORY_NAME -p ${{ secrets.ARTIFACTORY_PASSWORD }}
-          conan install $USTORE_CONAN_PACKAGE -r $ARTIFACTORY_NAME -g cmake
+          aws s3 cp s3://ustore-test-conan/ustore_dependency.tar.gz ustore_dependency.tar.gz
+          tar -xzvf ustore_dependency.tar.gz -C ~/.conan
+          conan install ustore_dependency.tar.gz -g cmake
+      
+      - name: Install default jdk
+        run: sudo apt install default-jdk -y
 
       - name: Build and test java
         run: |
@@ -151,11 +188,25 @@ jobs:
       - name: Install golang
         run: sudo apt update && sudo apt install golang
       
+      - name: Prepare CMake, Conan and PyArrow
+        run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.57.0
+
+      - name: install aws cli
+        uses: unfor19/install-aws-cli-action@master
+        with:
+          version: 2.11.0
+
+      - name: Configure AWS CLI
+        run: |
+          aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws configure set default.region $AWS_DEFAULT_REGION
+
       - name: Install ustore dependencies using conan
         run: |
-          conan remote add $ARTIFACTORY_NAME http://$IP_ADDRESS:8081/artifactory/api/conan/conan-local
-          conan user $ARTIFACTORY_USERNAME -r $ARTIFACTORY_NAME -p ${{ secrets.ARTIFACTORY_PASSWORD }}
-          conan install $USTORE_CONAN_PACKAGE -r $ARTIFACTORY_NAME -g cmake
+          aws s3 cp s3://ustore-test-conan/ustore_dependency.tar.gz ustore_dependency.tar.gz
+          tar -xzvf ustore_dependency.tar.gz -C ~/.conan
+          conan install ustore_dependency.tar.gz -g cmake
       
       - name: Build golang
         run: bash go-ustore/pack.sh
