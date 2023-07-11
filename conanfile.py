@@ -134,7 +134,7 @@ class ConanUStore(ConanFile):
         self.options["pcre2"].support_jit = True
         self.options["pcre2"].build_pcre2grep = True
 
-        self.options["arrow"].shared = True
+        self.options["arrow"].shared = False
         self.options["arrow"].with_orc = False
         self.options["arrow"].parquet = True
         self.options["arrow"].dataset_modules = True
