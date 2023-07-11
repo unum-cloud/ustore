@@ -66,7 +66,7 @@ jobs:
               -B ./build_release
 
       - name: Build
-        run: make -j4 ustore_flight_server_ucset ustore_flight_server_leveldb ustore_flight_server_rocksdb --silent -C ./build_release
+        run: make -j4 ustore_flight_server_ucset ustore_flight_server_leveldb ustore_flight_server_rocksdb --silent -C /home/runner/work/ustore/ustore/build_release
 
       - name: Upload Binaries
         uses: actions/upload-artifact@v3.1.1
