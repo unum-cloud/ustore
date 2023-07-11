@@ -594,6 +594,51 @@ typedef struct ustore_transaction_commit_t {
 void ustore_transaction_commit(ustore_transaction_commit_t*);
 
 /*********************************************************/
+/*****************	 Statistics   ****************/
+/*********************************************************/
+
+typedef struct ustore_statistics_list_t { /// @name Context
+    /// @{
+
+    /** @brief Already open database instance. */
+    ustore_database_t db;
+    /**
+     * @brief Pointer to exported error message.
+     * If not NULL, must be deallocated with `ustore_error_free()`.
+     */
+    ustore_error_t* error;
+    /**
+     * @brief Reusable memory handle.
+     * @see `ustore_arena_free()`.
+     */
+    ustore_arena_t* arena;
+    /**
+     * @brief Listing options.
+     *
+     * Possible values:
+     * - `::ustore_option_dont_discard_memory_k`: Won't reset the `arena` before the operation begins.
+     */
+    ustore_options_t options;
+
+    /// @}
+    /// @name Output
+    /// @{
+
+    ustore_length_t** offsets;
+    ustore_length_t** lengths;
+    ustore_char_t** names;
+    ustore_size_t** values;
+    ustore_size_t* count;
+    /// @}
+} ustore_statistics_list_t;
+
+/**
+ * @brief Lists all statistics in the DB.
+ * @see `ustore_statistics_list_t`.
+ */
+void ustore_statistics_list(ustore_statistics_list_t*);
+
+/*********************************************************/
 /*****************	 Memory Reclamation   ****************/
 /*********************************************************/
 
