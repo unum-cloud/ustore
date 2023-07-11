@@ -19,7 +19,8 @@
                 "create_if_missing": true,
                 "writable_file_max_buffer_size": 134217728,
                 "max_open_files": -1,
-                "max_file_opening_threads": 32
+                "max_file_opening_threads": 32,
+                "statistics": true
             },
             "CFOptions": {
                 "max_write_buffer_number": 4,
