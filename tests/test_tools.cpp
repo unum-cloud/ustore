@@ -33,6 +33,7 @@
 
 #include <ustore/ustore.hpp>
 #include "dataset.h"
+#include "export_statistics.hpp"
 
 using namespace unum::ustore;
 using graph_t = std::vector<edge_t>;
@@ -137,7 +138,7 @@ void clear_environment() {
         exit(0);
     }
     usleep(100000); // 0.1 sec
-#endif // USTORE_CLI
+#endif              // USTORE_CLI
 
     namespace stdfs = std::filesystem;
     auto directory_str = path() ? std::string_view(path()) : "";
@@ -674,6 +675,19 @@ bool test_graph(ustore_str_view_t file, ustore_str_view_t ext) {
     return true;
 }
 
+ustore_collection_t get_coll(database_t& db, ustore_str_view_t name) {
+    status_t status;
+    ustore_collection_t coll = {};
+    ustore_collection_create_t create {};
+    create.db = db;
+    create.error = status.member_ptr();
+    create.name = name;
+    create.id = &coll;
+    ustore_collection_create(&create);
+    EXPECT_TRUE(status);
+    return coll;
+}
+
 void fill_from_table(std::shared_ptr<arrow::Table>& table) {
     auto id = table->GetColumnByName(id_k);
     auto doc = table->GetColumnByName(doc_k);
@@ -973,11 +987,12 @@ bool cmp_table_docs_sub(ustore_str_view_t lhs, ustore_str_view_t rhs) {
 
 template <typename comparator>
 bool test_sub_docs(ustore_str_view_t file, ustore_str_view_t ext, comparator cmp, bool state = false) {
-    clear_environment();
+    // clear_environment();
 
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
-    auto collection = db.main();
+    db.clear().throw_unhandled();
+    auto collection = get_coll(db, "docs");
     arena_t arena(db);
     status_t status;
 
@@ -1043,17 +1058,19 @@ bool test_sub_docs(ustore_str_view_t file, ustore_str_view_t ext, comparator cmp
     EXPECT_TRUE(cmp(dataset_path.c_str(), new_file.data()));
 
     std::remove(new_file.data());
-    db.clear().throw_unhandled();
+    // db.clear().throw_unhandled();
+    db.close();
     return true;
 }
 
 template <typename comparator>
 bool test_whole_docs(ustore_str_view_t file, ustore_str_view_t ext, comparator cmp, bool state = false) {
-    clear_environment();
+    // clear_environment();
 
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
-    auto collection = db.main();
+    db.clear().throw_unhandled();
+    auto collection = get_coll(db, "docs");
     arena_t arena(db);
     status_t status;
 
@@ -1113,7 +1130,8 @@ bool test_whole_docs(ustore_str_view_t file, ustore_str_view_t ext, comparator c
     EXPECT_TRUE(cmp(dataset_path.c_str(), new_file.data()));
 
     std::remove(new_file.data());
-    db.clear().throw_unhandled();
+    // db.clear().throw_unhandled();
+    db.close();
     return true;
 }
 
@@ -1322,11 +1340,12 @@ bool test_crash_cases_graph_export(ustore_str_view_t ext) {
 }
 
 bool test_crash_cases_docs_import(ustore_str_view_t file) {
-    clear_environment();
+    // clear_environment();
 
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
-    auto collection = db.main();
+    db.clear().throw_unhandled();
+    auto collection = get_coll(db, "docs");
     arena_t arena(db);
     status_t status;
 
@@ -1418,16 +1437,18 @@ bool test_crash_cases_docs_import(ustore_str_view_t file) {
     };
     ustore_docs_import(&imp_db_null);
     EXPECT_FALSE(status);
-    db.clear().throw_unhandled();
+    // db.clear().throw_unhandled();
+    db.close();
     return true;
 }
 
 bool test_crash_cases_docs_export(ustore_str_view_t ext) {
-    clear_environment();
+    // clear_environment();
 
     database_t db;
     EXPECT_TRUE(db.open(config().c_str()));
-    auto collection = db.main();
+    db.clear().throw_unhandled();
+    auto collection = get_coll(db, "docs");
     arena_t arena(db);
     status_t status;
 
@@ -1519,7 +1540,8 @@ bool test_crash_cases_docs_export(ustore_str_view_t ext) {
     };
     ustore_docs_export(&imp_db_null);
     EXPECT_FALSE(status);
-    db.clear().throw_unhandled();
+    // db.clear().throw_unhandled();
+    db.close();
     return true;
 }
 
@@ -1554,63 +1576,81 @@ TEST(import_export_graph, csv_csv) {
 }
 
 TEST(import_export_docs_whole, ndjosn_ndjson) {
-    test_whole_docs(sample_path_k, ext_ndjson_k, cmp_ndjson_docs_whole);
+    test_whole_docs(ndjson_path_k, ext_ndjson_k, cmp_ndjson_docs_whole);
+    EXPECT_TRUE(export_statistics());
 }
 TEST(import_export_docs_whole, ndjosn_parquet) {
-    test_whole_docs(sample_path_k, ext_parquet_k, cmp_ndjson_docs_whole);
+    test_whole_docs(ndjson_path_k, ext_parquet_k, cmp_ndjson_docs_whole);
+    EXPECT_TRUE(export_statistics());
 }
 TEST(import_export_docs_whole, ndjosn_csv) {
-    test_whole_docs(sample_path_k, ext_csv_k, cmp_ndjson_docs_whole);
+    test_whole_docs(ndjson_path_k, ext_csv_k, cmp_ndjson_docs_whole);
+    EXPECT_TRUE(export_statistics());
 }
 
 TEST(import_export_docs_whole, parquet_ndjson) {
     test_whole_docs(parquet_path_k, ext_ndjson_k, cmp_table_docs_whole, true);
+    EXPECT_TRUE(export_statistics());
 }
 TEST(import_export_docs_whole, parquet_parquet) {
     test_whole_docs(parquet_path_k, ext_parquet_k, cmp_table_docs_whole, true);
+    EXPECT_TRUE(export_statistics());
 }
 TEST(import_export_docs_whole, parquet_csv) {
     test_whole_docs(parquet_path_k, ext_csv_k, cmp_table_docs_whole, true);
+    EXPECT_TRUE(export_statistics());
 }
 
 TEST(import_export_docs_whole, csv_ndjson) {
     test_whole_docs(csv_path_k, ext_ndjson_k, cmp_table_docs_whole, true);
+    EXPECT_TRUE(export_statistics());
 }
 TEST(import_export_docs_whole, csv_parquet) {
     test_whole_docs(csv_path_k, ext_parquet_k, cmp_table_docs_whole, true);
+    EXPECT_TRUE(export_statistics());
 }
 TEST(import_export_docs_whole, csv_csv) {
     test_whole_docs(csv_path_k, ext_csv_k, cmp_table_docs_whole, true);
+    EXPECT_TRUE(export_statistics());
 }
 
 TEST(import_export_docs_sub, ndjosn_ndjson) {
-    test_sub_docs(sample_path_k, ext_ndjson_k, cmp_ndjson_docs_sub);
+    test_sub_docs(ndjson_path_k, ext_ndjson_k, cmp_ndjson_docs_sub);
+    EXPECT_TRUE(export_statistics());
 }
 TEST(import_export_docs_sub, ndjosn_parquet) {
-    test_sub_docs(sample_path_k, ext_parquet_k, cmp_ndjson_docs_sub);
+    test_sub_docs(ndjson_path_k, ext_parquet_k, cmp_ndjson_docs_sub);
+    EXPECT_TRUE(export_statistics());
 }
 TEST(import_export_docs_sub, ndjosn_csv) {
-    test_sub_docs(sample_path_k, ext_csv_k, cmp_ndjson_docs_sub);
+    test_sub_docs(ndjson_path_k, ext_csv_k, cmp_ndjson_docs_sub);
+    EXPECT_TRUE(export_statistics());
 }
 
 TEST(import_export_docs_sub, parquet_ndjson) {
     test_sub_docs(parquet_path_k, ext_ndjson_k, cmp_table_docs_sub, true);
+    EXPECT_TRUE(export_statistics());
 }
 TEST(import_export_docs_sub, parquet_parquet) {
     test_sub_docs(parquet_path_k, ext_parquet_k, cmp_table_docs_sub, true);
+    EXPECT_TRUE(export_statistics());
 }
 TEST(import_export_docs_sub, parquet_csv) {
     test_sub_docs(parquet_path_k, ext_csv_k, cmp_table_docs_sub, true);
+    EXPECT_TRUE(export_statistics());
 }
 
 TEST(import_export_docs_sub, csv_ndjson) {
     test_sub_docs(csv_path_k, ext_ndjson_k, cmp_table_docs_sub, true);
+    EXPECT_TRUE(export_statistics());
 }
 TEST(import_export_docs_sub, csv_parquet) {
     test_sub_docs(csv_path_k, ext_parquet_k, cmp_table_docs_sub, true);
+    EXPECT_TRUE(export_statistics());
 }
 TEST(import_export_docs_sub, csv_csv) {
     test_sub_docs(csv_path_k, ext_csv_k, cmp_table_docs_sub, true);
+    EXPECT_TRUE(export_statistics());
 }
 
 TEST(crash_cases, graph_import) {
@@ -1629,14 +1669,15 @@ TEST(crash_cases, docs_import) {
     test_crash_cases_docs_import(sample_path_k);
     test_crash_cases_docs_import(parquet_path_k);
     test_crash_cases_docs_import(csv_path_k);
+    EXPECT_TRUE(export_statistics());
 }
 
 TEST(crash_cases, docs_export) {
     test_crash_cases_docs_export(ext_ndjson_k);
     test_crash_cases_docs_export(ext_parquet_k);
     test_crash_cases_docs_export(ext_csv_k);
+    EXPECT_TRUE(export_statistics());
 }
-
 
 #if defined(USTORE_CLI)
 template <typename... args>
@@ -1730,7 +1771,7 @@ bool test_import_export_cli(database_t& db, ustore_str_view_t url, ustore_str_vi
 }
 
 TEST(db, cli) {
-    clear_environment();
+    // clear_environment();
 
     database_t db;
     auto url = "grpc://0.0.0.0:38709";
@@ -1757,6 +1798,7 @@ TEST(db, cli) {
 #endif // USTORE_CLI
 
 int main(int argc, char** argv) {
+    clear_environment();
 
 #if defined(USTORE_CLI)
     std::string exec_path = argv[0];
@@ -1770,7 +1812,9 @@ int main(int argc, char** argv) {
         paths.push_back(ustore_str_span_t(entry.path().c_str()));
 
     ::testing::InitGoogleTest(&argc, argv);
-    int result = RUN_ALL_TESTS();
+    int result = 0;
+    for (std::size_t idx = 0; idx < 100; ++idx)
+        result = RUN_ALL_TESTS();
 
 #if defined(USTORE_CLI)
     kill(srv_id, SIGKILL);
