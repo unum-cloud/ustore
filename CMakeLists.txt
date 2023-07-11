@@ -193,6 +193,9 @@ endif()
 #   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/arrow.cmake")
 # endif()
 
+add_library(arrow::bundled STATIC IMPORTED)
+set_property(TARGET arrow::bundled PROPERTY IMPORTED_LOCATION ${BINARY_DIR}/release/libarrow_bundled_dependencies.a)
+add_dependencies(arrow::bundled Arrow-external)
 
 if(${USTORE_BUILD_API_FLIGHT_SERVER})
   include_directories(${CONAN_INCLUDE_DIRS_CLIPP}/include)
