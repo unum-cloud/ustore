@@ -96,39 +96,38 @@ jobs:
   #       run: for test in $(ls ./build_release/bin/*test_units*); do  echo -e "------ \e[93mRunning $test\e[0m ------"; timeout -v --kill-after=5 300 $test; done
 
 
-  # build_test_wheel:
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v3
-  #       with:
-  #         persist-credentials: false
-  #         ref: 'main-dev'
+  build_test_wheel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          persist-credentials: false
+          ref: 'main-dev'
 
-  #     - name: Prepare CMake, Conan and PyArrow
-  #       run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.57.0
+      - name: Prepare CMake, Conan and PyArrow
+        run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.57.0
 
-  #     - name: install aws cli
-  #       uses: unfor19/install-aws-cli-action@master
-  #       with:
-  #         version: 2.11.0
+      - name: install aws cli
+        uses: unfor19/install-aws-cli-action@master
+        with:
+          version: 2.11.0
 
-  #     - name: Configure AWS CLI
-  #       run: |
-  #         aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
-  #         aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-  #         aws configure set default.region $AWS_DEFAULT_REGION
+      - name: Configure AWS CLI
+        run: |
+          aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws configure set default.region $AWS_DEFAULT_REGION
 
-  #     - name: Install ustore dependencies using conan
-  #       run: |
-  #         aws s3 cp s3://ustore-test-conan/ustore_dependency.tar.gz ustore_dependency.tar.gz
-  #         conan profile new --detect default
-  #         conan profile update settings.compiler.libcxx=libstdc++11 default
-  #         tar -xzvf ustore_dependency.tar.gz -C ~/.conan
-  #         conan install ustore/1.1.1@admin/arrow-static -g cmake
+      - name: Install ustore dependencies using conan
+        run: |
+          aws s3 cp s3://ustore-dependency-test/ustore_dependency.tar.gz ustore_dependency.tar.gz
+          tar -xzf ustore_dependency.tar.gz -C ~/
+          conan export . user/channel
+          conan install ustore/0.12.1@user/channel --build=ustore -g cmake
 
-  #     - uses: pypa/cibuildwheel@v2.11.3
-  #       with:
-  #         output-dir: dist
+      - uses: pypa/cibuildwheel@v2.11.3
+        with:
+          output-dir: dist
   
 
   # build_test_java:
