@@ -48,6 +48,8 @@ inline static std::string const kFlightSnapDrop = "remove_snapshot";     /// `Do
 inline static std::string const kFlightTxnBegin = "begin_transaction";   /// `DoAction`
 inline static std::string const kFlightTxnCommit = "commit_transaction"; /// `DoAction`
 
+inline static std::string const kFlightListStats = "list_statistics";    /// `DoGet`
+
 inline static std::string const kFlightWrite = "write";                  /// `DoPut`
 inline static std::string const kFlightRead = "read";                    /// `DoExchange`
 inline static std::string const kFlightWritePath = "write_path";         /// `DoPut`

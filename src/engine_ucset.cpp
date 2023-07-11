@@ -974,6 +974,11 @@ void ustore_transaction_commit(ustore_transaction_commit_t* c_ptr) {
         safe_section("Saving to disk", c.error, [&] { write(db, db.persisted_directory, c.error); });
 }
 
+void ustore_statistics_list(ustore_statistics_list_t* c_ptr) {
+    ustore_statistics_list_t& c = *c_ptr;
+    return_error_if_m(false, c.error, missing_feature_k, "Not implemented!");
+}
+
 /*********************************************************/
 /*****************	  Memory Management   ****************/
 /*********************************************************/

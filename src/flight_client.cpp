@@ -11,7 +11,7 @@
 #include <mutex>       // `std::mutex`
 #include <string_view> // `std::string_view`
 
-#include <fmt/core.h>  // `fmt::format_to`
+#include <fmt/core.h> // `fmt::format_to`
 #include <arrow/c/abi.h>
 #include <arrow/flight/client.h>
 #include <arrow/array/array_binary.h>
@@ -117,7 +117,7 @@ void ustore_read(ustore_read_t* c_ptr) {
     bool const same_named_collection = same_collection && same_collections_are_named(places.collections_begin);
     bool const request_only_presences = c.presences && !c.lengths && !c.values;
     bool const request_only_lengths = c.lengths && !c.values;
-    char const* partial_mode = request_only_presences     //
+    char const* partial_mode = request_only_presences //
                                    ? kParamReadPartPresences.c_str()
                                    : request_only_lengths //
                                          ? kParamReadPartLengths.c_str()
@@ -843,7 +843,7 @@ void ustore_paths_read(ustore_paths_read_t* c_ptr) {
     bool const same_named_collection = same_collection && same_collections_are_named(places.collections_begin);
     bool const request_only_presences = c.presences && !c.lengths && !c.values;
     bool const request_only_lengths = c.lengths && !c.values;
-    char const* partial_mode = request_only_presences     //
+    char const* partial_mode = request_only_presences //
                                    ? kParamReadPartPresences.c_str()
                                    : request_only_lengths //
                                          ? kParamReadPartLengths.c_str()
@@ -1411,6 +1411,54 @@ void ustore_collection_list(ustore_collection_list_t* c_ptr) {
         auto array = std::static_pointer_cast<ar::NumericArray<ar::Int64Type>>(table->column(0)->chunk(0));
         return_error_if_m(table->column(0)->num_chunks() == 1, c.error, network_k, "Expected one chunk");
         *c.ids = (ustore_collection_t*)array->raw_values();
+    }
+
+    db.readers.push_back(std::move(stream_ptr));
+}
+
+void ustore_statistics_list(ustore_statistics_list_t* c_ptr) {
+
+    ustore_statistics_list_t& c = *c_ptr;
+    return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
+    if (!(c.options & ustore_option_dont_discard_memory_k))
+        db.readers.clear();
+
+    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
+    return_if_error_m(c.error);
+
+    ar::Status ar_status;
+    arrow_mem_pool_t pool(arena);
+    arf::FlightCallOptions options = arrow_call_options(pool);
+
+    arf::Ticket ticket {kFlightListStats};
+    if (c.transaction)
+        fmt::format_to(std::back_inserter(ticket.ticket),
+                       "?{}=0x{:0>16x}",
+                       kParamTransactionID,
+                       std::uintptr_t(c.transaction));
+
+    auto maybe_stream = db.flight->DoGet(options, ticket);
+    return_error_if_m(maybe_stream.ok(), c.error, network_k, "Failed to act on Arrow server");
+    auto& stream_ptr = maybe_stream.ValueUnsafe();
+
+    auto maybe_table = stream_ptr->ToTable();
+    return_error_if_m(maybe_table.ok(), c.error, error_unknown_k, "Failed to create table");
+    auto table = maybe_table.ValueUnsafe();
+
+    if (c.count)
+        *c.count = static_cast<ustore_size_t>(table->num_rows());
+    if (c.names) {
+        auto array = std::static_pointer_cast<ar::BinaryArray>(table->column(1)->chunk(0));
+        return_error_if_m(table->column(1)->num_chunks() == 1, c.error, network_k, "Expected one chunk");
+        *c.names = (ustore_str_span_t)array->value_data()->data();
+        *c.offsets = (ustore_length_t*)array->value_offsets()->data();
+        *c.lengths = arena.alloc<ustore_length_t>(c.count, c.error);
+    }
+    if (c.values) {
+        auto array = std::static_pointer_cast<ar::NumericArray<ar::Int64Type>>(table->column(0)->chunk(0));
+        return_error_if_m(table->column(0)->num_chunks() == 1, c.error, network_k, "Expected one chunk");
+        *c.values = (ustore_size_t*)array->raw_values();
     }
 
     db.readers.push_back(std::move(stream_ptr));

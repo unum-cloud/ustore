@@ -223,6 +223,7 @@ void ustore_database_init(ustore_database_init_t* c_ptr) {
 
         options.create_if_missing = true;
         options.comparator = &key_comparator_k;
+        options.statistics = rocksdb::CreateDBStatistics();
 
         // Storage paths
         for (auto const& disk : config.data_directories)
@@ -945,6 +946,63 @@ void ustore_transaction_commit(ustore_transaction_commit_t* c_ptr) {
         if (status.ok())
             *c.sequence_number = db.native->GetLatestSequenceNumber();
         db.mutex.unlock();
+    }
+}
+
+void ustore_statistics_list(ustore_statistics_list_t* c_ptr) {
+    ustore_statistics_list_t& c = *c_ptr;
+
+    return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
+    auto arena = linked_memory(c.arena, c.options, c.error);
+    return_if_error_m(c.error);
+
+    ustore_size_t count;
+    ustore_collection_t* ids;
+    ustore_char_t* coll_names;
+    ustore_collection_list_t list {};
+    list.db = c.db;
+    list.error = c.error;
+    list.arena = c.arena;
+    list.options = ustore_option_dont_discard_memory_k;
+    list.count = &count;
+    list.ids = &ids;
+    list.names = &coll_names;
+    ustore_collection_list(&list);
+    return_if_error_m(c.error);
+
+    auto cols = arena.alloc<rocks_collection_t*>(count + 1, c.error);
+    for (std::size_t i = 0; i != count; ++i)
+        cols[i] = rocks_collection(db, ids[i]);
+    cols[count] = rocks_collection(db, ustore_collection_main_k);
+
+    auto& tickers = rocksdb::TickersNameMap;
+    ustore_size_t tape_length = 0;
+    for (auto ticker : tickers)
+        tape_length += ticker.second.size();
+
+    *c.count = tickers.size();
+    auto names = *c.names = arena.alloc<ustore_char_t>(tape_length, c.error).begin();
+    return_if_error_m(c.error);
+    auto offsets = *c.offsets = arena.alloc<ustore_length_t>((*c.count) + 1, c.error).begin();
+    return_if_error_m(c.error);
+    auto lengths = *c.lengths = arena.alloc<ustore_length_t>(*c.count, c.error).begin();
+    return_if_error_m(c.error);
+    auto values = *c.values = arena.alloc<ustore_size_t>(*c.count, c.error).begin();
+    return_if_error_m(c.error);
+
+    offsets[0] = 0;
+    for (ustore_size_t idx = 0; idx < tickers.size(); ++idx) {
+        std::memcpy(names + offsets[idx], tickers[idx].second.c_str(), tickers[idx].second.size());
+        lengths[idx] = tickers[idx].second.size();
+        offsets[idx + 1] = offsets[idx] + lengths[idx];
+        values[idx] = 0;
+    }
+
+    for (auto col : cols) {
+        auto options = db.native->GetOptions(col);
+        for (ustore_size_t idx = 0; idx < tickers.size(); ++idx)
+            values[idx] += options.statistics->getTickerCount(tickers[idx].first);
     }
 }
 

@@ -7,6 +7,7 @@
  */
 #include <mutex>
 #include <fstream>
+#include <algorithm>
 
 #include <leveldb/db.h>
 #include <leveldb/comparator.h>
@@ -683,6 +684,78 @@ void ustore_transaction_commit(ustore_transaction_commit_t* c_ptr) {
 
     ustore_transaction_commit_t& c = *c_ptr;
     *c.error = "Transactions not supported by LevelDB!";
+}
+
+void ustore_statistics_list(ustore_statistics_list_t* c_ptr) {
+    ustore_statistics_list_t& c = *c_ptr;
+    // return_error_if_m(false, c.error, missing_feature_k, "Not implemented!");
+    return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
+    level_db_t& db = *reinterpret_cast<level_db_t*>(c.db);
+    auto arena = linked_memory(c.arena, c.options, c.error);
+    return_if_error_m(c.error);
+
+    std::vector<std::string> patterns = {
+        "level_0_files",
+        "level_0_size_in_MB",
+        "level_0_time_in_sec",
+        "level_0_reads_in_MB",
+        "level_0_writes_in_MB",
+    };
+    ustore_size_t names_length = 0;
+    for (auto const& pattern : patterns)
+        names_length += pattern.size();
+
+    auto replace_all = [&](ustore_size_t previous, ustore_size_t next) {
+        auto previous_str = std::to_string(previous);
+        auto next_str = std::to_string(next);
+        for (auto& pattern : patterns) {
+            ustore_size_t pos = pattern.find(previous_str.c_str(), 0, previous_str.size());
+            pattern.replace(pos, previous_str.size(), next_str.c_str(), next_str.size());
+        }
+    };
+
+    std::string stats;
+    auto success = db.native->GetProperty(to_slice("leveldb.stats"), &stats);
+    auto vals = stats.substr(147);
+    auto count = std::count(vals.begin(), vals.end(), '\n');
+    ustore_size_t extra_digits_count = count == 1 ? 0 : log10(count - 1);
+
+    *c.count = count * 5;
+    auto names = *c.names =
+        arena.alloc<ustore_char_t>(count * (names_length + (extra_digits_count * 5)), c.error).begin();
+    return_if_error_m(c.error);
+    auto offsets = *c.offsets = arena.alloc<ustore_length_t>((*c.count) + 1, c.error).begin();
+    return_if_error_m(c.error);
+    auto lengths = *c.lengths = arena.alloc<ustore_length_t>(*c.count, c.error).begin();
+    return_if_error_m(c.error);
+    auto values = *c.values = arena.alloc<ustore_size_t>(*c.count, c.error).begin();
+    return_if_error_m(c.error);
+
+    offsets[0] = 0;
+    for (ustore_size_t idx = 0, jdx = 0, prev = 0, layer_begin = 0, layer_end = 0; idx < count; ++idx) {
+        // Parse names
+        replace_all(prev, idx);
+        for (jdx = 0; jdx < patterns.size(); ++jdx) {
+            std::memcpy(names + offsets[idx * patterns.size() + jdx], patterns[jdx].c_str(), patterns[jdx].size());
+            lengths[idx * patterns.size() + jdx] = patterns[jdx].size();
+            offsets[idx * patterns.size() + jdx + 1] = offsets[idx * patterns.size() + jdx] + patterns[jdx].size();
+        }
+        prev = idx;
+        // Parse values
+        jdx = 0;
+        layer_end = vals.find('\n', layer_begin);
+        auto val = vals.substr(layer_begin, layer_end - layer_begin);
+        layer_begin = layer_end + 1;
+        ustore_size_t pos = 0;
+        ustore_size_t end = 0;
+        while (end != val.size()) {
+            val = val.substr(val.find(' ', pos));
+            pos = val.find_first_not_of(' ', 0);
+            end = val.find(' ', pos) != val.npos ? val.find(' ', pos) : val.size();
+            values[idx * patterns.size() + jdx] = std::stoi(val.substr(pos, end - pos));
+            ++jdx;
+        }
+    }
 }
 
 /*********************************************************/

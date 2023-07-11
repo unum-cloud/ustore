@@ -602,8 +602,8 @@ class UStoreService : public arf::FlightServerBase {
             if (!params.collection_id)
                 return ar::Status::Invalid("Missing collection ID argument");
 
-            ustore_drop_mode_t mode =                                       //
-                params.collection_drop_mode == kParamDropModeValues         //
+            ustore_drop_mode_t mode =                               //
+                params.collection_drop_mode == kParamDropModeValues //
                     ? ustore_drop_vals_k
                     : params.collection_drop_mode == kParamDropModeContents //
                           ? ustore_drop_keys_vals_k
@@ -1411,6 +1411,80 @@ class UStoreService : public arf::FlightServerBase {
                 ustore_doc_field_str_k,
                 nullptr,
                 offsets ? offsets : reinterpret_cast<ustore_length_t*>(&zero_size_data_k),
+                ustore_bytes_ptr_t(names),
+                schema_c.children[1],
+                array_c.children[1],
+                status.member_ptr());
+            if (!status)
+                return ar::Status::ExecutionError(status.message());
+
+            auto maybe_batch = ar::ImportRecordBatch(&array_c, &schema_c);
+            if (!maybe_batch.ok())
+                return maybe_batch.status();
+
+            auto batch = maybe_batch.ValueUnsafe();
+            auto maybe_reader = ar::RecordBatchReader::Make({batch});
+            if (!maybe_reader.ok())
+                return maybe_reader.status();
+
+            // TODO: Pass right IPC options
+            auto stream = std::make_unique<arf::RecordBatchStream>(maybe_reader.ValueUnsafe());
+            *response_ptr = std::move(stream);
+            return ar::Status::OK();
+        }
+        if (is_query(ticket.ticket, kFlightListStats)) {
+
+            // We will need some temporary memory for exports
+            auto session = sessions_.lock(params.session_id, status.member_ptr());
+            if (!status)
+                return ar::Status::ExecutionError(status.message());
+
+            ustore_length_t* offsets = nullptr;
+            ustore_length_t* lengths = nullptr;
+            ustore_char_t* names = nullptr;
+            ustore_size_t* values = nullptr;
+            ustore_size_t count = 0;
+
+            ustore_statistics_list_t stats {};
+            stats.db = db_;
+            stats.error = status.member_ptr();
+            stats.arena = session.arena;
+            stats.options = ustore_options(params);
+            stats.offsets = &offsets;
+            stats.lengths = &lengths;
+            stats.names = &names;
+            stats.values = &values;
+            stats.count = &count;
+            ustore_statistics_list(&stats);
+            if (!status)
+                return ar::Status::ExecutionError(status.message());
+
+            // Pack two columns into a Table
+            ArrowSchema schema_c;
+            ArrowArray array_c;
+            ustore_to_arrow_schema(count, 2, &schema_c, &array_c, status.member_ptr());
+            if (!status)
+                return ar::Status::ExecutionError(status.message());
+
+            ustore_to_arrow_column( //
+                count,
+                kArgVals.c_str(),
+                ustore_doc_field<ustore_collection_t>(),
+                nullptr,
+                nullptr,
+                ustore_bytes_ptr_t(values),
+                schema_c.children[0],
+                array_c.children[0],
+                status.member_ptr());
+            if (!status)
+                return ar::Status::ExecutionError(status.message());
+
+            ustore_to_arrow_column( //
+                count,
+                kArgNames.c_str(),
+                ustore_doc_field_str_k,
+                nullptr,
+                offsets,
                 ustore_bytes_ptr_t(names),
                 schema_c.children[1],
                 array_c.children[1],
