@@ -72,7 +72,7 @@ jobs:
                 
       - name: Build   
         run: |
-          make -j32 \
+          make -j4 \
               ustore_flight_server_ucset \
               ustore_flight_server_leveldb \
               ustore_flight_server_rocksdb \
