@@ -20,8 +20,8 @@ environment = "CMAKE_ARGS_F=/tmp/cmake_args"
 before-build = [
     "rm -rf {project}/CMakeCache.txt {project}/build {project}/CMakeFiles.txt {project}/_deps",
     "pip install pyarrow==10.0.1 conan==1.57.0 auditwheel awscli",
-    "aws configure set aws_access_key_id AKIAXGUPLN27LRI6OV56",
-    "aws configure set aws_secret_access_key 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",
+    "aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID,
+    "aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY",
     "aws configure set region us-east-1",
     "aws s3 cp s3://ustore-dependency-test/ustore_dependency_shared.tar.gz ustore_dependency_shared.tar.gz",
     "conan profile new --detect default",
