@@ -162,6 +162,11 @@ class ConanUStore(ConanFile):
         self.options["mongo-c-driver"].with_zlib = False
         self.options["mongo-c-driver"].with_zstd = False
         
+        self.options["leveldb"].shared = False
+        self.options["leveldb"].fPIC = False
+        self.options["leveldb"].with_snappy = False
+        self.options["leveldb"].with_crc32c = False
+        
         # self.options["gtest"].shared = False
 
     def requirements(self):
@@ -180,6 +185,8 @@ class ConanUStore(ConanFile):
         self.requires('argparse/2.9')
         self.requires('re2/20220601')
         self.requires('xsimd/9.0.1')
+        
+        self.requires('leveldb/1.23')
         # https://conan.io/center/openssl
 
     # def build(self):

@@ -160,7 +160,8 @@ if(${USTORE_BUILD_ENGINE_ROCKSDB})
 endif()
 
 if(${USTORE_BUILD_ENGINE_LEVELDB})
-  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/leveldb.cmake")
+  # include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/leveldb.cmake")
+  include_directories(${CONAN_INCLUDE_DIRS_LEVELDB})
 endif()
 
 # Modalities:
