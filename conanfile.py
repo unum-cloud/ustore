@@ -13,7 +13,7 @@ class ConanUStore(ConanFile):
 
     exports = 'VERSION', 'LICENSE', 'README.md'
     exports_sources = 'CMakeLists.txt', 'src/*', 'include/*', 'cmake/*', 'VERSION'
-    name = 'ustore_depend'
+    name = 'ustore'
     version = open('VERSION').read()
     # Take just the first line
     license = open('LICENSE').read().split('\n', 1)[0]
