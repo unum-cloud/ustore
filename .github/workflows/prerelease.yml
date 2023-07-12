@@ -27,6 +27,9 @@ jobs:
   
   build_ustore:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        backend: [ucset, rocksdb, leveldb]
     steps:
       - uses: actions/checkout@v3
         with:
@@ -57,17 +60,10 @@ jobs:
           rm -rf ustore_dependency.tar.gz
 
       - name: Configure CMake
-        run: |
-          cmake -DCMAKE_BUILD_TYPE=Release \
-              -DUSTORE_BUILD_TESTS=1 \
-              -DUSTORE_BUILD_ENGINE_UCSET=1 \
-              -DUSTORE_BUILD_ENGINE_LEVELDB=1 \
-              -DUSTORE_BUILD_ENGINE_ROCKSDB=1 \
-              -DUSTORE_BUILD_API_FLIGHT=0 . \
-              -B ./build_release
+        run: cmake -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} .
 
       - name: Build
-        run: make -j4 ustore_flight_server_leveldb ustore_flight_server_rocksdb --silent -C ./build_release
+        run: make -j4 ustore_${{ matrix.backend }} test_units_ustore_embedded_${{ matrix.backend }}
 
       - name: Upload Binaries
         uses: actions/upload-artifact@v3.1.1
