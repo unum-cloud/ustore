@@ -53,7 +53,7 @@ jobs:
           aws s3 cp s3://ustore-dependency-test/ustore_dependency_shared.tar.gz ustore_dependency_shared.tar.gz
           tar -xzf ustore_dependency_shared.tar.gz -C ~/
           conan export . user/channel
-          conan install ustore/0.12.1@user/channel --build=ustore -g cmake
+          conan install ustore_depend/0.12.1@user/channel --build=ustore_depend -g cmake
           rm -rf ustore_dependency_shared.tar.gz
 
       - name: Configure cmake
