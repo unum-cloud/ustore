@@ -51,6 +51,8 @@ jobs:
       - name: Install ustore dependencies using conan
         run: |
           aws s3 cp s3://ustore-dependency-test/ustore_dependency_shared.tar.gz ustore_dependency_shared.tar.gz
+          conan profile new --detect default
+          conan profile update settings.compiler.libcxx=libstdc++11 default
           tar -xzf ustore_dependency_shared.tar.gz -C ~/.conan
           conan export . user/channel
           conan install ustore_depend/0.12.1@user/channel --build=ustore_depend -g cmake
