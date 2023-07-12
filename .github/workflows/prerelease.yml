@@ -54,6 +54,7 @@ jobs:
           tar -xzf ustore_dependency.tar.gz -C ~/
           conan export . user/channel
           conan install ustore/0.12.1@user/channel --build=ustore -g cmake
+          rm -rf ustore_dependency.tar.gz
 
       - name: Configure CMake
         run: |
@@ -66,7 +67,7 @@ jobs:
               -B ./build_release
 
       - name: Build
-        run: make -j4 ustore_flight_server_ucset ustore_flight_server_leveldb ustore_flight_server_rocksdb --silent -C ./build_release
+        run: make -j4 ustore_flight_server_leveldb ustore_flight_server_rocksdb --silent -C ./build_release
 
       - name: Upload Binaries
         uses: actions/upload-artifact@v3.1.1
@@ -124,6 +125,7 @@ jobs:
           tar -xzf ustore_dependency.tar.gz -C ~/
           conan export . user/channel
           conan install ustore/0.12.1@user/channel --build=ustore -g cmake
+          rm -rf ustore_dependency.tar.gz
 
       - uses: pypa/cibuildwheel@v2.11.3
         with:
