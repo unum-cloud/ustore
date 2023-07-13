@@ -34,29 +34,23 @@ jobs:
           ref: 'main-dev'
       - run: git submodule update --init --recursive
 
+      - name: Install git lfs
+        run: |
+          sudo apt-get install git-lfs -y
+          git lfs install
+
       - name: Prepare CMake, Conan and PyArrow
         run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.57.0
 
-      - name: install aws cli
-        uses: unfor19/install-aws-cli-action@master
-        with:
-          version: 2.11.0
-
-      - name: Configure AWS CLI
-        run: |
-          aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws configure set default.region $AWS_DEFAULT_REGION
-
       - name: Install ustore dependencies using conan
         run: |
-          aws s3 cp s3://ustore-dependency-test/ustore_dependency_shared.tar.gz ustore_dependency_shared.tar.gz
+          git lfs clone https://github.com/unum-cloud/ustore-deps.git
           conan profile new --detect default
           conan profile update settings.compiler.libcxx=libstdc++11 default
-          tar -xzf ustore_dependency_shared.tar.gz -C ~/.conan
-          conan export . user/channel
-          conan install ustore_depend/0.12.1@user/channel --build=ustore_depend -g cmake
-          rm -rf ustore_dependency_shared.tar.gz
+          tar -xzf ./ustore-deps/ustore_deps.tar.gz -C ~/.conan
+          conan export . admin/arrow-static-leveldb
+          conan install ustore_depend/0.12.1@admin/arrow-static-leveldb --build=ustore_depend -g cmake
+          rm -rf ./ustore-deps/
 
       - name: Configure cmake
         run: |
@@ -107,37 +101,26 @@ jobs:
   #       run: for test in $(ls ./build_release/bin/*test_units*); do  echo -e "------ \e[93mRunning $test\e[0m ------"; timeout -v --kill-after=5 300 $test; done
 
 
-  # build_test_wheel:
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v3
-  #       with:
-  #         persist-credentials: false
-  #         ref: 'main-dev'
+  build_test_wheel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          persist-credentials: false
+          ref: 'main-dev'
 
-  #     - name: Prepare CMake, Conan and PyArrow
-  #       run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.57.0
+      - name: Prepare CMake, Conan and PyArrow
+        run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.57.0
 
-  #     - name: install aws cli
-  #       uses: unfor19/install-aws-cli-action@master
-  #       with:
-  #         version: 2.11.0
-
-  #     - name: Configure AWS CLI
-  #       run: |
-  #         aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
-  #         aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-  #         aws configure set default.region $AWS_DEFAULT_REGION
-
-  #     - name: Build wheel
-  #       run: |
-  #         pip install cibuildwheel twine
-  #         CIBW_BUILD="cp39-*" cibuildwheel --platform linux
-  #         CIBW_BUILD="cp310-*" cibuildwheel --platform linux
+      - name: Build wheel
+        run: |
+          pip install cibuildwheel twine
+          CIBW_BUILD="cp39-*" cibuildwheel --platform linux
+          CIBW_BUILD="cp310-*" cibuildwheel --platform linux
           
-  #     - uses: actions/upload-artifact@v3
-  #       with:
-  #         path: ./wheelhouse/*.whl
+      - uses: actions/upload-artifact@v3
+        with:
+          path: ./wheelhouse/*.whl
   
 
   # build_test_java:
