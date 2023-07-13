@@ -187,4 +187,10 @@ jobs:
         run: |
           go mod tidy
           go test go-ustore/...
+
+      - name: Publish Golang
+        run: |
+          sudo apt update
+          sudo apt install golang
+          cd go-ustore && bash publish.sh
     
