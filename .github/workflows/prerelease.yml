@@ -32,25 +32,21 @@ jobs:
         with:
           persist-credentials: false
           ref: 'main-dev'
+          
       - run: git submodule update --init --recursive
-
-      - name: Install git lfs
-        run: |
-          sudo apt-get install git-lfs -y
-          git lfs install
 
       - name: Prepare CMake, Conan and PyArrow
         run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.57.0
 
       - name: Install ustore dependencies using conan
         run: |
-          git lfs clone https://github.com/unum-cloud/ustore-deps.git
+          wget https://github.com/unum-cloud/ustore-deps/releases/download/v0.0.1/usttore_deps_x86_linux.tar.gz
           conan profile new --detect default
           conan profile update settings.compiler.libcxx=libstdc++11 default
-          tar -xzf ./ustore-deps/ustore_deps.tar.gz -C ~/.conan
-          conan export . admin/arrow-static-leveldb
-          conan install ustore_depend/0.12.1@admin/arrow-static-leveldb --build=ustore_depend -g cmake
-          rm -rf ./ustore-deps/
+          tar -xzf ./usttore_deps_x86_linux.tar.gz -C ~/.conan
+          conan export . unum/x86_linux
+          conan install ustore_depend/0.12.1@unum/x86_linux --build=ustore_depend -g cmake
+          rm -rf ./usttore_deps_x86_linux.tar.gz
 
       - name: Configure cmake
         run: |
@@ -101,26 +97,26 @@ jobs:
   #       run: for test in $(ls ./build_release/bin/*test_units*); do  echo -e "------ \e[93mRunning $test\e[0m ------"; timeout -v --kill-after=5 300 $test; done
 
 
-  # build_test_wheel:
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v3
-  #       with:
-  #         persist-credentials: false
-  #         ref: 'main-dev'
+  build_test_wheel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          persist-credentials: false
+          ref: 'main-dev'
 
-  #     - name: Prepare CMake, Conan and PyArrow
-  #       run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.57.0
+      - name: Prepare CMake, Conan and PyArrow
+        run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.57.0
 
-  #     - name: Build wheel
-  #       run: |
-  #         pip install cibuildwheel twine
-  #         CIBW_BUILD="cp39-*" cibuildwheel --platform linux
-  #         CIBW_BUILD="cp310-*" cibuildwheel --platform linux
+      - name: Build wheel
+        run: |
+          pip install cibuildwheel twine
+          CIBW_BUILD="cp39-*" cibuildwheel --platform linux
+          CIBW_BUILD="cp310-*" cibuildwheel --platform linux
           
-  #     - uses: actions/upload-artifact@v3
-  #       with:
-  #         path: ./wheelhouse/*.whl
+      - uses: actions/upload-artifact@v3
+        with:
+          path: ./wheelhouse/*.whl
   
 
   # build_test_java:
