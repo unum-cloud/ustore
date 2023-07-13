@@ -138,7 +138,7 @@ class ConanUStore(ConanFile):
         self.options['re2'].shared = False
         self.options['xsimd'].xtl_complex = False
         
-        self.options["arrow"].shared = True
+        self.options["arrow"].shared = False
         self.options["arrow"].with_orc = False
         self.options["arrow"].deprecated = True
         self.options["arrow"].with_protobuf = 'auto'
