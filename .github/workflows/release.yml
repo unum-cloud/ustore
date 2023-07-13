@@ -70,3 +70,121 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v1
+
+  
+  build_test_wheel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          persist-credentials: false
+          ref: 'main-dev'
+
+      - name: Prepare CMake, Conan and PyArrow
+        run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.57.0
+
+      - name: Build wheel
+        run: |
+          pip install cibuildwheel twine
+          CIBW_BUILD="cp39-*" cibuildwheel --platform linux
+          CIBW_BUILD="cp310-*" cibuildwheel --platform linux
+          
+      - uses: actions/upload-artifact@v3
+        with:
+          path: ./wheelhouse/*.whl
+    
+  publish_python:
+    name: Publish Python
+    needs: build_wheels
+    runs-on: ubuntu-20.04
+    environment:
+      name: pypi
+      url: https://pypi.org/p/usearch
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v3.0.2
+        with:
+          path: ./dist/
+
+      - name: Publish to PyPi
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: ./dist/artifact
+          verbose: true
+          print-hash: true
+
+  
+  build_publish_java:
+    name: Build and publish Java
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          persist-credentials: false
+          ref: 'main-dev'
+
+      - name: Prepare CMake, Conan and PyArrow
+        run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.57.0
+
+      - name: Install ustore dependencies using conan
+        run: |
+          wget https://github.com/unum-cloud/ustore-deps/releases/download/v0.0.1/usttore_deps_x86_linux.tar.gz
+          conan profile new --detect default
+          conan profile update settings.compiler.libcxx=libstdc++11 default
+          tar -xzf ./usttore_deps_x86_linux.tar.gz -C ~/.conan
+          conan export . unum/x86_linux
+          conan install ustore_depend/0.12.1@unum/x86_linux --build=ustore_depend -g cmake
+          rm -rf ./usttore_deps_x86_linux.tar.gz
+      
+      - name: Install default jdk
+        run: sudo apt install default-jdk -y
+
+      - name: Build and test java
+        run: |
+          export JAVA_HOME="/usr/lib/jvm/java-11-openjdk-amd64"
+          bash java/pack.sh
+      
+      - name: Publish java
+        run: ./java/gradlew publish
+
+
+  build_publish_golang:
+    name: Build and publish golang
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          persist-credentials: false
+          ref: 'main-dev'
+
+      - run: git submodule update --init --recursive
+
+      - name: Install golang
+        run: sudo apt update && sudo apt install golang
+      
+      - name: Prepare CMake, Conan and PyArrow
+        run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.57.0
+
+      - name: Install ustore dependencies using conan
+        run: |
+          wget https://github.com/unum-cloud/ustore-deps/releases/download/v0.0.1/usttore_deps_x86_linux.tar.gz
+          conan profile new --detect default
+          conan profile update settings.compiler.libcxx=libstdc++11 default
+          tar -xzf ./usttore_deps_x86_linux.tar.gz -C ~/.conan
+          conan export . unum/x86_linux
+          conan install ustore_depend/0.12.1@unum/x86_linux --build=ustore_depend -g cmake
+          rm -rf ./usttore_deps_x86_linux.tar.gz
+      
+      - name: Build golang
+        run: bash go-ustore/pack.sh
+
+      - name: Test golang
+        run: |
+          go mod tidy
+          go test go-ustore/...
+    
