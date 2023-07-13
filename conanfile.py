@@ -127,24 +127,29 @@ class ConanUStore(ConanFile):
         tc.cache_variables["ENABLE_HTML_DOCS"] = "OFF"
         tc.generate()
 
+
     def configure(self):
         self.options["openssl"].shared = False
 
         self.options["pcre2"].fPIC = True
         self.options["pcre2"].support_jit = True
         self.options["pcre2"].build_pcre2grep = True
-
+        
+        self.options['re2'].shared = False
+        self.options['xsimd'].xtl_complex = False
+        
         self.options["arrow"].shared = True
         self.options["arrow"].with_orc = False
+        self.options["arrow"].deprecated = True
+        self.options["arrow"].with_protobuf = 'auto'
         self.options["arrow"].parquet = True
         self.options["arrow"].dataset_modules = True
         self.options["arrow"].with_re2 = True
-        self.options["arrow"].compute = False
+        self.options["arrow"].compute = True
         self.options["arrow"].with_flight_rpc = True
         self.options["arrow"].with_utf8proc = True
         self.options["arrow"].with_openssl = True
         self.options["arrow"].encryption = False
-        self.options["arrow"].with_cuda = False
         self.options["arrow"].with_jemalloc = False
         self.options["arrow"].with_json = False
         self.options["arrow"].with_csv = True
