@@ -13,7 +13,7 @@ class ConanUStore(ConanFile):
 
     exports = 'VERSION', 'LICENSE', 'README.md'
     exports_sources = 'CMakeLists.txt', 'src/*', 'include/*', 'cmake/*', 'VERSION'
-    name = 'ustore_depend'
+    name = 'ustore_deps'
     version = open('VERSION').read()
     # Take just the first line
     license = open('LICENSE').read().split('\n', 1)[0]
@@ -177,7 +177,7 @@ class ConanUStore(ConanFile):
         self.options["mongo-c-driver"].with_zstd = False
         
         self.options["leveldb"].shared = False
-        self.options["leveldb"].fPIC = False
+        self.options["leveldb"].fPIC = True
         self.options["leveldb"].with_snappy = False
         self.options["leveldb"].with_crc32c = False
         
