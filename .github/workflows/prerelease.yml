@@ -51,50 +51,43 @@ jobs:
       - name: Configure cmake
         run: |
           cmake -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
-                -DUSTORE_BUILD_TESTS=1 \
-                -DUSTORE_BUILD_BENCHMARKS=0 \
                 -DUSTORE_BUILD_ENGINE_UCSET=1 \
                 -DUSTORE_BUILD_ENGINE_LEVELDB=1 \
                 -DUSTORE_BUILD_ENGINE_ROCKSDB=1 \
-                -DUSTORE_BUILD_API_FLIGHT_CLIENT=0 \
-                -DUSTORE_BUILD_API_FLIGHT_SERVER=1 . \
-                -B ./build_release
+                -DUSTORE_BUILD_API_FLIGHT=1 \
+                -DUSTORE_BUILD_TESTS=1 \
+                -B ./build_release .
                 
       - name: Build   
         run: |
-          make -j4 \
-              ustore_flight_server_ucset \
-              ustore_flight_server_leveldb \
-              ustore_flight_server_rocksdb \
-              --silent \
-              -C ./build_release
+          make -j 4 -C ./build_release
 
       - name: Upload Binaries
         uses: actions/upload-artifact@v3.1.1
         with:
           name: binaries
-          path: build_release/bin/*
+          path: build_release/build/bin/*
 
 
-  # test_ustore:
-  #   runs-on: ubuntu-latest
-  #   needs: build_ustore
-  #   steps:
-  #     - uses: actions/checkout@v3
-  #       with:
-  #         persist-credentials: false
-  #         ref: 'main-dev'
+  test_ustore:
+    runs-on: ubuntu-latest
+    needs: build_ustore
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          persist-credentials: false
+          ref: 'main-dev'
 
-  #     - name: Download a Build Artifact
-  #       uses: actions/download-artifact@v3.0.1
-  #       with:
-  #         name: binaries
+      - name: Download a Build Artifact
+        uses: actions/download-artifact@v3.0.1
+        with:
+          name: binaries
 
-  #     - name: Change Permissions
-  #       run: chmod +x /home/runner/work/ustore/ustore/*
+      - name: Change Permissions
+        run: chmod +x /home/runner/work/ustore/ustore/*
       
-  #     - name: Run Tests
-  #       run: for test in $(ls ./build_release/bin/*test_units*); do  echo -e "------ \e[93mRunning $test\e[0m ------"; timeout -v --kill-after=5 300 $test; done
+      - name: Run Tests
+        run: for test in $(ls ./build_release/build/bin/*test_units*); do  echo -e "------ \e[93mRunning $test\e[0m ------"; timeout -v --kill-after=5 300 $test; done
 
 
   build_test_wheel:
@@ -113,96 +106,74 @@ jobs:
           pip install cibuildwheel twine
           CIBW_BUILD="cp39-*" cibuildwheel --platform linux
           CIBW_BUILD="cp310-*" cibuildwheel --platform linux
-          
-      - uses: actions/upload-artifact@v3
+  
+
+  build_test_java:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
         with:
-          path: ./wheelhouse/*.whl
-  
+          persist-credentials: false
+          ref: 'main-dev'
 
-  # build_test_java:
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Checkout
-  #       uses: actions/checkout@v3
-  #       with:
-  #         persist-credentials: false
-  #         ref: 'main-dev'
-
-  #     - name: Prepare CMake, Conan and PyArrow
-  #       run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.57.0
-
-  #     - name: install aws cli
-  #       uses: unfor19/install-aws-cli-action@master
-  #       with:
-  #         version: 2.11.0
-
-  #     - name: Configure AWS CLI
-  #       run: |
-  #         aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
-  #         aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-  #         aws configure set default.region $AWS_DEFAULT_REGION
-
-  #     - name: Install ustore dependencies using conan
-  #       run: |
-  #         aws s3 cp s3://ustore-test-conan/ustore_dependency.tar.gz ustore_dependency.tar.gz
-  #         conan profile new --detect default
-  #         conan profile update settings.compiler.libcxx=libstdc++11 default
-  #         tar -xzvf ustore_dependency.tar.gz -C ~/.conan
-  #         conan install ustore/1.1.1@admin/arrow-static -g cmake
+      - name: Prepare CMake, Conan and PyArrow
+        run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.57.0
       
-  #     - name: Install default jdk
-  #       run: sudo apt install default-jdk -y
+      - name: Install default jdk
+        run: sudo apt install default-jdk -y
+      
+      - name: Install ustore dependencies using conan
+        run: |
+          wget https://github.com/unum-cloud/ustore-deps/releases/download/v0.0.1/usttore_deps_x86_linux.tar.gz
+          conan profile new --detect default
+          conan profile update settings.compiler.libcxx=libstdc++11 default
+          tar -xzf ./usttore_deps_x86_linux.tar.gz -C ~/.conan
+          conan export . unum/x86_linux
+          conan install ustore_depend/0.12.1@unum/x86_linux --build=ustore_depend -g cmake
+          rm -rf ./usttore_deps_x86_linux.tar.gz
 
-  #     - name: Build and test java
-  #       run: |
-  #         export JAVA_HOME="/usr/lib/jvm/java-11-openjdk-amd64"
-  #         bash java/pack.sh
+      - name: Build and test java
+        run: |
+          export JAVA_HOME="/usr/lib/jvm/java-11-openjdk-amd64"
+          bash java/pack.sh
 
   
-  # build_test_golang:
-  #   runs-on: ubuntu-latest
-  #   steps:
+  build_test_golang:
+    runs-on: ubuntu-latest
+    steps:
 
-  #     - name: Checkout
-  #       uses: actions/checkout@v3
-  #       with:
-  #         persist-credentials: false
-  #         ref: 'main-dev'
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          persist-credentials: false
+          ref: 'main-dev'
 
-  #     - run: git submodule update --init --recursive
+      - run: git submodule update --init --recursive
 
-  #     - name: Install golang
-  #       run: sudo apt update && sudo apt install golang
+      - name: Install golang
+        run: sudo apt update && sudo apt install golang
       
-  #     - name: Prepare CMake, Conan and PyArrow
-  #       run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.57.0
+      - name: Prepare CMake, Conan and PyArrow
+        run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.57.0
 
-  #     - name: install aws cli
-  #       uses: unfor19/install-aws-cli-action@master
-  #       with:
-  #         version: 2.11.0
-
-  #     - name: Configure AWS CLI
-  #       run: |
-  #         aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
-  #         aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-  #         aws configure set default.region $AWS_DEFAULT_REGION
-
-  #     - name: Install ustore dependencies using conan
-  #       run: |
-  #         aws s3 cp s3://ustore-test-conan/ustore_dependency.tar.gz ustore_dependency.tar.gz
-  #         conan profile new --detect default
-  #         conan profile update settings.compiler.libcxx=libstdc++11 default
-  #         tar -xzvf ustore_dependency.tar.gz -C ~/.conan
-  #         conan install ustore/1.1.1@admin/arrow-static -g cmake
+      - name: Install ustore dependencies using conan
+        run: |
+          wget https://github.com/unum-cloud/ustore-deps/releases/download/v0.0.1/usttore_deps_x86_linux.tar.gz
+          conan profile new --detect default
+          conan profile update settings.compiler.libcxx=libstdc++11 default
+          tar -xzf ./usttore_deps_x86_linux.tar.gz -C ~/.conan
+          conan export . unum/x86_linux
+          conan install ustore_depend/0.12.1@unum/x86_linux --build=ustore_depend -g cmake
+          rm -rf ./usttore_deps_x86_linux.tar.gz
       
-  #     - name: Build golang
-  #       run: bash go-ustore/pack.sh
+      - name: Build golang
+        run: bash go-ustore/pack.sh
 
-  #     - name: Test golang
-  #       run: |
-  #         go mod tidy
-  #         go test go-ustore/...
+      - name: Test golang
+        run: |
+          go mod tidy
+          go test go-ustore/...
 
 
 # Must discuss
