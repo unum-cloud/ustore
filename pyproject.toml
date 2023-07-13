@@ -13,23 +13,20 @@ testpaths = ["python/tests"]
 [tool.cibuildwheel]
 build-verbosity = 0
 before-all = [
-    "yum install -y bzip2-devel libffi-devel zlib-devel wget python3-devel perl-IPC-Cmd perl-Test-Simple"
+    "yum install -y bzip2-devel libffi-devel zlib-devel wget python3-devel perl-IPC-Cmd perl-Test-Simple git-lfs"
 ]
 
 environment = "CMAKE_ARGS_F=/tmp/cmake_args"
 before-build = [
     "rm -rf {project}/CMakeCache.txt {project}/build {project}/CMakeFiles.txt {project}/_deps",
-    "pip install pyarrow==10.0.1 conan==1.57.0 auditwheel awscli",
-    "aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID,
-    "aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY",
-    "aws configure set region us-east-1",
-    "aws s3 cp s3://ustore-dependency-test/ustore_dependency_shared.tar.gz ustore_dependency_shared.tar.gz",
+    "pip install pyarrow==10.0.1 conan==1.57.0 auditwheel",
+    "git lfs install && git lfs clone https://github.com/unum-cloud/ustore-deps.git",
     "conan profile new --detect default",
     "conan profile update settings.compiler.libcxx=libstdc++11 default",
-    "tar -xzf ustore_dependency_shared.tar.gz -C ~/.conan",
-    "rm -rf ustore_dependency_shared.tar.gz",
-    "conan export . user/channel",
-    "conan install ustore_depend/0.12.1@user/channel --build=ustore_depend -g cmake -s compiler.version=11",
+    "tar -xzf {project}/ustore-deps/ustore_deps.tar.gz -C ~/.conan",
+    "rm -rf ./ustore-deps/",
+    "conan export . admin/arrow-static-leveldb",
+    "conan install ustore_depend/0.12.1@admin/arrow-static-leveldb --build=ustore_depend -g cmake -s compiler.version=11",
     "export PYST=$(python -c 'import site; print(site.getsitepackages()[0])')",
     "echo \"-DCMAKE_BUILD_TYPE=Release -DPYARROW_DIR=${PYST}/pyarrow/\" > ${CMAKE_ARGS_F}",
     "mkdir -p build/ustore",
