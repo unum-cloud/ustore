@@ -243,7 +243,7 @@ endif()
 
 if(${USTORE_BUILD_ENGINE_LEVELDB})
   add_library(ustore_embedded_leveldb src/engine_leveldb.cpp src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp src/modality_vectors.cpp)
-  target_link_libraries(ustore_embedded_leveldb ${CONAN_LIBS_LEVELDB} pthread yyjson simdjson bson-static-1.0 pcre2-8 ${JEMALLOC_LIBRARIES})
+  target_link_libraries(ustore_embedded_leveldb ${CONAN_LIBS_LEVELDB} pthread yyjson simdjson bson-static-1.0 pcre2-8 ${CONAN_LIBS_RE2} ${CONAN_LIBS_UTF8PROC} ${JEMALLOC_LIBRARIES})
   set_source_files_properties(src/engine_leveldb.cpp PROPERTIES COMPILE_FLAGS -fno-rtti)
   target_compile_definitions(ustore_embedded_leveldb INTERFACE USTORE_VERSION="${USTORE_VERSION}")
   target_compile_definitions(ustore_embedded_leveldb INTERFACE USTORE_ENGINE_IS_LEVELDB=1)
