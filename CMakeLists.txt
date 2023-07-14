@@ -233,7 +233,7 @@ endif()
 
 if(${USTORE_BUILD_ENGINE_ROCKSDB})
   add_library(ustore_embedded_rocksdb src/engine_rocksdb.cpp src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp src/modality_vectors.cpp)
-  target_link_libraries(ustore_embedded_rocksdb rocksdb pthread yyjson simdjson bson-static-1.0 pcre2-8 ${CONAN_LIBS_THRIFT} ${JEMALLOC_LIBRARIES})
+  target_link_libraries(ustore_embedded_rocksdb rocksdb pthread yyjson simdjson bson-static-1.0 pcre2-8 ${CONAN_LIBS_RE2} ${CONAN_LIBS_UTF8PROC} ${CONAN_LIBS_THRIFT} ${JEMALLOC_LIBRARIES})
   target_compile_definitions(ustore_embedded_rocksdb INTERFACE USTORE_VERSION="${USTORE_VERSION}")
   target_compile_definitions(ustore_embedded_rocksdb INTERFACE USTORE_ENGINE_IS_ROCKSDB=1)
 
