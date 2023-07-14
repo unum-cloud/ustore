@@ -89,7 +89,7 @@ jobs:
       - name: Run Tests
         run: |
           ls /home/runner/work/ustore/ustore/
-          for test in $(ls /home/runner/work/ustore/ustore/build_release/build/bin/*test_units*); do  echo -e "------ \e[93mRunning $test\e[0m ------"; timeout -v --kill-after=5 300 $test; done
+          for test in $(ls /home/runner/work/ustore/ustore/*test_units*); do  echo -e "------ \e[93mRunning $test\e[0m ------"; timeout -v --kill-after=5 300 $test; done
 
 
   build_test_wheel:
