@@ -137,6 +137,7 @@ jobs:
 
       - name: Build and test java
         run: |
+          sed -i 's/make -j/make -j4/' /home/runner/work/ustore/ustore/java/pack.sh
           export JAVA_HOME="/usr/lib/jvm/java-11-openjdk-amd64"
           bash /home/runner/work/ustore/ustore/java/pack.sh
 
