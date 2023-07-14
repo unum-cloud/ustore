@@ -2,7 +2,7 @@ name: Pre-Release
 
 on:
   push:
-    branches: ["main-dev"]
+    branches: ["main"]
 
 # Must change after discuss
 env:
