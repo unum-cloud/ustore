@@ -223,7 +223,7 @@ set(USTORE_TEST_NAMES "test_tools" "test_compilation" "test_units" "stress_atomi
 # Define the Engine libraries we will need to build
 if(${USTORE_BUILD_ENGINE_UCSET})
   add_library(ustore_embedded_ucset src/engine_ucset.cpp src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp src/modality_vectors.cpp)
-  target_link_libraries(ustore_embedded_ucset pthread yyjson simdjson bson-static-1.0 pcre2-8 parquet arrow  ${JEMALLOC_LIBRARIES} ${TBB_LIBRARIES})
+  target_link_libraries(ustore_embedded_ucset pthread yyjson simdjson bson-static-1.0 pcre2-8 parquet arrow ${CONAN_LIBS_RE2} ${CONAN_LIBS_UTF8PROC} ${JEMALLOC_LIBRARIES} ${TBB_LIBRARIES})
   target_compile_definitions(ustore_embedded_ucset INTERFACE USTORE_VERSION="${USTORE_VERSION}")
   target_compile_definitions(ustore_embedded_ucset INTERFACE USTORE_ENGINE_IS_UCSET=1)
 
