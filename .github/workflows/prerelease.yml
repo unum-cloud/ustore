@@ -87,7 +87,9 @@ jobs:
         run: chmod +x /home/runner/work/ustore/ustore/*
       
       - name: Run Tests
-        run: for test in $(ls ./build_release/build/bin/*test_units*); do  echo -e "------ \e[93mRunning $test\e[0m ------"; timeout -v --kill-after=5 300 $test; done
+        run: |
+          ls /home/runner/work/ustore/ustore/
+          for test in $(ls /home/runner/work/ustore/ustore/build_release/build/bin/*test_units*); do  echo -e "------ \e[93mRunning $test\e[0m ------"; timeout -v --kill-after=5 300 $test; done
 
 
   build_test_wheel:
@@ -136,7 +138,7 @@ jobs:
       - name: Build and test java
         run: |
           export JAVA_HOME="/usr/lib/jvm/java-11-openjdk-amd64"
-          bash java/pack.sh
+          bash /home/runner/work/ustore/ustore/java/pack.sh
 
   
   build_test_golang:
