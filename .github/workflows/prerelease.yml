@@ -24,184 +24,190 @@ jobs:
   #   - run: cp .github/workflows/package.json . && npm install && npx semantic-release
   
   
-  build_ustore:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          persist-credentials: false
-          ref: 'main-dev'
+#   build_ustore:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v3
+#         with:
+#           persist-credentials: false
+#           ref: 'main-dev'
           
-      - run: git submodule update --init --recursive
+#       - run: git submodule update --init --recursive
 
-      - name: Prepare CMake, Conan and PyArrow
-        run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.57.0
+#       - name: Prepare CMake, Conan and PyArrow
+#         run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.57.0
 
-      - name: Install ustore dependencies using conan
-        run: |
-          wget https://github.com/unum-cloud/ustore-deps/releases/download/v0.0.1/usttore_deps_x86_linux.tar.gz
-          conan profile new --detect default
-          conan profile update settings.compiler.libcxx=libstdc++11 default
-          tar -xzf ./usttore_deps_x86_linux.tar.gz -C ~/.conan
-          conan export . unum/x86_linux
-          conan install ustore_depend/0.12.1@unum/x86_linux --build=ustore_depend -g cmake
-          rm -rf ./usttore_deps_x86_linux.tar.gz
+#       - name: Install ustore dependencies using conan
+#         run: |
+#           wget https://github.com/unum-cloud/ustore-deps/releases/download/v0.0.1/usttore_deps_x86_linux.tar.gz
+#           conan profile new --detect default
+#           conan profile update settings.compiler.libcxx=libstdc++11 default
+#           tar -xzf ./usttore_deps_x86_linux.tar.gz -C ~/.conan
+#           conan export . unum/x86_linux
+#           conan install ustore_depend/0.12.1@unum/x86_linux --build=ustore_depend -g cmake
+#           rm -rf ./usttore_deps_x86_linux.tar.gz
 
-      - name: Configure cmake
-        run: |
-          cmake -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
-                -DUSTORE_BUILD_ENGINE_UCSET=1 \
-                -DUSTORE_BUILD_ENGINE_LEVELDB=1 \
-                -DUSTORE_BUILD_ENGINE_ROCKSDB=1 \
-                -DUSTORE_BUILD_API_FLIGHT=1 \
-                -DUSTORE_BUILD_TESTS=1 \
-                -B ./build_release .
+#       - name: Configure cmake
+#         run: |
+#           cmake -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
+#                 -DUSTORE_BUILD_ENGINE_UCSET=1 \
+#                 -DUSTORE_BUILD_ENGINE_LEVELDB=1 \
+#                 -DUSTORE_BUILD_ENGINE_ROCKSDB=1 \
+#                 -DUSTORE_BUILD_API_FLIGHT=1 \
+#                 -DUSTORE_BUILD_TESTS=1 \
+#                 -B ./build_release .
                 
-      - name: Build   
-        run: |
-          make -j 4 -C ./build_release
+#       - name: Build   
+#         run: |
+#           make -j 4 -C ./build_release
 
-      - name: Upload Binaries
-        uses: actions/upload-artifact@v3.1.1
-        with:
-          name: binaries
-          path: build_release/build/bin/*
+#       - name: Upload Binaries
+#         uses: actions/upload-artifact@v3.1.1
+#         with:
+#           name: binaries
+#           path: build_release/build/bin/*
 
 
-  test_ustore:
-    runs-on: ubuntu-latest
-    needs: build_ustore
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          persist-credentials: false
-          ref: 'main-dev'
+#   test_ustore:
+#     runs-on: ubuntu-latest
+#     needs: build_ustore
+#     steps:
+#       - uses: actions/checkout@v3
+#         with:
+#           persist-credentials: false
+#           ref: 'main-dev'
 
-      - name: Download a Build Artifact
-        uses: actions/download-artifact@v3.0.1
-        with:
-          name: binaries
+#       - name: Download a Build Artifact
+#         uses: actions/download-artifact@v3.0.1
+#         with:
+#           name: binaries
 
-      - name: Change Permissions
-        run: chmod +x /home/runner/work/ustore/ustore/*
+#       - name: Change Permissions
+#         run: chmod +x /home/runner/work/ustore/ustore/*
       
-      - name: Run Tests
-        run: |
-          ls /home/runner/work/ustore/ustore/
-          for test in $(ls /home/runner/work/ustore/ustore/*test_units*); do  echo -e "------ \e[93mRunning $test\e[0m ------"; timeout -v --kill-after=5 300 $test; done
+#       - name: Run Tests
+#         run: |
+#           ls /home/runner/work/ustore/ustore/
+#           for test in $(ls /home/runner/work/ustore/ustore/*test_units*); do  echo -e "------ \e[93mRunning $test\e[0m ------"; timeout -v --kill-after=5 300 $test; done
 
 
-  build_test_wheel:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          persist-credentials: false
-          ref: 'main-dev'
+#   build_test_wheel:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v3
+#         with:
+#           persist-credentials: false
+#           ref: 'main-dev'
 
-      - name: Prepare CMake, Conan and PyArrow
-        run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.57.0
+#       - name: Prepare CMake, Conan and PyArrow
+#         run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.57.0
 
-      - name: Build wheel
-        run: |
-          pip install cibuildwheel twine
-          CIBW_BUILD="cp39-*" cibuildwheel --platform linux
-          CIBW_BUILD="cp310-*" cibuildwheel --platform linux
+#       - name: Build wheel
+#         run: |
+#           pip install cibuildwheel twine
+#           CIBW_BUILD="cp39-*" cibuildwheel --platform linux
+#           CIBW_BUILD="cp310-*" cibuildwheel --platform linux
   
 
-  build_test_java:
+#   build_test_java:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: Checkout
+#         uses: actions/checkout@v3
+#         with:
+#           persist-credentials: false
+#           ref: 'main-dev'
+
+#       - name: Prepare CMake, Conan and PyArrow
+#         run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.57.0
+      
+#       - name: Install default jdk
+#         run: sudo apt install default-jdk -y
+      
+#       - name: Install ustore dependencies using conan
+#         run: |
+#           wget https://github.com/unum-cloud/ustore-deps/releases/download/v0.0.1/usttore_deps_x86_linux.tar.gz
+#           conan profile new --detect default
+#           conan profile update settings.compiler.libcxx=libstdc++11 default
+#           tar -xzf ./usttore_deps_x86_linux.tar.gz -C ~/.conan
+#           conan export . unum/x86_linux
+#           conan install ustore_depend/0.12.1@unum/x86_linux --build=ustore_depend -g cmake
+#           rm -rf ./usttore_deps_x86_linux.tar.gz
+
+#       - name: Build and test java
+#         run: |
+#           sed -i 's/make -j/make -j4/' /home/runner/work/ustore/ustore/java/pack.sh
+#           export JAVA_HOME="/usr/lib/jvm/java-11-openjdk-amd64"
+#           bash /home/runner/work/ustore/ustore/java/pack.sh
+
+  
+#   build_test_golang:
+#     runs-on: ubuntu-latest
+#     steps:
+
+#       - name: Checkout
+#         uses: actions/checkout@v3
+#         with:
+#           persist-credentials: false
+#           ref: 'main-dev'
+
+#       - run: git submodule update --init --recursive
+
+#       - name: Install golang
+#         run: sudo apt update && sudo apt install golang
+      
+#       - name: Prepare CMake, Conan and PyArrow
+#         run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.57.0
+
+#       - name: Install ustore dependencies using conan
+#         run: |
+#           wget https://github.com/unum-cloud/ustore-deps/releases/download/v0.0.1/usttore_deps_x86_linux.tar.gz
+#           conan profile new --detect default
+#           conan profile update settings.compiler.libcxx=libstdc++11 default
+#           tar -xzf ./usttore_deps_x86_linux.tar.gz -C ~/.conan
+#           conan export . unum/x86_linux
+#           conan install ustore_depend/0.12.1@unum/x86_linux --build=ustore_depend -g cmake
+#           rm -rf ./usttore_deps_x86_linux.tar.gz
+      
+#       - name: Build golang
+#         run: bash go-ustore/pack.sh
+
+#       - name: Test golang
+#         run: |
+#           go mod tidy
+#           go test go-ustore/...
+
+
+  build_docker:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      
+      - name: Get version
+        run: version=$(cat VERSION)
+        
+      - name: docker login
+        uses: azure/docker-login@v1
         with:
-          persist-credentials: false
-          ref: 'main-dev'
+          login-server: index.docker.io
+          username: ${{ secrets.DOCKERIO_USERNAME }}
+          password: ${{ secrets.DOCKERIO_PASSWORD }}
 
-      - name: Prepare CMake, Conan and PyArrow
-        run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.57.0
-      
-      - name: Install default jdk
-        run: sudo apt install default-jdk -y
-      
-      - name: Install ustore dependencies using conan
+      # Optional, must discuss
+      - name: Build Docker
         run: |
-          wget https://github.com/unum-cloud/ustore-deps/releases/download/v0.0.1/usttore_deps_x86_linux.tar.gz
-          conan profile new --detect default
-          conan profile update settings.compiler.libcxx=libstdc++11 default
-          tar -xzf ./usttore_deps_x86_linux.tar.gz -C ~/.conan
-          conan export . unum/x86_linux
-          conan install ustore_depend/0.12.1@unum/x86_linux --build=ustore_depend -g cmake
-          rm -rf ./usttore_deps_x86_linux.tar.gz
-
-      - name: Build and test java
-        run: |
-          sed -i 's/make -j/make -j4/' /home/runner/work/ustore/ustore/java/pack.sh
-          export JAVA_HOME="/usr/lib/jvm/java-11-openjdk-amd64"
-          bash /home/runner/work/ustore/ustore/java/pack.sh
-
-  
-  build_test_golang:
-    runs-on: ubuntu-latest
-    steps:
-
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          persist-credentials: false
-          ref: 'main-dev'
-
-      - run: git submodule update --init --recursive
-
-      - name: Install golang
-        run: sudo apt update && sudo apt install golang
-      
-      - name: Prepare CMake, Conan and PyArrow
-        run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.57.0
-
-      - name: Install ustore dependencies using conan
-        run: |
-          wget https://github.com/unum-cloud/ustore-deps/releases/download/v0.0.1/usttore_deps_x86_linux.tar.gz
-          conan profile new --detect default
-          conan profile update settings.compiler.libcxx=libstdc++11 default
-          tar -xzf ./usttore_deps_x86_linux.tar.gz -C ~/.conan
-          conan export . unum/x86_linux
-          conan install ustore_depend/0.12.1@unum/x86_linux --build=ustore_depend -g cmake
-          rm -rf ./usttore_deps_x86_linux.tar.gz
-      
-      - name: Build golang
-        run: bash go-ustore/pack.sh
-
-      - name: Test golang
-        run: |
-          go mod tidy
-          go test go-ustore/...
-
-
-# Must discuss
-
-  # build_docker:
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Checkout
-  #       uses: actions/checkout@v3
-
-  #     - name: Set up QEMU
-  #       uses: docker/setup-qemu-action@v2
-
-  #     - name: Set up Docker Buildx
-  #       uses: docker/setup-buildx-action@v2
-      
-  #     - name: Get version
-  #       run: version=$(cat VERSION)
-
-  #     # Optional, must discuss
-  #     - name: Build Docker
-  #       run: |
-  #         docker buildx create --use
-  #         docker buildx build \
-  #           --platform "linux/amd64,linux/arm64" \
-  #           --build-arg version=$version \
-  #           --file ustore-scripts/Dockerfile.ubuntu \
-  #           --tag unum/ustore:$version-jammy \
-  #           --tag unum/ustore:latest
+          docker buildx create --use
+          docker buildx build \
+          --platform "linux/amd64,linux/arm64" \
+          --build-arg version=$version \
+          --file ./Dockerfile \
+          --tag gurgenyegoryan/ustore:$version-jammy \
+          --tag gurgenyegoryan/ustore:latest \
+          --push .
