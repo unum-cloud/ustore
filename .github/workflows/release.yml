@@ -72,7 +72,7 @@ jobs:
         uses: actions/deploy-pages@v1
 
   
-  build_test_wheel:
+  build_wheel:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -195,7 +195,7 @@ jobs:
           cd go-ustore && bash publish.sh
   
 
-  build_docker:
+  build_publish_docker:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

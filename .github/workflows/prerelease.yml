@@ -179,7 +179,7 @@ jobs:
           go test go-ustore/...
 
 
-  build_docker:
+  build_test_docker:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
