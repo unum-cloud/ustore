@@ -189,9 +189,6 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
-      
-      - name: Get version
-        run: version=$(cat VERSION)
         
       - name: docker login
         uses: azure/docker-login@v1
@@ -199,6 +196,9 @@ jobs:
           login-server: index.docker.io
           username: ${{ secrets.DOCKERIO_USERNAME }}
           password: ${{ secrets.DOCKERIO_PASSWORD }}
+      
+      - name: Get version
+        run: export version=$(cat VERSION)
 
       # Optional, must discuss
       - name: Build Docker
