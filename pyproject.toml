@@ -19,7 +19,7 @@ before-all = [
 environment = "CMAKE_ARGS_F=/tmp/cmake_args"
 before-build = [
     "rm -rf {project}/CMakeCache.txt {project}/build {project}/CMakeFiles.txt {project}/_deps",
-    "pip install pyarrow==10.0.1 conan==1.57.0 auditwheel",
+    "pip install pyarrow==10.0.0 conan==1.57.0 auditwheel",
     "wget https://github.com/unum-cloud/ustore-deps/releases/download/v0.0.1/usttore_deps_x86_linux.tar.gz",
     "conan profile new --detect default",
     "conan profile update settings.compiler.libcxx=libstdc++11 default",
