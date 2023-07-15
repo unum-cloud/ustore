@@ -196,12 +196,12 @@ jobs:
           login-server: index.docker.io
           username: ${{ secrets.DOCKERIO_USERNAME }}
           password: ${{ secrets.DOCKERIO_PASSWORD }}
-          
 
       # Optional, must discuss
       - name: Build Docker
         run: |
           export version=$(cat VERSION)
+          sed -i 's/make -j32/make -j4/' ./Dockerfile
           docker buildx create --use
           docker buildx build \
           --platform "linux/amd64,linux/arm64" \
