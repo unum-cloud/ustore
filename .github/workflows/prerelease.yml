@@ -8,7 +8,6 @@ on:
 env:
   GH_TOKEN: ${{ secrets.SEMANTIC_RELEASE_TOKEN }}
   BUILD_TYPE: Release
-  AWS_DEFAULT_REGION: us-east-1
 
 
 jobs:
