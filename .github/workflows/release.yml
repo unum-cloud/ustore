@@ -193,4 +193,37 @@ jobs:
           sudo apt update
           sudo apt install golang
           cd go-ustore && bash publish.sh
+  
+
+  build_docker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+        
+      - name: docker login
+        uses: azure/docker-login@v1
+        with:
+          login-server: index.docker.io
+          username: ${{ secrets.DOCKERIO_USERNAME }}
+          password: ${{ secrets.DOCKERIO_PASSWORD }}
+
+      - name: Build Docker
+        run: |
+          export version=$(cat VERSION)
+          sed -i 's/make -j32/make -j4/' ./Dockerfile
+          docker buildx create --use
+          docker buildx build \
+          --platform "linux/amd64,linux/arm64" \
+          --build-arg version=$version \
+          --file ./Dockerfile \
+          --tag unum/ustore:$version-jammy \
+          --tag unum/ustore:latest \
+          --push .
     
