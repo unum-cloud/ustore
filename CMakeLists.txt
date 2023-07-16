@@ -155,9 +155,9 @@ if(${USTORE_BUILD_ENGINE_UCSET})
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/ucset.cmake")
 endif()
 
-if(${USTORE_BUILD_ENGINE_ROCKSDB})
-  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/rocksdb.cmake")
-endif()
+#if(${USTORE_BUILD_ENGINE_ROCKSDB})
+#  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/rocksdb.cmake")
+#endif()
 
 if(${USTORE_BUILD_ENGINE_LEVELDB})
   # include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/leveldb.cmake")
