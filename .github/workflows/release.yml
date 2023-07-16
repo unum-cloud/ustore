@@ -132,13 +132,13 @@ jobs:
 
       - name: Install ustore dependencies using conan
         run: |
-          wget https://github.com/unum-cloud/ustore-deps/releases/download/v0.0.1/usttore_deps_x86_linux.tar.gz
+          wget https://github.com/unum-cloud/ustore-deps/releases/download/v0.1.1/ustore_deps_x86_linux.tar.gz
           conan profile new --detect default
           conan profile update settings.compiler.libcxx=libstdc++11 default
-          tar -xzf ./usttore_deps_x86_linux.tar.gz -C ~/.conan
+          tar -xzf ./ustore_deps_x86_linux.tar.gz -C ~/.conan
           conan export . unum/x86_linux
-          conan install ustore_depend/0.12.1@unum/x86_linux --build=ustore_depend -g cmake
-          rm -rf ./usttore_deps_x86_linux.tar.gz
+          conan install ustore_deps/0.12.1@unum/x86_linux --build=ustore_deps -g cmake
+          rm -rf ./ustore_deps_x86_linux.tar.gz
       
       - name: Install default jdk
         run: sudo apt install default-jdk -y
@@ -172,13 +172,13 @@ jobs:
 
       - name: Install ustore dependencies using conan
         run: |
-          wget https://github.com/unum-cloud/ustore-deps/releases/download/v0.0.1/usttore_deps_x86_linux.tar.gz
+          wget https://github.com/unum-cloud/ustore-deps/releases/download/v0.1.1/ustore_deps_x86_linux.tar.gz
           conan profile new --detect default
           conan profile update settings.compiler.libcxx=libstdc++11 default
-          tar -xzf ./usttore_deps_x86_linux.tar.gz -C ~/.conan
+          tar -xzf ./ustore_deps_x86_linux.tar.gz -C ~/.conan
           conan export . unum/x86_linux
-          conan install ustore_depend/0.12.1@unum/x86_linux --build=ustore_depend -g cmake
-          rm -rf ./usttore_deps_x86_linux.tar.gz
+          conan install ustore_deps/0.12.1@unum/x86_linux --build=ustore_deps -g cmake
+          rm -rf ./ustore_deps_x86_linux.tar.gz
       
       - name: Build golang
         run: bash go-ustore/pack.sh
