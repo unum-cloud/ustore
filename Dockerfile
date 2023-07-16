@@ -1,8 +1,8 @@
 FROM ubuntu:22.04 as builder
 
 ENV DEBIAN_FRONTEND="noninteractive" TZ="Europe/London"
-ENV ARM=ustore_deps/0.12.1@unum/arm_linux
-ENV AMD=ustore_depend/0.12.1@unum/x86_linux
+ENV ARM=arm
+ENV AMD=amd
 ENV ARCHIVE="ustore_deps.tar.gz"
 
 ARG TARGETPLATFORM
@@ -28,17 +28,16 @@ RUN pip install conan==1.57.0
 
 # Download files and set the archive and package variables based on the architecture
 RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
-        wget -O $ARCHIVE https://github.com/unum-cloud/ustore-deps/releases/download/v0.0.1/usttore_deps_x86_linux.tar.gz && PACKAGE=$AMD; \
+        wget -O $ARCHIVE https://github.com/unum-cloud/ustore-deps/releases/download/v0.1.1/ustore_deps_x86_linux.tar.gz; \
     elif [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
-        wget -O $ARCHIVE https://github.com/unum-cloud/ustore-deps/releases/download/v0.0.1/ustore_deps_arm_linux.tar.gz && PACKAGE=$ARM; \
+        wget -O $ARCHIVE https://github.com/unum-cloud/ustore-deps/releases/download/v0.1.1/ustore_deps_arm_linux.tar.gz; \
     fi
 
 RUN conan profile new --detect default && \
     conan profile update settings.compiler.libcxx=libstdc++11 default && \
     tar -xzf $ARCHIVE -C ~/.conan && \
-    export package_name="${PACKAGE#*@}" && \
-    conan export . unum/deps && \
-    conan install ustore_deps/0.12.1@unum/deps -g cmake --build=ustore_deps -s compiler.version=11 && \
+    conan export . unum/_linux && \
+    conan install ustore_deps/0.12.1@unum/_linux -g cmake --build=ustore_deps -s compiler.version=11 && \
     rm -rf $ARCHIVE
 
 RUN cmake \
