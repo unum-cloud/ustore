@@ -43,7 +43,7 @@ jobs:
           conan profile new --detect default
           conan profile update settings.compiler.libcxx=libstdc++11 default
           tar -xzf ./ustore_deps_x86_linux.tar.gz -C ~/.conan
-          conan install ustore_deps/0.12.1@unum/x86_linux -g cmake
+          conan install ustore_deps/0.12.1@unum/x86_linux -g cmake --build=ustore_deps -s compiler.version=11
           rm -rf ./ustore_deps_x86_linux.tar.gz
 
       - name: Configure cmake
