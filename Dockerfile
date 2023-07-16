@@ -36,7 +36,6 @@ RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
 RUN conan profile new --detect default && \
     conan profile update settings.compiler.libcxx=libstdc++11 default && \
     tar -xzf $ARCHIVE -C ~/.conan && \
-    conan export . unum/_linux && \
     conan install ustore_deps/0.12.1@unum/_linux -g cmake --build=ustore_deps -s compiler.version=11 && \
     rm -rf $ARCHIVE
 
