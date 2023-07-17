@@ -183,10 +183,14 @@ class ConanUStore(ConanFile):
         
         self.options["abseil"].shared = False
         
+        self.options["rocksdb"].shared = False
+        self.options["rocksdb"].fPIC = True
+        self.options["rocksdb"].use_rtti = True
+        
         # self.options["gtest"].shared = False
 
     def requirements(self):
-        self.requires('rocksdb/7.10.2@unum/ustore')
+        # self.requires('rocksdb/7.10.2@unum/ustore')
         self.requires('arrow/10.0.0')
         self.requires('openssl/1.1.1o')
         self.requires('pcre2/10.42')
@@ -206,6 +210,8 @@ class ConanUStore(ConanFile):
         self.requires('leveldb/1.23')
         self.requires('grpc/1.50.1')
         self.requires('zlib/1.2.13')
+        
+        self.requires('rocksdb/6.29.5')
         
         self.requires('abseil/20230125.3')
         self.requires('libcurl/7.80.0')
