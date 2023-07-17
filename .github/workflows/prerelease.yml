@@ -39,7 +39,7 @@ jobs:
 
       - name: Install ustore dependencies using conan
         run: |
-          wget -q https://github.com/unum-cloud/ustore-deps/releases/download/v0.1.1/ustore_deps_x86_linux.tar.gz
+          wget -q https://github.com/unum-cloud/ustore-deps/releases/download/v0.1.2/ustore_deps_x86_linux.tar.gz
           conan profile new --detect default
           conan profile update settings.compiler.libcxx=libstdc++11 default
           tar -xzf ./ustore_deps_x86_linux.tar.gz -C ~/.conan
@@ -125,7 +125,7 @@ jobs:
       
       - name: Install ustore dependencies using conan
         run: |
-          wget -q https://github.com/unum-cloud/ustore-deps/releases/download/v0.1.1/ustore_deps_x86_linux.tar.gz
+          wget -q https://github.com/unum-cloud/ustore-deps/releases/download/v0.1.2/ustore_deps_x86_linux.tar.gz
           conan profile new --detect default
           conan profile update settings.compiler.libcxx=libstdc++11 default
           tar -xzf ./ustore_deps_x86_linux.tar.gz -C ~/.conan
@@ -159,7 +159,7 @@ jobs:
 
   #     - name: Install ustore dependencies using conan
   #       run: |
-  #         wget -q https://github.com/unum-cloud/ustore-deps/releases/download/v0.1.1/ustore_deps_x86_linux.tar.gz
+  #         wget -q https://github.com/unum-cloud/ustore-deps/releases/download/v0.1.2/ustore_deps_x86_linux.tar.gz
   #         conan profile new --detect default
   #         conan profile update settings.compiler.libcxx=libstdc++11 default
   #         tar -xzf ./ustore_deps_x86_linux.tar.gz -C ~/.conan
