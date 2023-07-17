@@ -174,14 +174,11 @@ endif()
 
 if(${USTORE_USE_JEMALLOC})
   if (${CONAN})
-    set(JEMALLOC_LIBRARIES ${CONAN_LIB_DIRS_JEMALLOC})
+    set(JEMALLOC_LIBRARIES ${CONAN_LIBS_JEMALLOC})
   else()
     include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/jemalloc.cmake")
   endif()
 endif()
-
-# Test
-set(JEMALLOC_LIBRARIES ${CONAN_LIBS_JEMALLOC})
     
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/mpack.cmake")
 if(${USTORE_USE_ONEAPI})
@@ -278,7 +275,7 @@ set(USTORE_TEST_NAMES "test_tools" "test_compilation" "test_units" "stress_atomi
 # Define the Engine libraries we will need to build
 if(${USTORE_BUILD_ENGINE_UCSET})
   add_library(ustore_embedded_ucset src/engine_ucset.cpp src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp src/modality_vectors.cpp)
-  target_link_libraries(ustore_embedded_ucset pthread yyjson simdjson ${LIB_BSON} ${LIB_PCRE2} ${LIB_ARROW_PARQUET} ${CONAN_LIBS_GRPC} ${LIB_ARROW} ${LIB_ARROW_BUNDLED} ${JEMALLOC_LIBRARIES} ${TBB_LIBRARIES})
+  target_link_libraries(ustore_embedded_ucset pthread yyjson simdjson ${LIB_BSON} ${LIB_PCRE2} ${LIB_ARROW_PARQUET} ${LIB_ARROW} ${LIB_ARROW_BUNDLED} ${JEMALLOC_LIBRARIES} ${TBB_LIBRARIES})
   target_compile_definitions(ustore_embedded_ucset INTERFACE USTORE_VERSION="${USTORE_VERSION}")
   target_compile_definitions(ustore_embedded_ucset INTERFACE USTORE_ENGINE_IS_UCSET=1)
 
@@ -288,7 +285,7 @@ endif()
 
 if(${USTORE_BUILD_ENGINE_ROCKSDB})
   add_library(ustore_embedded_rocksdb src/engine_rocksdb.cpp src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp src/modality_vectors.cpp)
-  target_link_libraries(ustore_embedded_rocksdb ${LIB_ROCKSDB} pthread yyjson simdjson ${LIB_BSON} ${LIB_PCRE2} ${LIB_ARROW_BUNDLED} ${JEMALLOC_LIBRARIES})
+  target_link_libraries(ustore_embedded_rocksdb ${LIB_ROCKSDB} pthread yyjson simdjson ${LIB_BSON} ${LIB_PCRE2} ${LIB_ARROW} ${LIB_ARROW_BUNDLED} ${JEMALLOC_LIBRARIES})
   target_compile_definitions(ustore_embedded_rocksdb INTERFACE USTORE_VERSION="${USTORE_VERSION}")
   target_compile_definitions(ustore_embedded_rocksdb INTERFACE USTORE_ENGINE_IS_ROCKSDB=1)
 
@@ -298,7 +295,7 @@ endif()
 
 if(${USTORE_BUILD_ENGINE_LEVELDB})
   add_library(ustore_embedded_leveldb src/engine_leveldb.cpp src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp src/modality_vectors.cpp)
-  target_link_libraries(ustore_embedded_leveldb ${LIB_LEVELDB} pthread yyjson simdjson ${LIB_BSON} ${LIB_PCRE2} ${LIB_ARROW_BUNDLED} ${JEMALLOC_LIBRARIES})
+  target_link_libraries(ustore_embedded_leveldb ${LIB_LEVELDB} pthread yyjson simdjson ${LIB_BSON} ${LIB_PCRE2} ${LIB_ARROW} ${LIB_ARROW_BUNDLED} ${JEMALLOC_LIBRARIES})
   set_source_files_properties(src/engine_leveldb.cpp PROPERTIES COMPILE_FLAGS -fno-rtti)
   target_compile_definitions(ustore_embedded_leveldb INTERFACE USTORE_VERSION="${USTORE_VERSION}")
   target_compile_definitions(ustore_embedded_leveldb INTERFACE USTORE_ENGINE_IS_LEVELDB=1)
@@ -328,7 +325,7 @@ set(USTORE_CLIENT_NAMES ${USTORE_ENGINE_NAMES})
 
 if(${USTORE_BUILD_API_FLIGHT_CLIENT})
   add_library(ustore_flight_client src/flight_client.cpp src/modality_docs.cpp src/modality_graph.cpp src/modality_vectors.cpp)
-  target_link_libraries(ustore_flight_client pthread yyjson simdjson ${LIB_BSON} ${LIB_PCRE2} ${LIB_FMT} ${LIB_ARROW} ${LIB_ARROW_FLIGHT} ${LIB_ARROW_DATASET} ${LIB_ARROW_PARQUET} ${LIB_ARROW_BUNDLED} ${CONAN_LIBS_OPENSSL} {JEMALLOC_LIBRARIES})
+  target_link_libraries(ustore_flight_client pthread yyjson simdjson ${LIB_BSON} ${LIB_PCRE2} ${LIB_FMT} ${LIB_ARROW} ${LIB_ARROW_FLIGHT} ${LIB_ARROW_DATASET} ${LIB_ARROW_PARQUET} ${LIB_ARROW_BUNDLED} ${LIB_OPENSSL_SSL} ${LIB_OPENSSL_CRYPTO} {JEMALLOC_LIBRARIES})
   target_compile_definitions(ustore_flight_client INTERFACE USTORE_FLIGHT_CLIENT=TRUE)
   list(APPEND USTORE_CLIENT_NAMES "flight_client")
   list(APPEND USTORE_CLIENT_LIBS "ustore_flight_client")
