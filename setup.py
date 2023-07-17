@@ -84,8 +84,8 @@ class CMakeBuild(build_ext):
 
     def run(self):
         build_ext.run(self)
-        # if 'USTORE_DEBUG_PYTHON' not in os.environ:
-        #     self.run_command('build_pyi')
+        if 'USTORE_DEBUG_PYTHON' not in os.environ:
+            self.run_command('build_pyi')
 
 
 class BuildPyi(Command):
@@ -192,7 +192,7 @@ setup(
     ],
     cmdclass={
         'build_ext': CMakeBuild,
-        #'build_pyi': BuildPyi,
+        'build_pyi': BuildPyi,
     },
     zip_safe=False,
     install_requires=[
