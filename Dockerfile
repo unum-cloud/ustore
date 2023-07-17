@@ -30,7 +30,7 @@ RUN pip install conan==1.57.0
 RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
         wget -O $ARCHIVE https://github.com/unum-cloud/ustore-deps/releases/download/v0.1.2/ustore_deps_x86_linux.tar.gz; \
     elif [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
-        wget -O $ARCHIVE https://github.com/unum-cloud/ustore-deps/releases/download/v0.1.2/ustore_deps_arm_linux.tar.gz; \
+        wget -O $ARCHIVE https://github.com/unum-cloud/ustore-deps/releases/download/v0.1.2/ustore_deps_arm_linux.tar.gz; \ 
     fi
 
 RUN conan profile new --detect default && \
