@@ -9,7 +9,6 @@ project(UStore
   DESCRIPTION "Universal Binary DBMS Interface to manage Docs • Graphs • Blobs • Vectors × in Local • Remote × RocksDB • LevelDB • UCSet • UDisk × from C • C++ • Python • Java • GoLang"
 )
 
-
 option(USTORE_BUILD_ENGINE_UCSET "Building REST API server for all backends" ON)
 option(USTORE_BUILD_ENGINE_LEVELDB "Building REST API server for all backends")
 option(USTORE_BUILD_ENGINE_ROCKSDB "Building REST API server for all backends")
@@ -160,6 +159,9 @@ if (NOT CONAN)
   if(${USTORE_BUILD_ENGINE_LEVELDB})
     include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/leveldb.cmake")
   endif()
+else()
+  set(LIB_LEVELDB ${CONAN_LIBS_LEVELDB})
+  set(LIB_ROCKSDB ${CONAN_LIBS_ROCKSDB})
 
   # Modalities:
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/fmt.cmake")
@@ -177,10 +179,11 @@ if(${USTORE_USE_JEMALLOC})
     include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/jemalloc.cmake")
   endif()
 endif()
+
+# Test
+set(JEMALLOC_LIBRARIES ${CONAN_LIB_DIRS_JEMALLOC})
     
-
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/mpack.cmake")
-
 if(${USTORE_USE_ONEAPI})
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/oneapi.cmake")
 endif()
@@ -189,7 +192,6 @@ endif()
 # > USTORE_BUILD_ENGINE_UCSET: Uses Arrow Parquet format to save binary collections on disk.
 # > USTORE_BUILD_API_FLIGHT: Uses Arrow Flight RPC as a client-server communication protocol.
 # > USTORE_BUILD_SDK_PYTHON: Uses Arrow for zero-copy data exchage with the Python runtime.
-
 
 if(${USTORE_BUILD_API_FLIGHT_CLIENT} OR ${USTORE_BUILD_API_FLIGHT_SERVER} AND (NOT CONAN))
    include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/openssl.cmake")
@@ -270,7 +272,7 @@ set(USTORE_TEST_NAMES "test_tools" "test_compilation" "test_units" "stress_atomi
 # Define the Engine libraries we will need to build
 if(${USTORE_BUILD_ENGINE_UCSET})
   add_library(ustore_embedded_ucset src/engine_ucset.cpp src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp src/modality_vectors.cpp)
-  target_link_libraries(ustore_embedded_ucset pthread yyjson simdjson bson-static-1.0 pcre2-8 parquet arrow ${LIB_ARROW_BUNDLED} ${JEMALLOC_LIBRARIES} ${TBB_LIBRARIES})
+  target_link_libraries(ustore_embedded_ucset pthread yyjson simdjson ${LIB_BSON} ${LIB_PCRE2} ${LIB_ARROW_PARQUET} ${LIB_ARROW} ${LIB_ARROW_BUNDLED} ${JEMALLOC_LIBRARIES} ${TBB_LIBRARIES})
   target_compile_definitions(ustore_embedded_ucset INTERFACE USTORE_VERSION="${USTORE_VERSION}")
   target_compile_definitions(ustore_embedded_ucset INTERFACE USTORE_ENGINE_IS_UCSET=1)
 
@@ -280,7 +282,7 @@ endif()
 
 if(${USTORE_BUILD_ENGINE_ROCKSDB})
   add_library(ustore_embedded_rocksdb src/engine_rocksdb.cpp src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp src/modality_vectors.cpp)
-  target_link_libraries(ustore_embedded_rocksdb rocksdb pthread yyjson simdjson bson-static-1.0 pcre2-8 ${LIB_ARROW_BUNDLED} ${JEMALLOC_LIBRARIES})
+  target_link_libraries(ustore_embedded_rocksdb ${LIB_ROCKSDB} pthread yyjson simdjson ${LIB_BSON} ${LIB_PCRE2} ${LIB_ARROW_BUNDLED} ${JEMALLOC_LIBRARIES})
   target_compile_definitions(ustore_embedded_rocksdb INTERFACE USTORE_VERSION="${USTORE_VERSION}")
   target_compile_definitions(ustore_embedded_rocksdb INTERFACE USTORE_ENGINE_IS_ROCKSDB=1)
 
@@ -290,7 +292,7 @@ endif()
 
 if(${USTORE_BUILD_ENGINE_LEVELDB})
   add_library(ustore_embedded_leveldb src/engine_leveldb.cpp src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp src/modality_vectors.cpp)
-  target_link_libraries(ustore_embedded_leveldb ${CONAN_LIBS_LEVELDB} pthread yyjson simdjson bson-static-1.0 ${CONAN_LIBS_PCRE2} ${LIB_ARROW_BUNDLED} ${JEMALLOC_LIBRARIES})
+  target_link_libraries(ustore_embedded_leveldb ${LIB_LEVELDB} pthread yyjson simdjson ${LIB_BSON} ${LIB_PCRE2} ${LIB_ARROW_BUNDLED} ${JEMALLOC_LIBRARIES})
   set_source_files_properties(src/engine_leveldb.cpp PROPERTIES COMPILE_FLAGS -fno-rtti)
   target_compile_definitions(ustore_embedded_leveldb INTERFACE USTORE_VERSION="${USTORE_VERSION}")
   target_compile_definitions(ustore_embedded_leveldb INTERFACE USTORE_ENGINE_IS_LEVELDB=1)
@@ -306,7 +308,7 @@ if(EXISTS ${USTORE_ENGINE_UDISK_PATH})
   set_property(TARGET udisk PROPERTY LINK_LIBRARIES "")
 
   add_library(ustore_embedded_udisk src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp src/modality_vectors.cpp)
-  target_link_libraries(ustore_embedded_udisk udisk pthread yyjson simdjson bson-static-1.0 ${CONAN_LIBS_PCRE2} nlohmann_json ${JEMALLOC_LIBRARIES})
+  target_link_libraries(ustore_embedded_udisk udisk pthread yyjson simdjson ${LIB_BSON} ${LIB_PCRE2} nlohmann_json ${JEMALLOC_LIBRARIES})
   target_compile_definitions(ustore_embedded_udisk INTERFACE USTORE_VERSION="${USTORE_VERSION}")
   target_compile_definitions(ustore_embedded_udisk INTERFACE USTORE_ENGINE_IS_UDISK=1)
 
@@ -320,7 +322,7 @@ set(USTORE_CLIENT_NAMES ${USTORE_ENGINE_NAMES})
 
 if(${USTORE_BUILD_API_FLIGHT_CLIENT})
   add_library(ustore_flight_client src/flight_client.cpp src/modality_docs.cpp src/modality_graph.cpp src/modality_vectors.cpp)
-  target_link_libraries(ustore_flight_client pthread yyjson simdjson bson-static-1.0 ${CONAN_LIBS_PCRE2} ${CONAN_LIBS_FMT} ${CONAN_LIBS_ARROW} ${CONAN_LIBS_OPENSSL} ${LIB_ARROW_BUNDLED} {JEMALLOC_LIBRARIES})
+  target_link_libraries(ustore_flight_client pthread yyjson simdjson ${LIB_BSON} ${LIB_PCRE2} ${CONAN_LIBS_FMT} ${LIB_ARROW} ${LIB_ARROW_FLIGHT} ${LIB_ARROW_DATASET} ${LIB_ARROW_PARQUET} ${LIB_ARROW_BUNDLED} ${CONAN_LIBS_OPENSSL} {JEMALLOC_LIBRARIES})
   target_compile_definitions(ustore_flight_client INTERFACE USTORE_FLIGHT_CLIENT=TRUE)
   list(APPEND USTORE_CLIENT_NAMES "flight_client")
   list(APPEND USTORE_CLIENT_LIBS "ustore_flight_client")
@@ -333,7 +335,7 @@ if(${USTORE_BUILD_API_FLIGHT_SERVER})
 
     string(CONCAT server_exe_name "ustore_flight_server_" ${engine_name})
     add_executable(${server_exe_name} src/flight_server.cpp)
-    target_link_libraries(${server_exe_name} pthread yyjson simdjson bson-static-1.0  ${CONAN_LIBS_ARROW} ${CONAN_LIBS_OPENSSL} ${LIB_ARROW_BUNDLED} ${embedded_lib_name} ${embedded_dependencies})
+    target_link_libraries(${server_exe_name} pthread yyjson simdjson ${LIB_BSON} ${LIB_ARROW} ${LIB_ARROW_FLIGHT} ${LIB_ARROW_DATASET} ${LIB_ARROW_PARQUET} ${LIB_ARROW_BUNDLED} ${LIB_OPENSSL_SSL} ${LIB_OPENSSL_CRYPTO} ${embedded_lib_name} ${embedded_dependencies})
     target_compile_definitions(${server_exe_name} INTERFACE USTORE_ENGINE_NAME=${engine_name})
 
     if(${engine_name} STREQUAL "ucset")
