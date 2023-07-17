@@ -133,9 +133,6 @@ if(${USTORE_BUILD_SANITIZE} AND NOT ${USTORE_BUILD_SDK_PYTHON})
   set(CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fsanitize=address -fsanitize-address-use-after-scope")
 endif()
 
-
-
-
 # Install 3rd Party Packages
 include(FetchContent)
 include_directories(include/)
@@ -155,29 +152,34 @@ if(${USTORE_BUILD_ENGINE_UCSET})
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/ucset.cmake")
 endif()
 
-#if(${USTORE_BUILD_ENGINE_ROCKSDB})
-#  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/rocksdb.cmake")
-#endif()
+if (NOT CONAN)
+  if(${USTORE_BUILD_ENGINE_ROCKSDB})
+    include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/rocksdb.cmake")
+  endif()
 
-if(${USTORE_BUILD_ENGINE_LEVELDB})
-  # include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/leveldb.cmake")
-  include_directories(${CONAN_INCLUDE_DIRS_LEVELDB})
+  if(${USTORE_BUILD_ENGINE_LEVELDB})
+    include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/leveldb.cmake")
+  endif()
+
+  # Modalities:
+  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/fmt.cmake")
+  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/json.cmake")
+  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/bson.cmake")
+  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/yyjson.cmake")
+  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/simdjson.cmake")
+  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/pcre2.cmake")
 endif()
-
-# Modalities:
-# include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/fmt.cmake")
-# include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/json.cmake")
-# include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/bson.cmake")
-# include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/yyjson.cmake")
-# include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/simdjson.cmake")
-# include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/pcre2.cmake")
-include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/mpack.cmake")
-
 
 if(${USTORE_USE_JEMALLOC})
-  # include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/jemalloc.cmake")
-  set(JEMALLOC_LIBRARIES ${CONAN_LIB_DIRS_JEMALLOC})
+  if (${CONAN})
+    set(JEMALLOC_LIBRARIES ${CONAN_LIB_DIRS_JEMALLOC})
+  else()
+    include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/jemalloc.cmake")
+  endif()
 endif()
+    
+
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/mpack.cmake")
 
 if(${USTORE_USE_ONEAPI})
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/oneapi.cmake")
@@ -189,31 +191,42 @@ endif()
 # > USTORE_BUILD_SDK_PYTHON: Uses Arrow for zero-copy data exchage with the Python runtime.
 
 
-# if(${USTORE_BUILD_API_FLIGHT_CLIENT} OR ${USTORE_BUILD_API_FLIGHT_SERVER})
-#   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/openssl.cmake")
-# endif()
-
+if(${USTORE_BUILD_API_FLIGHT_CLIENT} OR ${USTORE_BUILD_API_FLIGHT_SERVER} AND (NOT CONAN))
+   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/openssl.cmake")
+endif()
 
 if(${USTORE_BUILD_API_FLIGHT_SERVER})
-  include_directories(${CONAN_INCLUDE_DIRS_CLIPP}/include)
+  if (${CONAN})
+    include_directories(${CONAN_INCLUDE_DIRS_CLIPP}/include)
+  else()
+    include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/clipp.cmake")
+  endif()
 endif()
 
 if(${USTORE_BUILD_API_REST_SERVER})
-  set(BOOST_ROOT ${CONAN_BOOST_ROOT})
-  set(BOOST_INCLUDE_DIR ${CONAN_INCLUDE_DIRS_BOOST})
-  set(BOOST_LIB_DIR ${CONAN_LIB_DIRS_BOOST})
+  if (${CONAN})
+    set(BOOST_ROOT ${CONAN_BOOST_ROOT})
+    set(BOOST_INCLUDE_DIR ${CONAN_INCLUDE_DIRS_BOOST})
+    set(BOOST_LIB_DIR ${CONAN_LIB_DIRS_BOOST})
+  else()
+    include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/boost.cmake")
+  endif()
 endif()
 
 if(${USTORE_BUILD_TESTS})
-  # include_directories(${CONAN_INCLUDE_DIRS_GTEST})
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/gtest.cmake")
 endif()
 
 if(${USTORE_BUILD_BENCHMARKS})
-  # include_directories(${CONAN_INCLUDE_DIRS_GTEST})
-  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/gtest.cmake")
-  include_directories(${CONAN_INCLUDE_DIRS_BENCHMARK})
-  include_directories(${CONAN_INCLUDE_DIRS_ARGPARSE})
+  if (${CONAN})
+    include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/gtest.cmake")
+    include_directories(${CONAN_INCLUDE_DIRS_BENCHMARK})
+    include_directories(${CONAN_INCLUDE_DIRS_ARGPARSE})
+  else()
+    include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/gtest.cmake")
+    include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/gbench.cmake")
+    include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/argparse.cmake")
+  endif()
 endif()
 
 set(USTORE_ENGINE_NAMES)

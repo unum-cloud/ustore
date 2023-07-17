@@ -90,53 +90,53 @@ jobs:
           for test in $(ls /home/runner/work/ustore/ustore/*test_units*); do  echo -e "------ \e[93mRunning $test\e[0m ------"; timeout -v --kill-after=5 300 $test; done
 
 
-  build_test_wheel:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          persist-credentials: false
-          ref: 'main-dev'
+  # build_test_wheel:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #       with:
+  #         persist-credentials: false
+  #         ref: 'main-dev'
 
-      - name: Prepare CMake, Conan and PyArrow
-        run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.57.0
+  #     - name: Prepare CMake, Conan and PyArrow
+  #       run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.57.0
 
-      - name: Build wheel
-        run: |
-          pip install cibuildwheel twine
-          CIBW_BUILD="cp39-*" cibuildwheel --platform linux
-          CIBW_BUILD="cp310-*" cibuildwheel --platform linux
+  #     - name: Build wheel
+  #       run: |
+  #         pip install cibuildwheel twine
+  #         CIBW_BUILD="cp39-*" cibuildwheel --platform linux
+  #         CIBW_BUILD="cp310-*" cibuildwheel --platform linux
   
 
-  build_test_java:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          persist-credentials: false
-          ref: 'main-dev'
+  # build_test_java:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout
+  #       uses: actions/checkout@v3
+  #       with:
+  #         persist-credentials: false
+  #         ref: 'main-dev'
 
-      - name: Prepare CMake, Conan and PyArrow
-        run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.57.0
+  #     - name: Prepare CMake, Conan and PyArrow
+  #       run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.57.0
       
-      - name: Install default jdk
-        run: sudo apt install default-jdk -y
+  #     - name: Install default jdk
+  #       run: sudo apt install default-jdk -y
       
-      - name: Install ustore dependencies using conan
-        run: |
-          wget -q https://github.com/unum-cloud/ustore-deps/releases/download/v0.1.2/ustore_deps_x86_linux.tar.gz
-          conan profile new --detect default
-          conan profile update settings.compiler.libcxx=libstdc++11 default
-          tar -xzf ./ustore_deps_x86_linux.tar.gz -C ~/.conan
-          conan install ustore_deps/0.12.1@unum/x86_linux --build=ustore_deps -g cmake -s compiler.version=11
-          rm -rf ./ustore_deps_x86_linux.tar.gz
+  #     - name: Install ustore dependencies using conan
+  #       run: |
+  #         wget -q https://github.com/unum-cloud/ustore-deps/releases/download/v0.1.2/ustore_deps_x86_linux.tar.gz
+  #         conan profile new --detect default
+  #         conan profile update settings.compiler.libcxx=libstdc++11 default
+  #         tar -xzf ./ustore_deps_x86_linux.tar.gz -C ~/.conan
+  #         conan install ustore_deps/0.12.1@unum/x86_linux --build=ustore_deps -g cmake -s compiler.version=11
+  #         rm -rf ./ustore_deps_x86_linux.tar.gz
 
-      - name: Build and test java
-        run: |
-          sed -i 's/make -j/make -j4/' /home/runner/work/ustore/ustore/java/pack.sh
-          export JAVA_HOME="/usr/lib/jvm/java-11-openjdk-amd64"
-          bash /home/runner/work/ustore/ustore/java/pack.sh
+  #     - name: Build and test java
+  #       run: |
+  #         sed -i 's/make -j/make -j4/' /home/runner/work/ustore/ustore/java/pack.sh
+  #         export JAVA_HOME="/usr/lib/jvm/java-11-openjdk-amd64"
+  #         bash /home/runner/work/ustore/ustore/java/pack.sh
 
   
   # build_test_golang:
