@@ -159,17 +159,18 @@ if (NOT CONAN)
   if(${USTORE_BUILD_ENGINE_LEVELDB})
     include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/leveldb.cmake")
   endif()
-else()
-  set(LIB_LEVELDB ${CONAN_LIBS_LEVELDB})
-  set(LIB_ROCKSDB ${CONAN_LIBS_ROCKSDB})
 
-  # Modalities:
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/fmt.cmake")
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/json.cmake")
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/bson.cmake")
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/yyjson.cmake")
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/simdjson.cmake")
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/pcre2.cmake")
+else()
+  set(LIB_LEVELDB ${CONAN_LIBS_LEVELDB})
+  set(LIB_ROCKSDB ${CONAN_LIBS_ROCKSDB})
+
+  # Modalities:
 endif()
 
 if(${USTORE_USE_JEMALLOC})
@@ -325,7 +326,7 @@ set(USTORE_CLIENT_NAMES ${USTORE_ENGINE_NAMES})
 
 if(${USTORE_BUILD_API_FLIGHT_CLIENT})
   add_library(ustore_flight_client src/flight_client.cpp src/modality_docs.cpp src/modality_graph.cpp src/modality_vectors.cpp)
-  target_link_libraries(ustore_flight_client pthread yyjson simdjson ${LIB_BSON} ${LIB_PCRE2} ${LIB_FMT} ${LIB_ARROW} ${LIB_ARROW_FLIGHT} ${LIB_ARROW_DATASET} ${LIB_ARROW_PARQUET} ${LIB_ARROW_BUNDLED} ${LIB_OPENSSL_SSL} ${LIB_OPENSSL_CRYPTO} {JEMALLOC_LIBRARIES})
+  target_link_libraries(ustore_flight_client pthread yyjson simdjson ${LIB_BSON} ${LIB_PCRE2} ${LIB_FMT} ${LIB_ARROW} ${LIB_ARROW_FLIGHT} ${LIB_ARROW_DATASET} ${LIB_ARROW_PARQUET} ${LIB_ARROW_BUNDLED} ${LIB_OPENSSL_SSL} ${LIB_OPENSSL_CRYPTO} ${JEMALLOC_LIBRARIES})
   target_compile_definitions(ustore_flight_client INTERFACE USTORE_FLIGHT_CLIENT=TRUE)
   list(APPEND USTORE_CLIENT_NAMES "flight_client")
   list(APPEND USTORE_CLIENT_LIBS "ustore_flight_client")
