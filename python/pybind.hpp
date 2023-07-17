@@ -18,7 +18,10 @@ struct py_db_t;
 struct py_transaction_t;
 struct py_collection_t;
 
-struct py_graph_t;
+typedef enum { graph_k = 0, digraph_k = 1, multigraph_k = 2, multidigraph_k = 3 } graph_type_t;
+template <graph_type_t>
+struct py_network_t;
+
 struct py_table_collection_t;
 
 struct py_task_ctx_t;
@@ -84,7 +87,7 @@ struct py_collection_gt {
     ustore_options_t options() noexcept {
         auto base = ustore_options_default_k;
         return py_txn_ptr ? static_cast<ustore_options_t>( //
-                                base |                  //
+                                base |                     //
                                 (py_txn_ptr->dont_watch ? ustore_option_transaction_dont_watch_k : base) |
                                 (py_txn_ptr->flush_writes ? ustore_option_write_flush_k : base))
                           : base;
@@ -113,7 +116,8 @@ struct py_buffer_memory_t {
     Py_ssize_t strides[4];
 };
 
-struct py_graph_t : public std::enable_shared_from_this<py_graph_t> {
+template <graph_type_t type_ak>
+struct py_network_t : public std::enable_shared_from_this<py_network_t<type_ak>> {
 
     std::shared_ptr<py_db_t> py_db_ptr;
     std::shared_ptr<py_transaction_t> py_txn_ptr;
@@ -123,21 +127,24 @@ struct py_graph_t : public std::enable_shared_from_this<py_graph_t> {
     docs_collection_t relations_attrs;
 
     bool in_txn {false};
-    bool is_directed {false};
-    bool is_multi {false};
-    bool allow_self_loops {false};
+    graph_type_t type {type_ak};
 
     py_buffer_memory_t last_buffer;
 
-    py_graph_t() {}
-    py_graph_t(py_graph_t&&) = delete;
-    py_graph_t(py_graph_t const&) = delete;
-    ~py_graph_t() {}
+    py_network_t() {}
+    py_network_t(py_network_t&&) = delete;
+    py_network_t(py_network_t const&) = delete;
+    ~py_network_t() {}
 
     graph_collection_t ref() {
         return graph_collection_t(index.db(), index, index.txn(), index.snap(), index.member_arena());
     }
 };
+
+using py_graph_t = py_network_t<graph_type_t::graph_k>;
+using py_digraph_t = py_network_t<graph_type_t::digraph_k>;
+using py_multigraph_t = py_network_t<graph_type_t::multigraph_k>;
+using py_multidigraph_t = py_network_t<graph_type_t::multidigraph_k>;
 
 struct py_table_keys_range_t {
     ustore_key_t min {std::numeric_limits<ustore_key_t>::min()};
