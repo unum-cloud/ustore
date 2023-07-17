@@ -36,8 +36,6 @@ namespace stdfs = std::filesystem;
 using sys_clock_t = std::chrono::system_clock;
 using sys_time_t = std::chrono::time_point<sys_clock_t>;
 
-static bool quiet = false;
-static bool verbose = false;
 inline static arf::ActionType const kActionColOpen {kFlightColCreate, "Find a collection descriptor by name."};
 inline static arf::ActionType const kActionColDrop {kFlightColDrop, "Delete a named collection."};
 inline static arf::ActionType const kActionSnapOpen {kFlightSnapCreate, "Find a snapshot descriptor by name."};
@@ -46,27 +44,33 @@ inline static arf::ActionType const kActionSnapDrop {kFlightSnapDrop, "Delete a 
 inline static arf::ActionType const kActionTxnBegin {kFlightTxnBegin, "Starts an ACID transaction and returns its ID."};
 inline static arf::ActionType const kActionTxnCommit {kFlightTxnCommit, "Commit a previously started transaction."};
 
-template <typename... args_at>
-void log_message(const char* message, args_at&&... args) {
-    if (quiet)
-        return;
+struct logger_t {
+    bool quiet = false;
+    bool verbose = false;
+    char buffer[256];
 
-    auto now = std::chrono::system_clock::now();
-    std::time_t current_time = std::chrono::system_clock::to_time_t(now);
-    std::string time_str = std::ctime(&current_time);
-    time_str.pop_back();
-    std::string format = std::string("%s: ") + message + "\n";
-    std::printf(format.c_str(), time_str.c_str(), std::forward<args_at>(args)...);
-}
-
-#define log_message_if_verbose_m(message, ...) \
-    if (verbose) {                             \
-        log_message(message, ##__VA_ARGS__);   \
+    void log_message(const char* message, ...) {
+        if (quiet)
+            return;
+        std::time_t time;
+        std::size_t tail_index = strftime(buffer, sizeof(buffer), "%c: ", std::localtime(&time));
+        va_list args;
+        va_start(args, message);
+        std::vsnprintf(&buffer[tail_index], sizeof(buffer) - tail_index, message, args);
+        va_end(args);
+        std::printf("%s\n",buffer);
     }
+};
 
+static logger_t logger;
+
+#define log_message_if_verbose_m(message, ...)      \
+    if (logger.verbose) {                           \
+        logger.log_message(message, ##__VA_ARGS__); \
+    }
 #define log_return_message_m(return_type, message, ...) \
     {                                                   \
-        log_message(message, ##__VA_ARGS__);            \
+        logger.log_message(message, ##__VA_ARGS__);     \
         return return_type(message);                    \
     }
 
@@ -789,7 +793,7 @@ class UStoreService : public arf::FlightServerBase {
             return ar::Status::OK();
         }
 
-        log_message("Unknown action type: %s", action.type.c_str());
+        logger.log_message("Unknown action type: %s", action.type.c_str());
 
         log_return_message_m(ar::Status::NotImplemented, "Unknown action type: ", action.type);
     }
@@ -1587,7 +1591,7 @@ class UStoreService : public arf::FlightServerBase {
     }
 };
 
-ar::Status run_server(ustore_str_view_t config, int port, bool quiet) {
+ar::Status run_server(ustore_str_view_t config, int port) {
 
     database_t db;
     db.open(config).throw_unhandled();
@@ -1609,7 +1613,7 @@ ar::Status run_server(ustore_str_view_t config, int port, bool quiet) {
 
     server->SetShutdownOnSignals({SIGINT});
 
-    log_message("Listening on port: %i", server->port());
+    logger.log_message("Listening on port: %i", server->port());
 
     return server->Serve();
 }
@@ -1629,8 +1633,8 @@ int main(int argc, char* argv[]) {
             .doc("Configuration file path. The default configuration file path is " + config_path),
         (option("-p", "--port") & value("port", port))
             .doc("Port to use for connection. The default connection port is 38709"),
-        option("-q", "--quiet").set(quiet).doc("Silence outputs"),
-        option("-v", "--verbose").set(verbose).doc("Active outputs"),
+        option("-q", "--quiet").set(logger.quiet).doc("Silence outputs"),
+        option("-v", "--verbose").set(logger.verbose).doc("Active outputs"),
         option("-h", "--help").set(help).doc("Print this help information on this tool and exit"));
 
     if (!parse(argc, argv, cli)) {
@@ -1642,9 +1646,9 @@ int main(int argc, char* argv[]) {
         exit(0);
     }
 
-    log_message("UStore is starting");
-    log_message("UStore version 1.0\n");
-    if (!quiet) {
+    logger.log_message("UStore is starting");
+    logger.log_message("UStore version 1.0\n");
+    if (!logger.quiet) {
         std::ifstream file("assets/ustore.txt");
         std::string line;
         while (std::getline(file, line))
@@ -1661,7 +1665,7 @@ int main(int argc, char* argv[]) {
     std::string config {};
     stdfs::file_status config_status = stdfs::status(config_path);
     if (config_status.type() == stdfs::file_type::not_found) {
-        log_message("Warning: Using the default config");
+        logger.log_message("Warning: Using the default config");
 
         stdfs::create_directories("./tmp/ustore/");
         config.assign(R"({
@@ -1679,5 +1683,5 @@ int main(int argc, char* argv[]) {
         config = std::string((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
     }
 
-    return run_server(config.c_str(), port, quiet).ok() ? EXIT_SUCCESS : EXIT_FAILURE;
+    return run_server(config.c_str(), port).ok() ? EXIT_SUCCESS : EXIT_FAILURE;
 }
