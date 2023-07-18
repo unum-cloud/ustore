@@ -1073,35 +1073,33 @@ template void wrap_networkx<multidigraph_k>(py::module& m, std::string const& n)
 template <graph_type_t type_ak>
 void ustore::wrap_networkx(py::module& m, std::string const& name) {
 
-    std::string degs_view_name = name + "DegreeView";
-    auto degs = py::class_<degree_view_t<type_ak>>(m, degs_view_name.c_str(), py::module_local());
+    std::string class_name = name + "DegreeView";
+    auto degs = py::class_<degree_view_t<type_ak>>(m, class_name.c_str(), py::module_local());
     degs.def("__getitem__", &degs_getitem<type_ak>);
     degs.def("__call__", &degs_call_with_array<type_ak>, py::arg("vs"), py::arg("weight") = "");
     degs.def("__call__", &degs_call<type_ak>, py::arg("weight") = "");
     degs.def("__iter__", &degs_iter<type_ak>);
 
-    std::string degs_stream_name = name + "DegreesStream";
-    auto degs_stream = py::class_<degrees_stream_t<type_ak>>(m, degs_stream_name.c_str(), py::module_local());
+    class_name = name + "DegreesStream";
+    auto degs_stream = py::class_<degrees_stream_t<type_ak>>(m, class_name.c_str(), py::module_local());
     degs_stream.def("__next__", [](degrees_stream_t<type_ak>& stream) { return stream.next(); });
 
-    std::string nodes_range_name = name + "NodesRange";
-    auto nodes_range =
-        py::class_<nodes_range_t<type_ak>, std::shared_ptr<nodes_range_t<type_ak>>>(m,
-                                                                                    nodes_range_name.c_str(),
-                                                                                    py::module_local());
+    class_name = name + "NodesRange";
+    auto nodes_range = py::class_<nodes_range_t<type_ak>, std::shared_ptr<nodes_range_t<type_ak>>>(m,
+                                                                                                   class_name.c_str(),
+                                                                                                   py::module_local());
     nodes_range.def("__iter__", &nodes_iter<type_ak>);
     nodes_range.def("__call__", nodes_call<type_ak>, py::arg("data") = false);
     nodes_range.def("__call__", &nodes_call_with_data<type_ak>, py::arg("data"), py::arg("default") = py::none());
 
-    std::string nodes_stream_name = name + "NodesStream";
-    auto nodes_stream = py::class_<nodes_stream_t<type_ak>>(m, nodes_stream_name.c_str(), py::module_local());
+    class_name = name + "NodesStream";
+    auto nodes_stream = py::class_<nodes_stream_t<type_ak>>(m, class_name.c_str(), py::module_local());
     nodes_stream.def("__next__", [](nodes_stream_t<type_ak>& stream) { return stream.next(); });
 
-    std::string edges_range_name = name + "EdgesRange";
-    auto edges_range =
-        py::class_<edges_range_t<type_ak>, std::shared_ptr<edges_range_t<type_ak>>>(m,
-                                                                                    edges_range_name.c_str(),
-                                                                                    py::module_local());
+    class_name = name + "EdgesRange";
+    auto edges_range = py::class_<edges_range_t<type_ak>, std::shared_ptr<edges_range_t<type_ak>>>(m,
+                                                                                                   class_name.c_str(),
+                                                                                                   py::module_local());
     edges_range.def("__iter__", &edges_iter<type_ak>);
     edges_range.def("__call__", &edges_call<type_ak>, py::arg("data") = false);
     edges_range.def("__call__", &edges_call_with_data<type_ak>, py::arg("data"), py::arg("default") = py::none());
@@ -1112,12 +1110,12 @@ void ustore::wrap_networkx(py::module& m, std::string const& name) {
                     py::arg("data"),
                     py::arg("default") = py::none());
 
-    std::string edges_iter_name = name + "EdgesIter";
-    auto edges_iter = py::class_<edges_nbunch_iter_t<type_ak>>(m, edges_iter_name.c_str(), py::module_local());
+    class_name = name + "EdgesIter";
+    auto edges_iter = py::class_<edges_nbunch_iter_t<type_ak>>(m, class_name.c_str(), py::module_local());
     edges_iter.def("__next__", [](edges_nbunch_iter_t<type_ak>& iter) { return iter.next(); });
 
-    std::string edges_stream_name = name + "EdgesStream";
-    auto edges_stream = py::class_<edges_stream_t<type_ak>>(m, edges_stream_name.c_str(), py::module_local());
+    class_name = name + "EdgesStream";
+    auto edges_stream = py::class_<edges_stream_t<type_ak>>(m, class_name.c_str(), py::module_local());
     edges_stream.def("__next__", [](edges_stream_t<type_ak>& stream) { return stream.next(); });
 
     auto g =
