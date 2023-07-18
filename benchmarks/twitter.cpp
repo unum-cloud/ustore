@@ -1,15 +1,15 @@
-#include <fcntl.h>    // `open` files
-#include <sys/stat.h> // `stat` to obtain file metadata
-#include <sys/mman.h> // `mmap` to read datasets faster
+#include <fcntl.h>      // `open` files
+#include <sys/stat.h>   // `stat` to obtain file metadata
+#include <sys/mman.h>   // `mmap` to read datasets faster
 
-#include <cstring>     // `std::memchr`
-#include <algorithm>   // `std::search`
-#include <filesystem>  // Listing directories is too much pain in C
-#include <string_view> //
-#include <vector>      //
-#include <thread>      //
-#include <random>      // `std::random_device` for each thread
-#include <fstream>     // `std::ifstream`, `std::istreambuf_iterator`
+#include <cstring>      // `std::memchr`
+#include <algorithm>    // `std::search`
+#include <filesystem>   // Listing directories is too much pain in C
+#include <string_view>  //
+#include <vector>       //
+#include <thread>       //
+#include <random>       // `std::random_device` for each thread
+#include <fstream>      // `std::ifstream`, `std::istreambuf_iterator`
 
 #include <fmt/printf.h> // `fmt::sprintf`
 #include <benchmark/benchmark.h>

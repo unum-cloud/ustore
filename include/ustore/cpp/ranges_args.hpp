@@ -8,7 +8,7 @@
  */
 
 #pragma once
-#include <limits> // `std::numeric_limits`
+#include <limits>                // `std::numeric_limits`
 
 #include "ustore/cpp/ranges.hpp" // `strided_iterator_gt`
 #include "ustore/cpp/status.hpp" // `return_error_if_m`
