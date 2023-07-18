@@ -41,21 +41,21 @@ inline static std::string const kFlightSample = "sample";                      /
 inline static std::string const kFlightColCreate = "create_collection";        /// `DoAction`
 inline static std::string const kFlightColDrop = "remove_collection";          /// `DoAction`
 
-inline static std::string const kFlightListSnap = "list_snapshots";            /// `DoGet`
-inline static std::string const kFlightSnapCreate = "create_snapshot";         /// `DoAction`
-inline static std::string const kFlightSnapExport = "export_snapshot";         /// `DoAction`
-inline static std::string const kFlightSnapDrop = "remove_snapshot";           /// `DoAction`
+inline static std::string const kFlightListSnap = "list_snapshots";    /// `DoGet`
+inline static std::string const kFlightSnapCreate = "create_snapshot"; /// `DoAction`
+inline static std::string const kFlightSnapExport = "export_snapshot"; /// `DoAction`
+inline static std::string const kFlightSnapDrop = "remove_snapshot";   /// `DoAction`
 
-inline static std::string const kFlightTxnBegin = "begin_transaction";         /// `DoAction`
-inline static std::string const kFlightTxnCommit = "commit_transaction";       /// `DoAction`
+inline static std::string const kFlightTxnBegin = "begin_transaction";   /// `DoAction`
+inline static std::string const kFlightTxnCommit = "commit_transaction"; /// `DoAction`
 
-inline static std::string const kFlightWrite = "write";                        /// `DoPut`
-inline static std::string const kFlightRead = "read";                          /// `DoExchange`
-inline static std::string const kFlightWritePath = "write_path";               /// `DoPut`
-inline static std::string const kFlightMatchPath = "match_path";               /// `DoExchange`
-inline static std::string const kFlightReadPath = "read_path";                 /// `DoExchange`
-inline static std::string const kFlightScan = "scan";                          /// `DoExchange`
-inline static std::string const kFlightMeasure = "measure";                    /// `DoExchange`
+inline static std::string const kFlightWrite = "write";          /// `DoPut`
+inline static std::string const kFlightRead = "read";            /// `DoExchange`
+inline static std::string const kFlightWritePath = "write_path"; /// `DoPut`
+inline static std::string const kFlightMatchPath = "match_path"; /// `DoExchange`
+inline static std::string const kFlightReadPath = "read_path";   /// `DoExchange`
+inline static std::string const kFlightScan = "scan";            /// `DoExchange`
+inline static std::string const kFlightMeasure = "measure";      /// `DoExchange`
 
 inline static std::string const kArgSnaps = "snapshots";
 inline static std::string const kArgCols = "collections";

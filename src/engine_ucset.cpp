@@ -28,10 +28,10 @@
 #include <ucset/consistent_set.hpp> // `ucset::consistent_set_gt`
 #include <ucset/locked.hpp>         // `ucset::locked_gt`
 
-#include <nlohmann/json.hpp>        // `nlohmann::json`
-#include <arrow/io/file.h>          // `arrow::io::ReadableFile`
-#include <parquet/stream_reader.h>  // `parquet::StreamReader`
-#include <parquet/stream_writer.h>  // `parquet::StreamWriter`
+#include <nlohmann/json.hpp>       // `nlohmann::json`
+#include <arrow/io/file.h>         // `arrow::io::ReadableFile`
+#include <parquet/stream_reader.h> // `parquet::StreamReader`
+#include <parquet/stream_writer.h> // `parquet::StreamWriter`
 
 #include "ustore/db.h"
 #include "helpers/file.hpp"

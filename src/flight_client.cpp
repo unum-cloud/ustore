@@ -11,7 +11,7 @@
 #include <mutex>       // `std::mutex`
 #include <string_view> // `std::string_view`
 
-#include <fmt/core.h>  // `fmt::format_to`
+#include <fmt/core.h> // `fmt::format_to`
 #include <arrow/c/abi.h>
 #include <arrow/flight/client.h>
 #include <arrow/array/array_binary.h>
@@ -131,7 +131,7 @@ void ustore_read(ustore_read_t* c_ptr) {
     bool const same_named_collection = same_collection && same_collections_are_named(places.collections_begin);
     bool const request_only_presences = c.presences && !c.lengths && !c.values;
     bool const request_only_lengths = c.lengths && !c.values;
-    char const* partial_mode = request_only_presences     //
+    char const* partial_mode = request_only_presences //
                                    ? kParamReadPartPresences.c_str()
                                    : request_only_lengths //
                                          ? kParamReadPartLengths.c_str()
@@ -857,7 +857,7 @@ void ustore_paths_read(ustore_paths_read_t* c_ptr) {
     bool const same_named_collection = same_collection && same_collections_are_named(places.collections_begin);
     bool const request_only_presences = c.presences && !c.lengths && !c.values;
     bool const request_only_lengths = c.lengths && !c.values;
-    char const* partial_mode = request_only_presences     //
+    char const* partial_mode = request_only_presences //
                                    ? kParamReadPartPresences.c_str()
                                    : request_only_lengths //
                                          ? kParamReadPartLengths.c_str()

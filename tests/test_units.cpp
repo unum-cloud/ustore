@@ -817,7 +817,7 @@ TEST(db, export_snapshot) {
     std::filesystem::create_directory(dir);
     std::filesystem::create_directory(dir1);
     std::filesystem::create_directory(dir2);
-    
+
     EXPECT_TRUE(db.open(config.c_str()));
     if (!db.supports_snapshots())
         return;

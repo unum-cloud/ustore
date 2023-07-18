@@ -276,7 +276,7 @@ using transaction_t = context_t;
 class database_t : public std::enable_shared_from_this<database_t> {
     ustore_database_t db_ = nullptr;
 
-    ustore_metadata_t get_metadata(){
+    ustore_metadata_t get_metadata() {
         status_t status {};
         ustore_metadata_t metadata {};
         ustore_get_metadata_t get_metadata {};
