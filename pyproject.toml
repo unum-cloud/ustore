@@ -13,14 +13,32 @@ testpaths = ["python/tests"]
 [tool.cibuildwheel]
 build-verbosity = 0
 before-all = [
-    "yum install -y bzip2-devel libffi-devel zlib-devel wget python3-devel perl-IPC-Cmd perl-Test-Simple"
+    "yum install -y bzip2-devel libffi-devel zlib-devel wget python3-devel perl-IPC-Cmd perl-Test-Simple cmake", 
+    "yum groupinstall -y 'Development Tools'",
+    "curl -O https://ftp.gnu.org/gnu/make/make-4.3.tar.gz",
+    "tar xf make-4.3.tar.gz",
+    "cd make-4.3",
+    "./configure",
+    "make",
+    "make install",
+    "ln -s /usr/local/bin/make /usr/local/bin/gmake",
+    "ln -fs /usr/local/bin/python3.10 /usr/bin/python",
+    "wget -q https://ftp.gnu.org/gnu/glibc/glibc-2.32.tar.gz",
+    "tar zxvf glibc-2.32.tar.gz",
+    "cd glibc-2.32",
+    "mkdir build",
+    "cd build",
+    "../configure --prefix=/opt/glibc-2.32",
+    "make -j32",
+    "make install",
+    "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/glibc-2.32/lib",
 ]
 
 environment = "CMAKE_ARGS_F=/tmp/cmake_args"
 before-build = [
     "rm -rf {project}/CMakeCache.txt {project}/build {project}/CMakeFiles.txt {project}/_deps",
     "pip install pyarrow==10.0.0 conan==1.57.0 auditwheel",
-    "wget -q https://github.com/unum-cloud/ustore-deps/releases/download/v0.1.2/ustore_deps_x86_linux.tar.gz",
+    "wget -q https://github.com/gurgenyegoryan/ustore-conan/releases/download/v0.1.2/ustore_deps_x86_linux.tar.gz",
     "conan profile new --detect default",
     "conan profile update settings.compiler.libcxx=libstdc++11 default",
     "tar -xzf {project}/ustore_deps_x86_linux.tar.gz -C ~/.conan",
