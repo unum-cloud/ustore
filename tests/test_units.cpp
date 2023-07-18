@@ -811,18 +811,16 @@ TEST(db, export_snapshot) {
     std::string dir1 = fmt::format("{}/export1/", path());
     std::string dir2 = fmt::format("{}/export2/", path());
     auto config = fmt::format(R"({{"version": "1.0", "directory": "{}"}})", dir);
-    EXPECT_TRUE(db.open(config.c_str()));
-
-    if (!db.supports_snapshots())
-        return;
-
     std::filesystem::remove_all(dir);
     std::filesystem::remove_all(dir1);
     std::filesystem::remove_all(dir2);
     std::filesystem::create_directory(dir);
     std::filesystem::create_directory(dir1);
     std::filesystem::create_directory(dir2);
-
+    
+    EXPECT_TRUE(db.open(config.c_str()));
+    if (!db.supports_snapshots())
+        return;
     EXPECT_TRUE(db.clear());
 
     triplet_t triplet;
