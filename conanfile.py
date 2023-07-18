@@ -183,7 +183,7 @@ class ConanUStore(ConanFile):
     def requirements(self):
         # self.requires('rocksdb/7.10.2@unum/ustore')
         self.requires('arrow/10.0.0')
-        self.requires('openssl/1.1.1o')
+        self.requires('openssl/3.1.0')
         self.requires('pcre2/10.42')
         self.requires('fmt/9.1.0')
         self.requires('mongo-c-driver/1.23.2')
