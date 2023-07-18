@@ -42,8 +42,10 @@ class ConanUStore(ConanFile):
         'with_arrow': False,
     }
 
+
     def layout(self):
         cmake_layout(self)
+
 
     def generate(self):
         tc = CMakeToolchain(self)
@@ -54,28 +56,24 @@ class ConanUStore(ConanFile):
             }.get(str(self.settings.arch), str(self.settings.arch))
             if cmake_system_processor == "aarch64":
                 tc.variables["ARROW_CPU_FLAG"] = "armv8"
-
         tc.variables["ARROW_DEPENDENCY_SOURCE"] = "AUTO"
         tc.variables['ARROW_BUILD_STATIC'] = True
         tc.variables['ARROW_BUILD_SHARED'] = False
         tc.variables['ARROW_SIMD_LEVEL'] = "AVX2"
         tc.variables["ARROW_DEPENDENCY_USE_SHARED"] = False
         tc.variables["ARROW_OPENSSL_USE_SHARED"] = True
-
         tc.variables["ARROW_BUILD_TESTS"] = False
         tc.variables["ARROW_ENABLE_TIMING_TESTS"] = False
         tc.variables["ARROW_BUILD_EXAMPLES"] = False
         tc.variables["ARROW_BUILD_BENCHMARKS"] = False
         tc.variables["ARROW_BUILD_INTEGRATION"] = False
         tc.variables["ARROW_EXTRA_ERROR_CONTEXT"] = False
-
         tc.variables['ARROW_DATASET'] = True
         tc.variables['ARROW_PARQUET'] = True
         tc.variables['ARROW_WITH_RE2'] = True
         tc.variables['ARROW_COMPUTE'] = True
         tc.variables['ARROW_FLIGHT'] = True
         tc.variables['ARROW_WITH_UTF8PROC'] = True
-
         tc.variables["PARQUET_REQUIRE_ENCRYPTION"] = bool(
             self.options['arrow:encryption'])  # False
         tc.variables["ARROW_CUDA"] = False
@@ -90,9 +88,7 @@ class ConanUStore(ConanFile):
             self.options['arrow:cli'])  # False
         tc.variables["ARROW_GANDIVA"] = False
         tc.variables["ARROW_S3"] = False
-
         tc.variables["ABS_VENDORED"] = True
-
         tc.variables["ARROW_DEPENDENCY_SOURCE"] = "BUNDLED"
         tc.variables["c-ares_SOURCE"] = "BUNDLED"
         tc.variables["re2_SOURCE"] = "BUNDLED"
@@ -103,7 +99,6 @@ class ConanUStore(ConanFile):
         tc.variables["ZLIB_SOURCE"] = "BUNDLED"
         tc.variables["Thrift_SOURCE"] = "BUNDLED"
         tc.variables["utf8proc_SOURCE"] = "BUNDLED"
-
         tc.variables["ARROW_INCLUDE_DIR"] = True
         tc.variables["ARROW_WITH_THRIFT"] = self._with_thrift()
         tc.variables["ARROW_UTF8PROC_USE_SHARED"] = False
@@ -114,7 +109,6 @@ class ConanUStore(ConanFile):
                 self.dependencies["thrift"].ref.version)
             tc.variables["ARROW_THRIFT_USE_SHARED"] = bool(
                 self.dependencies["thrift"].options.shared)
-
         tc.cache_variables["ENABLE_STATIC"] = "ON"
         tc.cache_variables["ENABLE_BSON"] = "ON"
         tc.cache_variables["ENABLE_TESTS"] = "OFF"
@@ -136,11 +130,9 @@ class ConanUStore(ConanFile):
         self.options["pcre2"].build_pcre2grep = True
         
         self.options['re2'].shared = False
+        
         self.options['xsimd'].xtl_complex = False
-        
-        self.options['arrow'].shared = True
 
-        
         self.options["arrow"].shared = False
         self.options['arrow'].with_grpc = 'auto'
         self.options["arrow"].with_orc = False
@@ -187,7 +179,6 @@ class ConanUStore(ConanFile):
         self.options["rocksdb"].fPIC = True
         self.options["rocksdb"].use_rtti = True
         
-        # self.options["gtest"].shared = False
 
     def requirements(self):
         # self.requires('rocksdb/7.10.2@unum/ustore')
@@ -216,14 +207,15 @@ class ConanUStore(ConanFile):
         self.requires('abseil/20230125.3')
         self.requires('libcurl/7.80.0')
         # https://conan.io/center/openssl
+        
 
-    # def build(self):
-    #     cmake = CMake(self)
-    #     cmake.configure()
-    #     cmake.build()
-
+    def build(self):
+        pass
+    
+    
     def system_requirements(self):
         pass
+    
 
     def package_info(self):
 
@@ -240,77 +232,11 @@ class ConanUStore(ConanFile):
         self.copy(pattern="*.h", dst="lib", keep_path=False)
         self.copy(pattern="*.hpp", dst="lib", keep_path=False)
         
-        # self.cpp_info.components["libarrow"].set_property("pkg_config_name", "arrow")
-        # self.cpp_info.components["libarrow"].libs = [f"arrow{suffix}"]
-        # if not self.options['arrow'].shared:
-        #     self.cpp_info.components["libarrow"].defines = ["ARROW_STATIC"]
-        #     if self.settings.os in ["Linux", "FreeBSD"]:
-        #         self.cpp_info.components["libarrow"].system_libs = ["pthread", "m", "dl", "rt"]
-        # if self.options['arrow'].gandiva:
-        #     self.cpp_info.components["libparquet"].set_property("pkg_config_name", "parquet")
-        #     self.cpp_info.components["libparquet"].libs = [f"parquet{suffix}"]
-        #     self.cpp_info.components["libparquet"].requires = ["libarrow"]
-        #     if not self.options.shared:
-        #         self.cpp_info.components["libparquet"].defines = ["PARQUET_STATIC"]
-        # if self.options['arrow'].gandiva:
-        #     self.cpp_info.components["libgandiva"].set_property("pkg_config_name", "gandiva")
-        #     self.cpp_info.components["libgandiva"].libs = [f"gandiva{suffix}"]
-        #     self.cpp_info.components["libgandiva"].requires = ["libarrow"]
-        #     if not self.options['arrow'].shared:
-        #         self.cpp_info.components["libgandiva"].defines = ["GANDIVA_STATIC"]
-        # if self.options['arrow'].with_flight_rpc:
-        #     self.cpp_info.components["libarrow_flight"].set_property("pkg_config_name", "flight_rpc")
-        #     self.cpp_info.components["libarrow_flight"].libs = [f"arrow_flight{suffix}"]
-        #     self.cpp_info.components["libarrow_flight"].requires = ["libarrow"]
-        # if self.options['arrow'].with_flight_sql:
-        #     self.cpp_info.components["libarrow_flight_sql"].set_property("pkg_config_name", "flight_sql")
-        #     self.cpp_info.components["libarrow_flight_sql"].libs = [f"arrow_flight_sql{suffix}"]
-        #     self.cpp_info.components["libarrow_flight_sql"].requires = ["libarrow", "libarrow_flight"]
-        # if self.options['arrow'].dataset:
-        #     self.cpp_info.components["dataset"].libs = ["arrow_dataset"]
-        #     if self._parquet():
-        #         self.cpp_info.components["dataset"].requires = ["libparquet"]
-        # if self.options['arrow'].cli and (self.options['arrow'].with_cuda or self.options['arrow'].with_flight_rpc or self.options['arrow'].parquet):
-        #     binpath = os.path.join(self.package_folder, "bin")
-        #     self.output.info(f"Appending PATH env var: {binpath}")
-        #     self.env_info.PATH.append(binpath)
-            
-        # if self.options['arrow'].openssl:
-        #     self.cpp_info.components["libarrow"].requires.append("openssl::openssl")
-        # if self.options['with_gflags']:
-        #     self.cpp_info.components["libarrow"].requires.append("gflags::gflags")
-        # if self.options['arrow'].with_jemalloc:
-        #     self.cpp_info.components["libarrow"].requires.append("jemalloc::jemalloc")
-        # if self.options['arrow'].with_re2:
-        #     if self.options['arrow'].gandiva:
-        #         self.cpp_info.components["libgandiva"].requires.append("re2::re2")
-        #     if self.options['arrow'].parquet:
-        #         self.cpp_info.components["libparquet"].requires.append("re2::re2")
-        #     self.cpp_info.components["libarrow"].requires.append("re2::re2")
-        # if self.options['arrow'].with_protobuf:
-        #     self.cpp_info.components["libarrow"].requires.append("protobuf::protobuf")
-        # if self.options['arrow'].with_utf8proc:
-        #     self.cpp_info.components["libarrow"].requires.append("utf8proc::utf8proc")
-        # if self.options['arrow'].with_thrift:
-        #     self.cpp_info.components["libarrow"].requires.append("thrift::thrift")
-       
-        # if self.options['arrow'].with_cuda:
-        #     self.cpp_info.components["libarrow"].requires.append("cuda::cuda")
-       
-        
-        # if self.options['arrow'].with_zlib:
-        #     self.cpp_info.components["libarrow"].requires.append("zlib::zlib")
-
-        # if self.options['arrow'].with_boost:
-        #     self.cpp_info.components["libarrow"].requires.append("boost::boost")
-        # if self.options['arrow'].with_grpc:
-        #     self.cpp_info.components["libarrow"].requires.append("grpc::grpc")
-        # if self.options['arrow'].with_flight_rpc:
-        #     self.cpp_info.components["libarrow_flight"].requires.append("protobuf::protobuf")
 
     def _with_thrift(self, required=False):
         # No self.options.with_thift exists
         return bool(required or self._parquet())
+    
 
     def _parquet(self, required=False):
         if required or self.options['arrow'].parquet == "auto":
