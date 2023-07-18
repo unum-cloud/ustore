@@ -629,7 +629,7 @@ auto has_node(py_graph_gt<type_ak>& g, ustore_key_t v) {
 
 template <graph_type_t type_ak>
 auto has_edge(py_graph_gt<type_ak>& g, ustore_key_t v1, ustore_key_t v2) {
-    if (type_ak == digraph_k)
+    if (type_ak == digraph_k || type_ak == multidigraph_k)
         return g.ref().edges_between(v1, v2).throw_or_release().size() != 0;
     return g.ref().edges_between(v1, v2).throw_or_release().size() != 0 ||
            g.ref().edges_between(v2, v1).throw_or_release().size() != 0;
@@ -650,7 +650,7 @@ auto get_edges(py_graph_gt<type_ak>& g) {
 
 template <graph_type_t type_ak>
 auto neighbors(py_graph_gt<type_ak>& g, ustore_key_t n) {
-    if (type_ak == graph_k)
+    if (type_ak == graph_k || type_ak == multigraph_k)
         return wrap_into_buffer(g, g.ref().neighbors(n).throw_or_release());
     return wrap_into_buffer(g, g.ref().neighbors(n, ustore_vertex_source_k).throw_or_release());
 }
@@ -1135,8 +1135,6 @@ void ustore::wrap_networkx(py::module& m, std::string const& name) {
     g.def("number_of_nodes", &number_of_nodes<type_ak>);
     g.def("__len__", &len<type_ak>);
     g.def_property_readonly("degree", &degree<type_ak>);
-    g.def_property_readonly("in_degree", &in_degree<type_ak>);
-    g.def_property_readonly("out_degree", &out_degree<type_ak>);
     g.def("size", &size<type_ak>, py::arg("weight") = "");
     g.def("number_of_edges", &number_of_edges_between<type_ak>);
     g.def("number_of_edges", &number_of_edges<type_ak>);
@@ -1184,6 +1182,11 @@ void ustore::wrap_networkx(py::module& m, std::string const& name) {
     g.def("clear_edges", &clear_edges<type_ak>);
     g.def("clear", &clear<type_ak>);
     g.def("community_louvain", &community_louvain<type_ak>);
+
+    if (type_ak == digraph_k || type_ak == multidigraph_k) {
+        g.def_property_readonly("in_degree", &in_degree<type_ak>);
+        g.def_property_readonly("out_degree", &out_degree<type_ak>);
+    }
 
     if (type_ak == multigraph_k || type_ak == multidigraph_k) {
         g.def("has_edge", &has_edge_with_id<type_ak>, py::arg("u"), py::arg("v"), py::arg("key"));
