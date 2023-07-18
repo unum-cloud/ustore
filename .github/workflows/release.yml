@@ -77,6 +77,7 @@ jobs:
       - uses: actions/checkout@v3
         with:
           persist-credentials: false
+          ref: 'main'
       - name: Prepare CMake, Conan and PyArrow
         run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.57.0
 
@@ -123,7 +124,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           persist-credentials: false
-          ref: 'main-dev'
+          ref: 'main'
       - name: Prepare CMake, Conan and PyArrow
         run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.57.0
 
@@ -156,6 +157,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+        with:
+          persist-credentials: false
+          ref: 'main'
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
