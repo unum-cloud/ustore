@@ -635,8 +635,8 @@ class UStoreService : public arf::FlightServerBase {
             if (!params.collection_id)
                 log_return_message_m(ar::Status::Invalid, "Missing collection ID argument");
 
-            ustore_drop_mode_t mode =                               //
-                params.collection_drop_mode == kParamDropModeValues //
+            ustore_drop_mode_t mode =                                       //
+                params.collection_drop_mode == kParamDropModeValues         //
                     ? ustore_drop_vals_k
                     : params.collection_drop_mode == kParamDropModeContents //
                           ? ustore_drop_keys_vals_k
