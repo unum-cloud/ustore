@@ -328,7 +328,7 @@ def test_clear():
 
 def test_size():
     db = ustore.DataBase()
-    graph = ustore.Graph(db, 'graph', relations='edges')
+    graph = ustore.MultiGraph(db, 'graph', relations='edges')
     size = 1000
     weighted_size = 0
     for node in range(size):
@@ -383,7 +383,7 @@ def test_nodes_attributes():
 
 def test_edges_attributes():
     db = ustore.DataBase()
-    graph = ustore.Graph(db, 'graph', relations='edges')
+    graph = ustore.MultiGraph(db, 'graph', relations='edges')
 
     for i in range(100):
         graph.add_edge(
@@ -456,7 +456,7 @@ def test_get_node_attributes():
 
 def test_get_edge_attributes():
     db = ustore.DataBase()
-    graph = ustore.Graph(db, 'graph', relations='edges')
+    graph = ustore.MultiGraph(db, 'graph', relations='edges')
 
     for node in range(1000):
         graph.add_edge(node, node+1, node, weight=node)
@@ -513,7 +513,7 @@ def test_set_node_attributes():
 
 def test_set_edge_attributes():
     db = ustore.DataBase()
-    graph = ustore.Graph(db, relations='edges')
+    graph = ustore.MultiGraph(db, relations='edges')
 
     graph.add_edge(0, 1, 0)
     graph.add_edge(1, 2, 1)
