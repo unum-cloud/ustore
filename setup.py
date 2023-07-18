@@ -50,7 +50,8 @@ class CMakeBuild(build_ext):
             '-DUSTORE_BUILD_ENGINE_LEVELDB=1',
             '-DUSTORE_BUILD_ENGINE_ROCKSDB=1',
             '-DUSTORE_BUILD_API_FLIGHT_CLIENT=1',
-            '-DUSTORE_BUILD_SDK_PYTHON=1'
+            '-DUSTORE_BUILD_SDK_PYTHON=1',
+            '-DCONAN=1'
         ]
 
         # Adding CMake arguments set as environment variable
