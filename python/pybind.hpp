@@ -20,7 +20,7 @@ struct py_collection_t;
 
 typedef enum { graph_k = 0, digraph_k = 1, multigraph_k = 2, multidigraph_k = 3 } graph_type_t;
 template <graph_type_t>
-struct py_network_t;
+struct py_graph_gt;
 
 struct py_table_collection_t;
 
@@ -117,7 +117,7 @@ struct py_buffer_memory_t {
 };
 
 template <graph_type_t type_ak>
-struct py_network_t : public std::enable_shared_from_this<py_network_t<type_ak>> {
+struct py_graph_gt : public std::enable_shared_from_this<py_graph_gt<type_ak>> {
 
     std::shared_ptr<py_db_t> py_db_ptr;
     std::shared_ptr<py_transaction_t> py_txn_ptr;
@@ -131,20 +131,15 @@ struct py_network_t : public std::enable_shared_from_this<py_network_t<type_ak>>
 
     py_buffer_memory_t last_buffer;
 
-    py_network_t() {}
-    py_network_t(py_network_t&&) = delete;
-    py_network_t(py_network_t const&) = delete;
-    ~py_network_t() {}
+    py_graph_gt() {}
+    py_graph_gt(py_graph_gt&&) = delete;
+    py_graph_gt(py_graph_gt const&) = delete;
+    ~py_graph_gt() {}
 
     graph_collection_t ref() {
         return graph_collection_t(index.db(), index, index.txn(), index.snap(), index.member_arena());
     }
 };
-
-using py_graph_t = py_network_t<graph_type_t::graph_k>;
-using py_digraph_t = py_network_t<graph_type_t::digraph_k>;
-using py_multigraph_t = py_network_t<graph_type_t::multigraph_k>;
-using py_multidigraph_t = py_network_t<graph_type_t::multidigraph_k>;
 
 struct py_table_keys_range_t {
     ustore_key_t min {std::numeric_limits<ustore_key_t>::min()};
@@ -301,7 +296,8 @@ void wrap_database(py::module&);
  * - Implement subgraph selection
  * - Implement attributes
  */
-void wrap_networkx(py::module&);
+template <graph_type_t>
+void wrap_networkx(py::module&, std::string const&);
 
 /**
  * @brief Python bindings for a Document Store, that mimics Pandas.

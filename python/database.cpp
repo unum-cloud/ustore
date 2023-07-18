@@ -99,9 +99,9 @@ auto iterate(range_at& range) {
     return std::make_unique<wrap_t>(std::move(wrap));
 }
 
-template <typename py_typed_network_t>
+template <graph_type_t type_ak>
 auto create_graph(py_blobs_collection_t& py_collection) {
-    auto py_graph = std::make_shared<py_typed_network_t>();
+    auto py_graph = std::make_shared<py_graph_gt<type_ak>>();
     py_graph->py_db_ptr = py_collection.py_db_ptr;
     py_graph->py_txn_ptr = py_collection.py_txn_ptr;
     py_graph->in_txn = py_collection.in_txn;
@@ -273,8 +273,10 @@ void ustore::wrap_database(py::module& m) {
         [](py_db_t& py_db, std::string const& name) { py_db.native.drop(name.c_str()).throw_unhandled(); },
         py::arg("collection"));
 
-    py_collection.def_property_readonly("graph", &create_graph<py_graph_t>);
-    py_collection.def_property_readonly("digraph", &create_graph<py_digraph_t>);
+    py_collection.def_property_readonly("graph", &create_graph<graph_k>);
+    py_collection.def_property_readonly("digraph", &create_graph<digraph_k>);
+    py_collection.def_property_readonly("multigraph", &create_graph<multigraph_k>);
+    py_collection.def_property_readonly("multidigraph", &create_graph<multidigraph_k>);
     py_collection.def_property_readonly("table", [](py_blobs_collection_t& py_collection) {
         auto py_table = std::make_shared<py_table_collection_t>();
         py_table->binary = py_collection.native;

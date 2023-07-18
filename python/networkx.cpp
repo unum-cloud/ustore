@@ -44,7 +44,7 @@ embedded_blobs_t read_attributes( //
 }
 
 template <graph_type_t type_ak>
-void compute_degrees(py_network_t<type_ak>& graph,
+void compute_degrees(py_graph_gt<type_ak>& graph,
                      strided_range_gt<ustore_key_t const> vertices,
                      ustore_vertex_role_t role,
                      ustore_str_view_t weight,
@@ -94,6 +94,7 @@ void compute_degrees(py_network_t<type_ak>& graph,
     }
 }
 
+template <graph_type_t type_ak>
 struct nodes_stream_t {
     keys_stream_t native;
     docs_collection_t& collection;
@@ -134,7 +135,7 @@ struct nodes_stream_t {
         return ret;
     }
 };
-
+template <graph_type_t type_ak>
 struct edges_stream_t {
     graph_stream_t native;
     docs_collection_t& collection;
@@ -178,7 +179,7 @@ struct edges_stream_t {
         return ret;
     }
 };
-
+template <graph_type_t type_ak>
 struct edges_nbunch_iter_t {
     edges_span_t edges;
     embedded_blobs_t attrs;
@@ -210,7 +211,7 @@ struct edges_nbunch_iter_t {
 template <graph_type_t type_ak>
 struct degrees_stream_t {
     keys_stream_t keys_stream;
-    py_network_t<type_ak>& graph;
+    py_graph_gt<type_ak>& graph;
     std::string weight_field;
     ustore_vertex_role_t vertex_role;
 
@@ -218,7 +219,7 @@ struct degrees_stream_t {
     ustore_vertex_degree_t* degrees = nullptr;
     std::size_t index = 0;
 
-    degrees_stream_t(keys_stream_t&& stream, py_network_t<type_ak>& net, std::string field, ustore_vertex_role_t role)
+    degrees_stream_t(keys_stream_t&& stream, py_graph_gt<type_ak>& net, std::string field, ustore_vertex_role_t role)
         : keys_stream(std::move(stream)), graph(net), weight_field(field), vertex_role(role) {
         fetched_nodes = keys_stream.keys_batch();
         compute_degrees(graph,
@@ -248,7 +249,8 @@ struct degrees_stream_t {
     }
 };
 
-struct nodes_range_t : public std::enable_shared_from_this<nodes_range_t> {
+template <graph_type_t type_ak>
+struct nodes_range_t : public std::enable_shared_from_this<nodes_range_t<type_ak>> {
     keys_range_t native;
     docs_collection_t& collection;
     bool read_data = false;
@@ -260,7 +262,7 @@ struct nodes_range_t : public std::enable_shared_from_this<nodes_range_t> {
 
 template <graph_type_t type_ak>
 struct edges_range_t : public std::enable_shared_from_this<edges_range_t<type_ak>> {
-    std::weak_ptr<py_network_t<type_ak>> net_ptr;
+    std::weak_ptr<py_graph_gt<type_ak>> net_ptr;
     std::vector<ustore_key_t> vertices;
     bool read_data = false;
     std::string field;
@@ -269,13 +271,13 @@ struct edges_range_t : public std::enable_shared_from_this<edges_range_t<type_ak
 
 template <graph_type_t type_ak>
 struct degree_view_t {
-    std::weak_ptr<py_network_t<type_ak>> net_ptr;
+    std::weak_ptr<py_graph_gt<type_ak>> net_ptr;
     ustore_vertex_role_t roles = ustore_vertex_role_any_k;
     std::string weight = "";
 };
 
 template <graph_type_t type_ak, typename element_at>
-py::object wrap_into_buffer(py_network_t<type_ak>& g, strided_range_gt<element_at> range) {
+py::object wrap_into_buffer(py_graph_gt<type_ak>& g, strided_range_gt<element_at> range) {
 
     py_buffer_memory_t& buf = g.last_buffer;
 
@@ -301,23 +303,24 @@ py::object wrap_into_buffer(py_network_t<type_ak>& g, strided_range_gt<element_a
     return py::reinterpret_steal<py::object>(obj);
 }
 
-// nodes_range_t functions
-
-auto nodes_iter(nodes_range_t& range) {
-    return nodes_stream_t {std::move(range.native).begin(),
-                           range.collection,
-                           range.read_data,
-                           range.field,
-                           range.default_value};
+template <graph_type_t type_ak>
+auto nodes_iter(nodes_range_t<type_ak>& range) {
+    return nodes_stream_t<type_ak> {std::move(range.native).begin(),
+                                    range.collection,
+                                    range.read_data,
+                                    range.field,
+                                    range.default_value};
 }
 
-auto nodes_call(nodes_range_t& range, bool data = false) {
+template <graph_type_t type_ak>
+auto nodes_call(nodes_range_t<type_ak>& range, bool data = false) {
     range.read_data = data;
     range.default_value = "{}";
     return range.shared_from_this();
 }
 
-auto nodes_call_with_data(nodes_range_t& range, std::string& data, py::object def_value) {
+template <graph_type_t type_ak>
+auto nodes_call_with_data(nodes_range_t<type_ak>& range, std::string& data, py::object def_value) {
     range.read_data = true;
     range.field = data;
     std::string str;
@@ -326,10 +329,9 @@ auto nodes_call_with_data(nodes_range_t& range, std::string& data, py::object de
     return range.shared_from_this();
 }
 
-// edges_range_t functions
 template <graph_type_t type_ak>
 auto edges_iter(edges_range_t<type_ak>& range) {
-    py_network_t<type_ak>& g = *range.net_ptr.lock().get();
+    py_graph_gt<type_ak>& g = *range.net_ptr.lock().get();
     if (range.vertices.size()) {
         auto vertices = strided_range(range.vertices).immutable();
         auto role = ustore_vertex_source_k;
@@ -337,11 +339,14 @@ auto edges_iter(edges_range_t<type_ak>& range) {
         auto attrs = read_attributes(g.relations_attrs,
                                      edges.edge_ids.immutable(),
                                      range.field.size() ? range.field.c_str() : nullptr);
-        return py::cast(edges_nbunch_iter_t(edges, attrs, range.read_data, range.default_value));
+        return py::cast(edges_nbunch_iter_t<type_ak>(edges, attrs, range.read_data, range.default_value));
     }
     auto edges = g.ref().edges(ustore_vertex_source_k).throw_or_release();
-    return py::cast(
-        edges_stream_t(std::move(edges).begin(), g.relations_attrs, range.read_data, range.field, range.default_value));
+    return py::cast(edges_stream_t<type_ak>(std::move(edges).begin(),
+                                            g.relations_attrs,
+                                            range.read_data,
+                                            range.field,
+                                            range.default_value));
 }
 
 template <graph_type_t type_ak>
@@ -395,8 +400,6 @@ auto edges_call_with_array_and_data(edges_range_t<type_ak>& range,
     return range.shared_from_this();
 }
 
-// degree_view_t functions
-
 template <graph_type_t type_ak>
 auto degs_getitem(degree_view_t<type_ak>& degs, ustore_key_t v) {
     auto& g = *degs.net_ptr.lock().get();
@@ -447,11 +450,9 @@ auto degs_iter(degree_view_t<type_ak>& degs) {
     return degrees_stream_t(std::move(stream), g, degs.weight, degs.roles);
 }
 
-// py_graph_t functions
-
-template <typename network_at, typename array_at>
+template <graph_type_t type_ak, typename array_at>
 void add_key_value( //
-    network_at& g,
+    py_graph_gt<type_ak>& g,
     strided_range_gt<ustore_key_t const> keys,
     std::shared_ptr<arrow::Array> values,
     std::string_view attr) {
@@ -474,9 +475,9 @@ void add_key_value( //
     g.relations_attrs[keys].merge(contents).throw_unhandled();
 }
 
-template <typename network_at, typename array_at>
+template <graph_type_t type_ak, typename array_at>
 void add_key_value_binary( //
-    network_at& g,
+    py_graph_gt<type_ak>& g,
     strided_range_gt<ustore_key_t const> keys,
     std::shared_ptr<arrow::Array> values,
     std::string_view attr) {
@@ -504,15 +505,15 @@ void add_key_value_binary( //
     g.relations_attrs[keys].merge(contents).throw_unhandled();
 }
 
-template <typename network_at>
+template <graph_type_t type_ak>
 auto graph_init(std::shared_ptr<py_db_t> py_db,
                 std::optional<std::string> index,
                 std::optional<std::string> vertices_attrs,
                 std::optional<std::string> relations_attrs) {
     if (!py_db)
-        return std::shared_ptr<network_at> {};
+        return std::shared_ptr<py_graph_gt<type_ak>> {};
 
-    auto net_ptr = std::make_shared<network_at>();
+    auto net_ptr = std::make_shared<py_graph_gt<type_ak>>();
     net_ptr->py_db_ptr = py_db;
 
     // Attach the primary collection
@@ -529,7 +530,7 @@ auto graph_init(std::shared_ptr<py_db_t> py_db,
 }
 
 template <graph_type_t type_ak>
-auto degree(py_network_t<type_ak>& g) {
+auto degree(py_graph_gt<type_ak>& g) {
     auto degs_ptr = std::make_unique<degree_view_t<type_ak>>();
     degs_ptr->net_ptr = g.shared_from_this();
     degs_ptr->roles = ustore_vertex_role_any_k;
@@ -537,7 +538,7 @@ auto degree(py_network_t<type_ak>& g) {
 }
 
 template <graph_type_t type_ak>
-auto in_degree(py_network_t<type_ak>& g) {
+auto in_degree(py_graph_gt<type_ak>& g) {
     auto degs_ptr = std::make_unique<degree_view_t<type_ak>>();
     degs_ptr->net_ptr = g.shared_from_this();
     degs_ptr->roles = ustore_vertex_target_k;
@@ -545,15 +546,15 @@ auto in_degree(py_network_t<type_ak>& g) {
 }
 
 template <graph_type_t type_ak>
-auto out_degree(py_network_t<type_ak>& g) {
+auto out_degree(py_graph_gt<type_ak>& g) {
     auto degs_ptr = std::make_unique<degree_view_t<type_ak>>();
     degs_ptr->net_ptr = g.shared_from_this();
     degs_ptr->roles = ustore_vertex_source_k;
     return degs_ptr;
 }
 
-template <typename network_at>
-auto size(network_at& g, std::string weight) {
+template <graph_type_t type_ak>
+auto size(py_graph_gt<type_ak>& g, std::string weight) {
     if (!weight.size())
         return g.ref().number_of_edges();
 
@@ -581,53 +582,53 @@ auto size(network_at& g, std::string weight) {
     return size;
 }
 
-template <typename network_at>
-auto number_of_edges_between(network_at& g, ustore_key_t v1, ustore_key_t v2) {
+template <graph_type_t type_ak>
+auto number_of_edges_between(py_graph_gt<type_ak>& g, ustore_key_t v1, ustore_key_t v2) {
     return g.ref().edges_between(v1, v2).throw_or_release().size();
 }
 
-template <typename network_at>
-auto number_of_edges(network_at& g) {
+template <graph_type_t type_ak>
+auto number_of_edges(py_graph_gt<type_ak>& g) {
     return g.ref().number_of_edges();
 }
 
-template <typename network_at>
-auto nodes(network_at& g) {
+template <graph_type_t type_ak>
+auto nodes(py_graph_gt<type_ak>& g) {
     blobs_range_t members(g.index.db(), g.index.txn(), 0, g.index);
     keys_range_t keys {members};
-    auto range = std::make_shared<nodes_range_t>(keys, g.vertices_attrs);
+    auto range = std::make_shared<nodes_range_t<type_ak>>(keys, g.vertices_attrs);
     return range;
 }
 
-template <typename network_at>
-auto contains(network_at& g, ustore_key_t v) {
+template <graph_type_t type_ak>
+auto contains(py_graph_gt<type_ak>& g, ustore_key_t v) {
     return g.ref().contains(v).throw_or_release();
 }
 
-template <typename network_at>
-auto getitem(network_at& g, ustore_key_t n) {
+template <graph_type_t type_ak>
+auto getitem(py_graph_gt<type_ak>& g, ustore_key_t n) {
     return wrap_into_buffer(g, g.ref().neighbors(n).throw_or_release());
 }
 
-template <typename network_at>
-auto len(network_at& g) {
+template <graph_type_t type_ak>
+auto len(py_graph_gt<type_ak>& g) {
     return g.index.size();
 }
 
-template <typename network_at>
-auto number_of_nodes(network_at& g) {
+template <graph_type_t type_ak>
+auto number_of_nodes(py_graph_gt<type_ak>& g) {
     return g.index.size();
 }
 
-template <typename network_at>
-auto has_node(network_at& g, ustore_key_t v) {
+template <graph_type_t type_ak>
+auto has_node(py_graph_gt<type_ak>& g, ustore_key_t v) {
     auto maybe = g.ref().contains(v);
     maybe.throw_unhandled();
     return *maybe;
 }
 
 template <graph_type_t type_ak>
-auto has_edge(py_network_t<type_ak>& g, ustore_key_t v1, ustore_key_t v2) {
+auto has_edge(py_graph_gt<type_ak>& g, ustore_key_t v1, ustore_key_t v2) {
     if (type_ak == digraph_k)
         return g.ref().edges_between(v1, v2).throw_or_release().size() != 0;
     return g.ref().edges_between(v1, v2).throw_or_release().size() != 0 ||
@@ -635,44 +636,44 @@ auto has_edge(py_network_t<type_ak>& g, ustore_key_t v1, ustore_key_t v2) {
 }
 
 template <graph_type_t type_ak>
-auto has_edge_with_id(py_network_t<type_ak>& g, ustore_key_t v1, ustore_key_t v2, ustore_key_t e) {
+auto has_edge_with_id(py_graph_gt<type_ak>& g, ustore_key_t v1, ustore_key_t v2, ustore_key_t e) {
     auto ids = g.ref().edges_between(v1, v2).throw_or_release().edge_ids;
     return std::find(ids.begin(), ids.end(), e) != ids.end();
 }
 
 template <graph_type_t type_ak>
-auto get_edges(py_network_t<type_ak>& g) {
+auto get_edges(py_graph_gt<type_ak>& g) {
     auto edges_ptr = std::make_shared<edges_range_t<type_ak>>();
     edges_ptr->net_ptr = g.shared_from_this();
     return edges_ptr;
 }
 
 template <graph_type_t type_ak>
-auto neighbors(py_network_t<type_ak>& g, ustore_key_t n) {
+auto neighbors(py_graph_gt<type_ak>& g, ustore_key_t n) {
     if (type_ak == graph_k)
         return wrap_into_buffer(g, g.ref().neighbors(n).throw_or_release());
     return wrap_into_buffer(g, g.ref().neighbors(n, ustore_vertex_source_k).throw_or_release());
 }
 
-template <typename network_at>
-auto successors(network_at& g, ustore_key_t n) {
+template <graph_type_t type_ak>
+auto successors(py_graph_gt<type_ak>& g, ustore_key_t n) {
     return wrap_into_buffer(g, g.ref().successors(n).throw_or_release());
 }
 
-template <typename network_at>
-auto predecessors(network_at& g, ustore_key_t n) {
+template <graph_type_t type_ak>
+auto predecessors(py_graph_gt<type_ak>& g, ustore_key_t n) {
     return wrap_into_buffer(g, g.ref().predecessors(n).throw_or_release());
 }
 
-template <typename network_at>
-auto community_louvain(network_at& g) {
+template <graph_type_t type_ak>
+auto community_louvain(py_graph_gt<type_ak>& g) {
     graph_collection_t graph = g.ref();
     auto partition = best_partition(graph);
     return py::cast(partition);
 }
 
-template <typename network_at>
-void set_node_attributes(network_at& g, py::object obj, std::optional<std::string> name) {
+template <graph_type_t type_ak>
+void set_node_attributes(py_graph_gt<type_ak>& g, py::object obj, std::optional<std::string> name) {
     std::string json_to_merge;
 
     if (PyDict_Check(obj.ptr())) {
@@ -708,8 +709,8 @@ void set_node_attributes(network_at& g, py::object obj, std::optional<std::strin
     }
 }
 
-template <typename network_at>
-auto get_node_attributes(network_at& g, std::string& name) {
+template <graph_type_t type_ak>
+auto get_node_attributes(py_graph_gt<type_ak>& g, std::string& name) {
     std::unordered_map<ustore_key_t, py::object> map;
     auto stream = g.ref().vertex_stream().throw_or_release();
     while (!stream.is_end()) {
@@ -724,7 +725,7 @@ auto get_node_attributes(network_at& g, std::string& name) {
 }
 
 template <graph_type_t type_ak>
-auto get_edge_data(py_network_t<type_ak>& g, ustore_key_t v1, ustore_key_t v2, py::object default_value) -> py::object {
+auto get_edge_data(py_graph_gt<type_ak>& g, ustore_key_t v1, ustore_key_t v2, py::object default_value) -> py::object {
     std::string default_value_str;
     to_string(default_value.ptr(), default_value_str);
     auto edges = g.ref().edges_between(v1, v2).throw_or_release();
@@ -741,7 +742,7 @@ auto get_edge_data(py_network_t<type_ak>& g, ustore_key_t v1, ustore_key_t v2, p
 }
 
 template <graph_type_t type_ak>
-auto get_edge_attributes(py_network_t<type_ak>& g, std::string& name) {
+auto get_edge_attributes(py_graph_gt<type_ak>& g, std::string& name) {
     auto hash = [](py::tuple const& tuple) {
         return py_to_scalar<ustore_key_t>(PyTuple_GetItem(tuple.ptr(), 2));
     };
@@ -769,7 +770,7 @@ auto get_edge_attributes(py_network_t<type_ak>& g, std::string& name) {
 }
 
 template <graph_type_t type_ak>
-void set_edge_attributes(py_network_t<type_ak>& g, py::object obj, std::optional<std::string> name) {
+void set_edge_attributes(py_graph_gt<type_ak>& g, py::object obj, std::optional<std::string> name) {
     std::string json_to_merge;
 
     if (PyDict_Check(obj.ptr())) {
@@ -807,8 +808,8 @@ void set_edge_attributes(py_network_t<type_ak>& g, py::object obj, std::optional
     }
 }
 
-template <typename network_at>
-auto nbunch_iter(network_at& g, PyObject* vs) {
+template <graph_type_t type_ak>
+auto nbunch_iter(py_graph_gt<type_ak>& g, PyObject* vs) {
     auto ids_handle = py_buffer(vs);
     auto ids = py_strided_range<ustore_key_t const>(ids_handle);
     auto result = g.ref().contains(ids).throw_or_release();
@@ -823,8 +824,8 @@ auto nbunch_iter(network_at& g, PyObject* vs) {
     return res_array;
 }
 
-template <typename network_at>
-void add_node(network_at& g, ustore_key_t v, py::kwargs const& attrs) {
+template <graph_type_t type_ak>
+void add_node(py_graph_gt<type_ak>& g, ustore_key_t v, py::kwargs const& attrs) {
     g.ref().upsert_vertex(v).throw_unhandled();
     if (!attrs.size())
         return;
@@ -833,13 +834,14 @@ void add_node(network_at& g, ustore_key_t v, py::kwargs const& attrs) {
     g.vertices_attrs[v].assign(value_view_t(json_str)).throw_unhandled();
 }
 
-template <typename network_at>
-void add_edge(network_at& g, ustore_key_t v1, ustore_key_t v2) {
+template <graph_type_t type_ak>
+void add_edge(py_graph_gt<type_ak>& g, ustore_key_t v1, ustore_key_t v2) {
     g.ref().upsert_edge(edge_t {v1, v2}).throw_unhandled();
 }
 
-template <typename network_at>
-void add_edge_with_id(network_at& g, ustore_key_t v1, ustore_key_t v2, ustore_key_t e, py::kwargs const& attrs) {
+template <graph_type_t type_ak>
+void add_edge_with_id(
+    py_graph_gt<type_ak>& g, ustore_key_t v1, ustore_key_t v2, ustore_key_t e, py::kwargs const& attrs) {
     g.ref().upsert_edge(edge_t {v1, v2, e}).throw_unhandled();
     if (!attrs.size())
         return;
@@ -848,25 +850,25 @@ void add_edge_with_id(network_at& g, ustore_key_t v1, ustore_key_t v2, ustore_ke
     g.relations_attrs[e].assign(value_view_t(json_str)).throw_unhandled();
 }
 
-template <typename network_at>
-void remove_node(network_at& g, ustore_key_t v) {
+template <graph_type_t type_ak>
+void remove_node(py_graph_gt<type_ak>& g, ustore_key_t v) {
     g.ref().remove_vertex(v).throw_unhandled();
     if (g.vertices_attrs.db())
         g.vertices_attrs[v].clear().throw_unhandled();
 }
 
-template <typename network_at>
-void remove_edge(network_at& g, ustore_key_t v1, ustore_key_t v2) {
+template <graph_type_t type_ak>
+void remove_edge(py_graph_gt<type_ak>& g, ustore_key_t v1, ustore_key_t v2) {
     g.ref().remove_edge(edge_t {v1, v2}).throw_unhandled();
 }
 
-template <typename network_at>
-void remove_edge_with_id(network_at& g, ustore_key_t v1, ustore_key_t v2, ustore_key_t e) {
+template <graph_type_t type_ak>
+void remove_edge_with_id(py_graph_gt<type_ak>& g, ustore_key_t v1, ustore_key_t v2, ustore_key_t e) {
     g.ref().remove_edge(edge_t {v1, v2, e}).throw_unhandled();
 }
 
-template <typename network_at>
-void add_nodes_from(network_at& g, py::object vs, py::kwargs const& attrs) {
+template <graph_type_t type_ak>
+void add_nodes_from(py_graph_gt<type_ak>& g, py::object vs, py::kwargs const& attrs) {
     if (PyObject_CheckBuffer(vs.ptr())) {
         py_buffer_t buf = py_buffer(vs.ptr());
         if (!can_cast_internal_scalars<ustore_key_t>(buf))
@@ -893,13 +895,13 @@ void add_nodes_from(network_at& g, py::object vs, py::kwargs const& attrs) {
     }
 }
 
-template <typename network_at>
-void add_edges_from_adjacency_list(network_at& g, py::object adjacency_list) {
+template <graph_type_t type_ak>
+void add_edges_from_adjacency_list(py_graph_gt<type_ak>& g, py::object adjacency_list) {
     g.ref().upsert_edges(parsed_adjacency_list_t(adjacency_list.ptr())).throw_unhandled();
 }
 
-template <typename network_at>
-void remove_nodes_from(network_at& g, py::object vs) {
+template <graph_type_t type_ak>
+void remove_nodes_from(py_graph_gt<type_ak>& g, py::object vs) {
     if (PyObject_CheckBuffer(vs.ptr())) {
         py_buffer_t buf = py_buffer(vs.ptr());
         if (!can_cast_internal_scalars<ustore_key_t>(buf))
@@ -920,13 +922,14 @@ void remove_nodes_from(network_at& g, py::object vs) {
     }
 }
 
-template <typename network_at>
-void remove_edges_from_adjacency_list(network_at& g, py::object adjacency_list) {
+template <graph_type_t type_ak>
+void remove_edges_from_adjacency_list(py_graph_gt<type_ak>& g, py::object adjacency_list) {
     g.ref().remove_edges(parsed_adjacency_list_t(adjacency_list.ptr())).throw_unhandled();
 }
 
-template <typename network_at>
-void add_edges_from_arrays(network_at& g, py::object v1s, py::object v2s, py::object es, py::kwargs const& attrs) {
+template <graph_type_t type_ak>
+void add_edges_from_arrays(
+    py_graph_gt<type_ak>& g, py::object v1s, py::object v2s, py::object es, py::kwargs const& attrs) {
     g.ref().upsert_edges(parsed_adjacency_list_t(v1s.ptr(), v2s.ptr(), es.ptr())).throw_unhandled();
 
     if (!attrs.size())
@@ -950,8 +953,8 @@ void add_edges_from_arrays(network_at& g, py::object v1s, py::object v2s, py::ob
     }
 }
 
-template <typename network_at>
-void remove_edges_from_arrays(network_at& g, py::object v1s, py::object v2s, py::object es) {
+template <graph_type_t type_ak>
+void remove_edges_from_arrays(py_graph_gt<type_ak>& g, py::object v1s, py::object v2s, py::object es) {
     g.ref().remove_edges(parsed_adjacency_list_t(v1s.ptr(), v2s.ptr(), es.ptr())).throw_unhandled();
 
     if (!g.relations_attrs.db())
@@ -973,9 +976,12 @@ void remove_edges_from_arrays(network_at& g, py::object v1s, py::object v2s, py:
     }
 }
 
-template <typename network_at>
-void add_edges_from_table(
-    network_at& g, py::object table, ustore_str_view_t source, ustore_str_view_t target, ustore_str_view_t edge) {
+template <graph_type_t type_ak>
+void add_edges_from_table(py_graph_gt<type_ak>& g,
+                          py::object table,
+                          ustore_str_view_t source,
+                          ustore_str_view_t target,
+                          ustore_str_view_t edge) {
     if (!arrow::py::is_table(table.ptr()))
         throw std::runtime_error("Wrong arg py::object isn't table");
 
@@ -1024,34 +1030,34 @@ void add_edges_from_table(
 
             using type = arrow::Type;
             switch (values->type_id()) {
-            case type::HALF_FLOAT: add_key_value<network_at, arrow::HalfFloatArray>(g, keys, values, attr); break;
-            case type::FLOAT: add_key_value<network_at, arrow::FloatArray>(g, keys, values, attr); break;
-            case type::DOUBLE: add_key_value<network_at, arrow::DoubleArray>(g, keys, values, attr); break;
-            case type::BOOL: add_key_value<network_at, arrow::BooleanArray>(g, keys, values, attr); break;
-            case type::UINT8: add_key_value<network_at, arrow::UInt8Array>(g, keys, values, attr); break;
-            case type::INT8: add_key_value<network_at, arrow::Int8Array>(g, keys, values, attr); break;
-            case type::UINT16: add_key_value<network_at, arrow::UInt16Array>(g, keys, values, attr); break;
-            case type::INT16: add_key_value<network_at, arrow::Int16Array>(g, keys, values, attr); break;
-            case type::UINT32: add_key_value<network_at, arrow::UInt32Array>(g, keys, values, attr); break;
-            case type::INT32: add_key_value<network_at, arrow::Int32Array>(g, keys, values, attr); break;
-            case type::UINT64: add_key_value<network_at, arrow::UInt64Array>(g, keys, values, attr); break;
-            case type::INT64: add_key_value<network_at, arrow::Int64Array>(g, keys, values, attr); break;
+            case type::HALF_FLOAT: add_key_value<type_ak, arrow::HalfFloatArray>(g, keys, values, attr); break;
+            case type::FLOAT: add_key_value<type_ak, arrow::FloatArray>(g, keys, values, attr); break;
+            case type::DOUBLE: add_key_value<type_ak, arrow::DoubleArray>(g, keys, values, attr); break;
+            case type::BOOL: add_key_value<type_ak, arrow::BooleanArray>(g, keys, values, attr); break;
+            case type::UINT8: add_key_value<type_ak, arrow::UInt8Array>(g, keys, values, attr); break;
+            case type::INT8: add_key_value<type_ak, arrow::Int8Array>(g, keys, values, attr); break;
+            case type::UINT16: add_key_value<type_ak, arrow::UInt16Array>(g, keys, values, attr); break;
+            case type::INT16: add_key_value<type_ak, arrow::Int16Array>(g, keys, values, attr); break;
+            case type::UINT32: add_key_value<type_ak, arrow::UInt32Array>(g, keys, values, attr); break;
+            case type::INT32: add_key_value<type_ak, arrow::Int32Array>(g, keys, values, attr); break;
+            case type::UINT64: add_key_value<type_ak, arrow::UInt64Array>(g, keys, values, attr); break;
+            case type::INT64: add_key_value<type_ak, arrow::Int64Array>(g, keys, values, attr); break;
             case type::STRING:
-            case type::BINARY: add_key_value_binary<network_at, arrow::BinaryArray>(g, keys, values, attr); break;
+            case type::BINARY: add_key_value_binary<type_ak, arrow::BinaryArray>(g, keys, values, attr); break;
             }
         }
     }
 }
 
-template <typename network_at>
-void clear_edges(network_at& g) {
+template <graph_type_t type_ak>
+void clear_edges(py_graph_gt<type_ak>& g) {
     g.index.clear_values().throw_unhandled();
     if (g.relations_attrs.db())
         g.relations_attrs.clear_values().throw_unhandled();
 }
 
-template <typename network_at>
-void clear(network_at& g) {
+template <graph_type_t type_ak>
+void clear(py_graph_gt<type_ak>& g) {
     g.index.clear();
     if (g.vertices_attrs.db())
         g.vertices_attrs.clear().throw_unhandled();
@@ -1059,204 +1065,129 @@ void clear(network_at& g) {
         g.relations_attrs.clear().throw_unhandled();
 }
 
-void ustore::wrap_networkx(py::module& m) {
+template void wrap_networkx<graph_k>(py::module& m, std::string const& n);
+template void wrap_networkx<digraph_k>(py::module& m, std::string const& n);
+template void wrap_networkx<multigraph_k>(py::module& m, std::string const& n);
+template void wrap_networkx<multidigraph_k>(py::module& m, std::string const& n);
 
-    auto g_degs = py::class_<degree_view_t<graph_k>>(m, "GraphDegreeView", py::module_local());
-    g_degs.def("__getitem__", &degs_getitem<graph_k>);
-    g_degs.def("__call__", &degs_call_with_array<graph_k>, py::arg("vs"), py::arg("weight") = "");
-    g_degs.def("__call__", &degs_call<graph_k>, py::arg("weight") = "");
-    g_degs.def("__iter__", &degs_iter<graph_k>);
+template <graph_type_t type_ak>
+void ustore::wrap_networkx(py::module& m, std::string const& name) {
 
-    auto dg_degs = py::class_<degree_view_t<digraph_k>>(m, "DiGraphDegreeView", py::module_local());
-    dg_degs.def("__getitem__", &degs_getitem<digraph_k>);
-    dg_degs.def("__call__", &degs_call_with_array<digraph_k>, py::arg("vs"), py::arg("weight") = "");
-    dg_degs.def("__call__", &degs_call<digraph_k>, py::arg("weight") = "");
-    dg_degs.def("__iter__", &degs_iter<digraph_k>);
+    std::string degs_view_name = name + "DegreeView";
+    auto degs = py::class_<degree_view_t<type_ak>>(m, degs_view_name.c_str(), py::module_local());
+    degs.def("__getitem__", &degs_getitem<type_ak>);
+    degs.def("__call__", &degs_call_with_array<type_ak>, py::arg("vs"), py::arg("weight") = "");
+    degs.def("__call__", &degs_call<type_ak>, py::arg("weight") = "");
+    degs.def("__iter__", &degs_iter<type_ak>);
 
-    auto g_degs_stream = py::class_<degrees_stream_t<graph_k>>(m, "GraphDegreesStream", py::module_local());
-    g_degs_stream.def("__next__", [](degrees_stream_t<graph_k>& stream) { return stream.next(); });
+    std::string degs_stream_name = name + "DegreesStream";
+    auto degs_stream = py::class_<degrees_stream_t<type_ak>>(m, degs_stream_name.c_str(), py::module_local());
+    degs_stream.def("__next__", [](degrees_stream_t<type_ak>& stream) { return stream.next(); });
 
-    auto dg_degs_stream = py::class_<degrees_stream_t<digraph_k>>(m, "DiGraphDegreesStream", py::module_local());
-    dg_degs_stream.def("__next__", [](degrees_stream_t<digraph_k>& stream) { return stream.next(); });
-
-    auto nodes_range = py::class_<nodes_range_t, std::shared_ptr<nodes_range_t>>(m, "NodesRange", py::module_local());
-    nodes_range.def("__iter__", &nodes_iter);
-    nodes_range.def("__call__", nodes_call, py::arg("data") = false);
-    nodes_range.def("__call__", &nodes_call_with_data, py::arg("data"), py::arg("default") = py::none());
-
-    auto nodes_stream = py::class_<nodes_stream_t>(m, "NodesStream", py::module_local());
-    nodes_stream.def("__next__", [](nodes_stream_t& stream) { return stream.next(); });
-
-    auto g_edges_range =
-        py::class_<edges_range_t<graph_k>, std::shared_ptr<edges_range_t<graph_k>>>(m,
-                                                                                    "GraphEdgesRange",
+    std::string nodes_range_name = name + "NodesRange";
+    auto nodes_range =
+        py::class_<nodes_range_t<type_ak>, std::shared_ptr<nodes_range_t<type_ak>>>(m,
+                                                                                    nodes_range_name.c_str(),
                                                                                     py::module_local());
-    g_edges_range.def("__iter__", &edges_iter<graph_k>);
-    g_edges_range.def("__call__", &edges_call<graph_k>, py::arg("data") = false);
-    g_edges_range.def("__call__", &edges_call_with_data<graph_k>, py::arg("data"), py::arg("default") = py::none());
-    g_edges_range.def("__call__", &edges_call_with_array<graph_k>, py::arg("vs"), py::arg("data"));
-    g_edges_range.def("__call__",
-                      &edges_call_with_array_and_data<graph_k>,
-                      py::arg("vs"),
-                      py::arg("data"),
-                      py::arg("default") = py::none());
+    nodes_range.def("__iter__", &nodes_iter<type_ak>);
+    nodes_range.def("__call__", nodes_call<type_ak>, py::arg("data") = false);
+    nodes_range.def("__call__", &nodes_call_with_data<type_ak>, py::arg("data"), py::arg("default") = py::none());
 
-    auto dg_edges_range =
-        py::class_<edges_range_t<digraph_k>, std::shared_ptr<edges_range_t<digraph_k>>>(m,
-                                                                                        "DiGraphEdgesRange",
-                                                                                        py::module_local());
-    dg_edges_range.def("__iter__", &edges_iter<digraph_k>);
-    dg_edges_range.def("__call__", &edges_call<digraph_k>, py::arg("data") = false);
-    dg_edges_range.def("__call__", &edges_call_with_data<digraph_k>, py::arg("data"), py::arg("default") = py::none());
-    dg_edges_range.def("__call__", &edges_call_with_array<digraph_k>, py::arg("vs"), py::arg("data"));
-    dg_edges_range.def("__call__",
-                       &edges_call_with_array_and_data<digraph_k>,
-                       py::arg("vs"),
-                       py::arg("data"),
-                       py::arg("default") = py::none());
+    std::string nodes_stream_name = name + "NodesStream";
+    auto nodes_stream = py::class_<nodes_stream_t<type_ak>>(m, nodes_stream_name.c_str(), py::module_local());
+    nodes_stream.def("__next__", [](nodes_stream_t<type_ak>& stream) { return stream.next(); });
 
-    auto edges_iter = py::class_<edges_nbunch_iter_t>(m, "EdgesIter", py::module_local());
-    edges_iter.def("__next__", [](edges_nbunch_iter_t& iter) { return iter.next(); });
+    std::string edges_range_name = name + "EdgesRange";
+    auto edges_range =
+        py::class_<edges_range_t<type_ak>, std::shared_ptr<edges_range_t<type_ak>>>(m,
+                                                                                    edges_range_name.c_str(),
+                                                                                    py::module_local());
+    edges_range.def("__iter__", &edges_iter<type_ak>);
+    edges_range.def("__call__", &edges_call<type_ak>, py::arg("data") = false);
+    edges_range.def("__call__", &edges_call_with_data<type_ak>, py::arg("data"), py::arg("default") = py::none());
+    edges_range.def("__call__", &edges_call_with_array<type_ak>, py::arg("vs"), py::arg("data"));
+    edges_range.def("__call__",
+                    &edges_call_with_array_and_data<type_ak>,
+                    py::arg("vs"),
+                    py::arg("data"),
+                    py::arg("default") = py::none());
 
-    auto edges_stream = py::class_<edges_stream_t>(m, "EdgesStream", py::module_local());
-    edges_stream.def("__next__", [](edges_stream_t& stream) { return stream.next(); });
+    std::string edges_iter_name = name + "EdgesIter";
+    auto edges_iter = py::class_<edges_nbunch_iter_t<type_ak>>(m, edges_iter_name.c_str(), py::module_local());
+    edges_iter.def("__next__", [](edges_nbunch_iter_t<type_ak>& iter) { return iter.next(); });
 
-    auto g = py::class_<py_graph_t, std::shared_ptr<py_graph_t>>(m, "Graph", py::module_local());
-    auto dg = py::class_<py_digraph_t, std::shared_ptr<py_digraph_t>>(m, "DiGraph", py::module_local());
+    std::string edges_stream_name = name + "EdgesStream";
+    auto edges_stream = py::class_<edges_stream_t<type_ak>>(m, edges_stream_name.c_str(), py::module_local());
+    edges_stream.def("__next__", [](edges_stream_t<type_ak>& stream) { return stream.next(); });
 
-    g.def(py::init(&graph_init<py_graph_t>),
+    auto g =
+        py::class_<py_graph_gt<type_ak>, std::shared_ptr<py_graph_gt<type_ak>>>(m, name.c_str(), py::module_local());
+
+    g.def(py::init(&graph_init<type_ak>),
           py::arg("db"),
           py::arg("index") = std::nullopt,
           py::arg("vertices") = std::nullopt,
           py::arg("relations") = std::nullopt);
 
-    dg.def(py::init(&graph_init<py_digraph_t>),
-           py::arg("db"),
-           py::arg("index") = std::nullopt,
-           py::arg("vertices") = std::nullopt,
-           py::arg("relations") = std::nullopt);
-
     // Counting nodes edges and neighbors
     // https://networkx.org/documentation/stable/reference/classes/graph.html#counting-nodes-edges-and-neighbors
     // https://networkx.org/documentation/stable/reference/classes/multidigraph.html#counting-nodes-edges-and-neighbors
-    g.def("number_of_nodes", &number_of_nodes<py_graph_t>);
-    g.def("__len__", &len<py_graph_t>);
-    g.def_property_readonly("degree", &degree<graph_k>);
-    g.def("size", &size<py_graph_t>, py::arg("weight") = "");
-    g.def("number_of_edges", &number_of_edges_between<py_graph_t>);
-    g.def("number_of_edges", &number_of_edges<py_graph_t>);
-
-    dg.def("number_of_nodes", &number_of_nodes<py_digraph_t>);
-    dg.def("__len__", &len<py_digraph_t>);
-    dg.def_property_readonly("degree", &degree<digraph_k>);
-    dg.def_property_readonly("in_degree", &in_degree<digraph_k>);
-    dg.def_property_readonly("out_degree", &out_degree<digraph_k>);
-    dg.def("size", &size<py_digraph_t>, py::arg("weight") = "");
-    dg.def("number_of_edges", &number_of_edges_between<py_digraph_t>);
-    dg.def("number_of_edges", &number_of_edges<py_digraph_t>);
+    g.def("number_of_nodes", &number_of_nodes<type_ak>);
+    g.def("__len__", &len<type_ak>);
+    g.def_property_readonly("degree", &degree<type_ak>);
+    g.def_property_readonly("in_degree", &in_degree<type_ak>);
+    g.def_property_readonly("out_degree", &out_degree<type_ak>);
+    g.def("size", &size<type_ak>, py::arg("weight") = "");
+    g.def("number_of_edges", &number_of_edges_between<type_ak>);
+    g.def("number_of_edges", &number_of_edges<type_ak>);
 
     // Reporting nodes edges and neighbors
     // https://networkx.org/documentation/stable/reference/classes/multidigraph.html#reporting-nodes-edges-and-neighbors
-    g.def_property_readonly("nodes", &nodes<py_graph_t>);
-    g.def("__iter__", [](py_graph_t& g) { throw_not_implemented(); });
-    g.def("has_node", &has_node<py_graph_t>, py::arg("n"));
-    g.def("__contains__", &contains<py_graph_t>, py::arg("n"));
-    g.def("set_node_attributes", &set_node_attributes<py_graph_t>, py::arg("values"), py::arg("name") = std::nullopt);
-    g.def("get_node_attributes", &get_node_attributes<py_graph_t>, py::arg("name"));
-    g.def_property_readonly("edges", &get_edges<graph_k>);
-    g.def("has_edge", &has_edge<graph_k>, py::arg("u"), py::arg("v"));
-    g.def("has_edge_with_id", &has_edge_with_id<graph_k>, py::arg("u"), py::arg("v"), py::arg("id"));
-    g.def("get_edge_data", &get_edge_data<graph_k>, py::arg("u"), py::arg("v"), py::arg("default") = py::none());
-    g.def("get_edge_attributes", &get_edge_attributes<graph_k>, py::arg("name"));
-    g.def("set_edge_attributes", &set_edge_attributes<graph_k>, py::arg("values"), py::arg("name") = std::nullopt);
-    g.def("__getitem__", &getitem<py_graph_t>, py::arg("n"));
-    g.def("neighbors", &neighbors<graph_k>, py::arg("n"));
-    g.def("nbunch_iter", &nbunch_iter<py_graph_t>);
-
-    dg.def_property_readonly("nodes", &nodes<py_digraph_t>);
-    dg.def("__iter__", [](py_digraph_t& g) { throw_not_implemented(); });
-    dg.def("has_node", &has_node<py_digraph_t>, py::arg("n"));
-    dg.def("__contains__", &contains<py_digraph_t>, py::arg("n"));
-    dg.def("set_node_attributes",
-           &set_node_attributes<py_digraph_t>,
-           py::arg("values"),
-           py::arg("name") = std::nullopt);
-    dg.def("get_node_attributes", &get_node_attributes<py_digraph_t>, py::arg("name"));
-    dg.def_property_readonly("edges", &get_edges<digraph_k>);
-    dg.def("has_edge", &has_edge<digraph_k>, py::arg("u"), py::arg("v"));
-    dg.def("has_edge_with_id", &has_edge_with_id<digraph_k>, py::arg("u"), py::arg("v"), py::arg("id"));
-    dg.def("get_edge_data", &get_edge_data<digraph_k>, py::arg("u"), py::arg("v"), py::arg("default") = py::none());
-    dg.def("get_edge_attributes", &get_edge_attributes<digraph_k>, py::arg("name"));
-    dg.def("set_edge_attributes", &set_edge_attributes<digraph_k>, py::arg("values"), py::arg("name") = std::nullopt);
-    dg.def("__getitem__", &getitem<py_digraph_t>, py::arg("n"));
-    dg.def("neighbors", &neighbors<digraph_k>, py::arg("n"));
-    dg.def("successors", &successors<py_digraph_t>, py::arg("n"));
-    dg.def("predecessors", &predecessors<py_digraph_t>, py::arg("n"));
-    dg.def("nbunch_iter", &nbunch_iter<py_digraph_t>);
-
+    g.def_property_readonly("nodes", &nodes<type_ak>);
+    g.def("__iter__", [](py_graph_gt<type_ak>& g) { throw_not_implemented(); });
+    g.def("has_node", &has_node<type_ak>, py::arg("n"));
+    g.def("__contains__", &contains<type_ak>, py::arg("n"));
+    g.def("set_node_attributes", &set_node_attributes<type_ak>, py::arg("values"), py::arg("name") = std::nullopt);
+    g.def("get_node_attributes", &get_node_attributes<type_ak>, py::arg("name"));
+    g.def_property_readonly("edges", &get_edges<type_ak>);
+    g.def("has_edge", &has_edge<type_ak>, py::arg("u"), py::arg("v"));
+    g.def("get_edge_data", &get_edge_data<type_ak>, py::arg("u"), py::arg("v"), py::arg("default") = py::none());
+    g.def("get_edge_attributes", &get_edge_attributes<type_ak>, py::arg("name"));
+    g.def("set_edge_attributes", &set_edge_attributes<type_ak>, py::arg("values"), py::arg("name") = std::nullopt);
+    g.def("__getitem__", &getitem<type_ak>, py::arg("n"));
+    g.def("neighbors", &neighbors<type_ak>, py::arg("n"));
+    g.def("successors", &successors<type_ak>, py::arg("n"));
+    g.def("predecessors", &predecessors<type_ak>, py::arg("n"));
+    g.def("nbunch_iter", &nbunch_iter<type_ak>);
     // Adding and Removing Nodes and Edges
     // https://networkx.org/documentation/stable/reference/classes/multidigraph.html#adding-and-removing-nodes-and-edges
-    g.def("add_node", &add_node<py_graph_t>, py::arg("v_to_upsert"));
-    g.def("add_edge", &add_edge<py_graph_t>, py::arg("u_for_edge"), py::arg("v_for_edge"));
-    g.def("add_edge", &add_edge_with_id<py_graph_t>, py::arg("u_for_edge"), py::arg("v_for_edge"), py::arg("id"));
-    g.def("remove_node", &remove_node<py_graph_t>, py::arg("v_to_remove"));
-    g.def("remove_edge", &remove_edge<py_graph_t>, py::arg("u_for_edge"), py::arg("v_for_edge"));
-    g.def("remove_edge", &remove_edge_with_id<py_graph_t>, py::arg("u_for_edge"), py::arg("v_for_edge"), py::arg("id"));
-    g.def("add_nodes_from", &add_nodes_from<py_graph_t>);
-    g.def("add_edges_from", &add_edges_from_adjacency_list<py_graph_t>, py::arg("ebunch_to_add"));
-    g.def("remove_nodes_from", &remove_nodes_from<py_graph_t>);
-    g.def("remove_edges_from", &remove_edges_from_adjacency_list<py_graph_t>, py::arg("ebunch"));
-    g.def("add_edges_from",
-          &add_edges_from_arrays<py_graph_t>,
-          py::arg("us"),
-          py::arg("vs"),
-          py::arg("keys") = nullptr);
+    g.def("add_node", &add_node<type_ak>, py::arg("node_for_adding"));
+    g.def("add_edge", &add_edge<type_ak>, py::arg("u_of_edge"), py::arg("v_of_edge"));
+    g.def("remove_node", &remove_node<type_ak>, py::arg("n"));
+    g.def("remove_edge", &remove_edge<type_ak>, py::arg("u"), py::arg("v"));
+    g.def("add_nodes_from", &add_nodes_from<type_ak>, py::arg("nodes_for_adding"));
+    g.def("add_edges_from", &add_edges_from_adjacency_list<type_ak>, py::arg("ebunch_to_add"));
+    g.def("remove_nodes_from", &remove_nodes_from<type_ak>, py::arg("nodes"));
+    g.def("remove_edges_from", &remove_edges_from_adjacency_list<type_ak>, py::arg("ebunch"));
+    g.def("add_edges_from", &add_edges_from_arrays<type_ak>, py::arg("us"), py::arg("vs"), py::arg("keys") = nullptr);
     g.def("remove_edges_from",
-          &remove_edges_from_arrays<py_graph_t>,
+          &remove_edges_from_arrays<type_ak>,
           py::arg("us"),
           py::arg("vs"),
           py::arg("keys") = nullptr);
     g.def("add_edges_from",
-          &add_edges_from_table<py_graph_t>,
+          &add_edges_from_table<type_ak>,
           py::arg("table"),
           py::arg("source"),
           py::arg("target"),
           py::arg("edge"));
-    g.def("clear_edges", &clear_edges<py_graph_t>);
-    g.def("clear", &clear<py_graph_t>);
-    g.def("community_louvain", &community_louvain<py_graph_t>);
+    g.def("clear_edges", &clear_edges<type_ak>);
+    g.def("clear", &clear<type_ak>);
+    g.def("community_louvain", &community_louvain<type_ak>);
 
-    dg.def("add_node", &add_node<py_digraph_t>, py::arg("v_to_upsert"));
-    dg.def("add_edge", &add_edge<py_digraph_t>, py::arg("u_for_edge"), py::arg("v_for_edge"));
-    dg.def("add_edge", &add_edge_with_id<py_digraph_t>, py::arg("u_for_edge"), py::arg("v_for_edge"), py::arg("id"));
-    dg.def("remove_node", &remove_node<py_digraph_t>, py::arg("v_to_remove"));
-    dg.def("remove_edge", &remove_edge<py_digraph_t>, py::arg("u_for_edge"), py::arg("v_for_edge"));
-    dg.def("remove_edge",
-           &remove_edge_with_id<py_digraph_t>,
-           py::arg("u_for_edge"),
-           py::arg("v_for_edge"),
-           py::arg("id"));
-    dg.def("add_nodes_from", &add_nodes_from<py_digraph_t>);
-    dg.def("add_edges_from", &add_edges_from_adjacency_list<py_digraph_t>, py::arg("ebunch_to_add"));
-    dg.def("remove_nodes_from", &remove_nodes_from<py_digraph_t>);
-    dg.def("remove_edges_from", &remove_edges_from_adjacency_list<py_digraph_t>, py::arg("ebunch"));
-    dg.def("add_edges_from",
-           &add_edges_from_arrays<py_digraph_t>,
-           py::arg("us"),
-           py::arg("vs"),
-           py::arg("keys") = nullptr);
-    dg.def("remove_edges_from",
-           &remove_edges_from_arrays<py_digraph_t>,
-           py::arg("us"),
-           py::arg("vs"),
-           py::arg("keys") = nullptr);
-    dg.def("add_edges_from",
-           &add_edges_from_table<py_digraph_t>,
-           py::arg("table"),
-           py::arg("source"),
-           py::arg("target"),
-           py::arg("edge"));
-    dg.def("clear_edges", &clear_edges<py_digraph_t>);
-    dg.def("clear", &clear<py_digraph_t>);
-    dg.def("community_louvain", &community_louvain<py_digraph_t>);
+    if (type_ak == multigraph_k || type_ak == multidigraph_k) {
+        g.def("has_edge", &has_edge_with_id<type_ak>, py::arg("u"), py::arg("v"), py::arg("key"));
+        g.def("add_edge", &add_edge_with_id<type_ak>, py::arg("u_of_edge"), py::arg("v_of_edge"), py::arg("key"));
+        g.def("remove_edge", &remove_edge_with_id<type_ak>, py::arg("u_of_edge"), py::arg("v_of_edge"), py::arg("key"));
+    }
 }
