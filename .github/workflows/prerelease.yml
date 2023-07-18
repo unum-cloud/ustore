@@ -53,7 +53,7 @@ jobs:
                 -DUSTORE_BUILD_ENGINE_ROCKSDB=1 \
                 -DUSTORE_BUILD_API_FLIGHT=1 \
                 -DUSTORE_BUILD_TESTS=1 \
-                -DCONAN=1 \
+                -DUSE_CONAN=1 \
                 -B ./build_release .
                 
       - name: Build   

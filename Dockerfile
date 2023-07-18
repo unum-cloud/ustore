@@ -48,7 +48,8 @@ RUN cmake \
     -DUSTORE_BUILD_ENGINE_LEVELDB=1 \
     -DUSTORE_BUILD_ENGINE_ROCKSDB=1 \
     -DUSTORE_BUILD_API_FLIGHT_CLIENT=0 \
-    -DUSTORE_BUILD_API_FLIGHT_SERVER=1 . \
+    -DUSTORE_BUILD_API_FLIGHT_SERVER=1 \
+    -DUSE_CONAN=1 . \
     -B ./build_release && \
     make -j32 \
     ustore_flight_server_ucset \
