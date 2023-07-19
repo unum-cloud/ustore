@@ -276,6 +276,19 @@ using transaction_t = context_t;
 class database_t : public std::enable_shared_from_this<database_t> {
     ustore_database_t db_ = nullptr;
 
+    ustore_metadata_t get_metadata() {
+        status_t status {};
+        ustore_metadata_t metadata {};
+        ustore_get_metadata_t get_metadata {};
+
+        get_metadata.db = db_;
+        get_metadata.metadata = &metadata;
+        get_metadata.error = status.member_ptr();
+
+        ustore_get_metadata(&get_metadata);
+        return metadata;
+    }
+
   public:
     database_t() = default;
     database_t(database_t const&) = delete;
@@ -300,6 +313,21 @@ class database_t : public std::enable_shared_from_this<database_t> {
     ~database_t() noexcept {
         if (db_)
             close();
+    }
+
+    bool supports_named_collections() {
+        ustore_metadata_t metadata = get_metadata();
+        return metadata & ustore_supports_named_collections_k;
+    }
+
+    bool supports_transactions() {
+        ustore_metadata_t metadata = get_metadata();
+        return metadata & ustore_supports_transactions_k;
+    }
+
+    bool supports_snapshots() {
+        ustore_metadata_t metadata = get_metadata();
+        return metadata & ustore_supports_snapshots_k;
     }
 
     expected_gt<context_t> transact() noexcept {

@@ -1449,7 +1449,55 @@ class UStoreService : public arf::FlightServerBase {
         session_params_t params = session_params(server_call, ticket.ticket);
         status_t status;
 
-        if (is_query(ticket.ticket, kFlightListCols)) {
+        if (is_query(ticket.ticket, kFlightRetrieveMetadata)) {
+            log_message_if_verbose_m("Process start: Retrieve Metadata");
+
+            auto session = sessions_.lock(params.session_id, status.member_ptr());
+            if (!status)
+                return ar::Status::ExecutionError(status.message());
+
+            auto arena = linked_memory(&session.arena, ustore_options_default_k, status.member_ptr());
+            if (!status)
+                return ar::Status::ExecutionError(status.message());
+
+            auto metadata_ptr = arena.alloc<int8_t>(1, status.member_ptr()).begin();
+            ustore_get_metadata_t get_metadata {};
+            get_metadata.metadata = reinterpret_cast<ustore_metadata_t*>(metadata_ptr);
+            ustore_get_metadata(&get_metadata);
+
+            ArrowSchema schema_c;
+            ArrowArray array_c;
+            ustore_to_arrow_schema(1, 1, &schema_c, &array_c, status.member_ptr());
+            if (!status)
+                return ar::Status::ExecutionError(status.message());
+
+            ustore_to_arrow_column( //
+                1,
+                "metadata",
+                ustore_doc_field_i8_k,
+                nullptr,
+                nullptr,
+                metadata_ptr,
+                schema_c.children[0],
+                array_c.children[0],
+                status.member_ptr());
+            if (!status)
+                return ar::Status::ExecutionError(status.message());
+
+            auto maybe_batch = ar::ImportRecordBatch(&array_c, &schema_c);
+            if (!maybe_batch.ok())
+                return maybe_batch.status();
+            auto batch = maybe_batch.ValueUnsafe();
+
+            auto maybe_reader = ar::RecordBatchReader::Make({batch});
+            if (!maybe_reader.ok())
+                return maybe_reader.status();
+
+            auto stream = std::make_unique<arf::RecordBatchStream>(maybe_reader.ValueUnsafe());
+            *response_ptr = std::move(stream);
+            return ar::Status::OK();
+        }
+        else if (is_query(ticket.ticket, kFlightListCols)) {
             log_message_if_verbose_m("Process start: List collections");
 
             // We will need some temporary memory for exports

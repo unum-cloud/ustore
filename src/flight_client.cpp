@@ -29,9 +29,6 @@
 ustore_collection_t const ustore_collection_main_k = 0;
 ustore_length_t const ustore_length_missing_k = std::numeric_limits<ustore_length_t>::max();
 ustore_key_t const ustore_key_unknown_k = std::numeric_limits<ustore_key_t>::max();
-bool const ustore_supports_transactions_k = true;
-bool const ustore_supports_named_collections_k = true;
-bool const ustore_supports_snapshots_k = false;
 
 /*********************************************************/
 /*****************	 C++ Implementation	  ****************/
@@ -45,6 +42,7 @@ struct rpc_client_t {
     std::vector<std::unique_ptr<arf::FlightStreamReader>> readers;
     linked_memory_t arena;
     std::mutex arena_lock;
+    ustore_metadata_t metadata;
 };
 
 arf::FlightCallOptions arrow_call_options(arrow_mem_pool_t& pool) {
@@ -89,8 +87,24 @@ void ustore_database_init(ustore_database_init_t* c_ptr) {
         linked_memory(reinterpret_cast<ustore_arena_t*>(&db_ptr->arena), ustore_option_dont_discard_memory_k, c.error);
         return_error_if_m(maybe_location.ok(), c.error, args_wrong_k, "Failed to allocate default arena.");
         db_ptr->flight = maybe_flight_ptr.MoveValueUnsafe();
+
+        arf::Ticket ticket {kFlightRetrieveMetadata};
+        auto maybe_stream = db_ptr->flight->DoGet(ticket);
+        return_error_if_m(maybe_stream.ok(), c.error, network_k, "Failed to act on Arrow server");
+        auto& stream_ptr = maybe_stream.ValueUnsafe();
+        auto maybe_table = stream_ptr->ToTable();
+        return_error_if_m(maybe_table.ok(), c.error, error_unknown_k, "Failed to create table");
+        auto table = maybe_table.ValueUnsafe();
+        auto array = std::static_pointer_cast<ar::NumericArray<ar::Int8Type>>(table->column(0)->chunk(0));
+        db_ptr->metadata = ustore_metadata_t(array->Value(0));
         *c.db = db_ptr.release();
     });
+}
+
+void ustore_get_metadata(ustore_get_metadata_t* c_ptr) {
+    ustore_get_metadata_t& c = *c_ptr;
+    rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
+    *c.metadata = db.metadata;
 }
 
 void ustore_read(ustore_read_t* c_ptr) {

@@ -1,15 +1,15 @@
-#include <fcntl.h>    // `open` files
-#include <sys/stat.h> // `stat` to obtain file metadata
-#include <sys/mman.h> // `mmap` to read datasets faster
+#include <fcntl.h>      // `open` files
+#include <sys/stat.h>   // `stat` to obtain file metadata
+#include <sys/mman.h>   // `mmap` to read datasets faster
 
-#include <cstring>     // `std::memchr`
-#include <algorithm>   // `std::search`
-#include <filesystem>  // Listing directories is too much pain in C
-#include <string_view> //
-#include <vector>      //
-#include <thread>      //
-#include <random>      // `std::random_device` for each thread
-#include <fstream>     // `std::ifstream`, `std::istreambuf_iterator`
+#include <cstring>      // `std::memchr`
+#include <algorithm>    // `std::search`
+#include <filesystem>   // Listing directories is too much pain in C
+#include <string_view>  //
+#include <vector>       //
+#include <thread>       //
+#include <random>       // `std::random_device` for each thread
+#include <fstream>      // `std::ifstream`, `std::istreambuf_iterator`
 
 #include <fmt/printf.h> // `fmt::sprintf`
 #include <benchmark/benchmark.h>
@@ -796,7 +796,7 @@ int main(int argc, char** argv) {
 
     bool can_build_graph = false;
     bool can_build_paths = false;
-    if (ustore_supports_named_collections_k) {
+    if (db.supports_named_collections()) {
         status_t status;
         ustore_collection_create_t collection_init {};
         collection_init.db = db;
@@ -822,7 +822,7 @@ int main(int argc, char** argv) {
     }
 
     std::printf("Will benchmark...\n");
-    if (ustore_supports_transactions_k)
+    if (db.supports_transactions())
         bm::RegisterBenchmark("construct_docs", &construct_docs) //
             ->Iterations(pass_through_size(dataset_docs) / (settings.threads_count * settings.big_batch_size))
             ->UseRealTime()
@@ -904,6 +904,6 @@ int main(int argc, char** argv) {
 
     // Close DB
     db.close();
-    
+
     return 0;
 }
