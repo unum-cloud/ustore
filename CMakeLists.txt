@@ -163,11 +163,14 @@ if (${USE_CONAN})
   endif()
 
 else()
+  # Engines:
   if(${USTORE_BUILD_ENGINE_ROCKSDB})
+    set(LIB_ROCKSDB rocksdb)
     include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/rocksdb.cmake")
   endif()
 
   if(${USTORE_BUILD_ENGINE_LEVELDB})
+    set(LIB_LEVELDB leveldb)
     include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/leveldb.cmake")
   endif()
 
@@ -184,7 +187,9 @@ else()
   endif()
 endif()
 
+# Modalities:
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/mpack.cmake")
+
 if(${USTORE_USE_ONEAPI})
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/oneapi.cmake")
 endif()
@@ -195,7 +200,7 @@ endif()
 # > USTORE_BUILD_SDK_PYTHON: Uses Arrow for zero-copy data exchage with the Python runtime.
 
 if((${USTORE_BUILD_API_FLIGHT_CLIENT} OR ${USTORE_BUILD_API_FLIGHT_SERVER}) AND (NOT ${USE_CONAN}))
-   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/openssl.cmake")
+  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/openssl.cmake")
 endif()
 
 if((${USTORE_BUILD_SDK_PYTHON} OR ${USTORE_BUILD_API_FLIGHT_CLIENT} OR ${USTORE_BUILD_API_FLIGHT_SERVER} OR ${USTORE_BUILD_ENGINE_UCSET} OR ${USTORE_BUILD_TESTS}) AND (NOT ${USE_CONAN}))
@@ -248,8 +253,10 @@ if (${USE_CONAN})
   set(LIB_PCRE2 pcre2-8)
   
   set(LIB_BSON bson-static-1.0) 
-  
+    
   set(LIB_FMT fmt)
+  set(LIB_BSON bson-static-1.0) 
+  set(LIB_PCRE2 pcre2-8)
 else()
   set(LIB_ARROW arrow::arrow) 
   set(LIB_ARROW_FLIGHT arrow::flight)
@@ -260,11 +267,9 @@ else()
   set(LIB_OPENSSL_SSL openssl::ssl)
   set(LIB_OPENSSL_CRYPTO openssl::crypto)
   
-  set(LIB_PCRE2 pcre2)
-  
-  set(LIB_BSON bson)
-  
   set(LIB_FMT fmt::fmt)
+  set(LIB_BSON bson)
+  set(LIB_PCRE2 pcre2)
 endif()
 
 set(USTORE_ENGINE_NAMES)
