@@ -31,6 +31,10 @@ def test_line():
     digraph.remove_edge(1, 2)
     assert graph.has_node(1) and digraph.has_node(1)
     assert graph.has_node(2) and digraph.has_node(2)
+
+    for edge in graph.edges:
+        print(edge)
+
     assert not graph.has_edge(1, 2) and not digraph.has_edge(1, 2)
     graph.clear()
     digraph.clear()
@@ -162,18 +166,18 @@ def test_neighbors():
     graph.add_edge(1, 2)
     graph.add_edge(1, 3)
     graph.add_edge(2, 3)
-    assert [n for n in graph.neighbors(1)] == [2, 3]
-    assert [n for n in graph.neighbors(2)] == [1, 3]
-    assert [n for n in graph.neighbors(3)] == [1, 2]
+    assert list(graph.neighbors(1)) == [2, 3]
+    assert list(graph.neighbors(2)) == [1, 3]
+    assert list(graph.neighbors(3)) == [1, 2]
     graph.clear()
 
     digraph = db.main.digraph
     digraph.add_edge(1, 2)
     digraph.add_edge(1, 3)
     digraph.add_edge(2, 3)
-    assert [n for n in digraph.neighbors(1)] == [2, 3]
-    assert [n for n in digraph.neighbors(2)] == [3]
-    assert [n for n in digraph.neighbors(3)] == []
+    assert list(digraph.neighbors(1)) == [2, 3]
+    assert list(digraph.neighbors(2)) == [3]
+    assert list(digraph.neighbors(3)) == []
     digraph.clear()
 
 
@@ -184,9 +188,8 @@ def test_degree():
 
     sources = np.arange(100)
     targets = np.arange(1, 101)
-    edge_ids = np.arange(100)
-    graph.add_edges_from(sources, targets, edge_ids, weight=2)
-    digraph.add_edges_from(sources, targets, edge_ids, weight=2)
+    graph.add_edges_from(sources, targets, weight=2)
+    digraph.add_edges_from(sources, targets, weight=2)
 
     g_degs = graph.degree
     dg_degs = digraph.degree
@@ -195,6 +198,7 @@ def test_degree():
         assert g_degs[node] == dg_degs[node] == 2
 
     # Batch(List, Numpy)
+
     assert graph.degree([0, 1, 2]) == digraph.degree(
         [0, 1, 2]) == [(0, 1), (1, 2), (2, 2)]
     assert graph.degree([100, 1, 2, 0], weight='weight') == digraph.degree([100, 1, 2, 0], weight='weight') == [
@@ -550,6 +554,43 @@ def test_set_edge_attributes():
         exported_datas.append(data)
 
     assert expected_datas == exported_datas
+
+    graph.clear()
+
+
+def test_add_remove_edges():
+    db = ustore.DataBase()
+    graph = ustore.Graph(db, 'graph', relations='edges')
+    digraph = ustore.DiGraph(db, 'digraph', relations='di_edges')
+    multigraph = ustore.MultiGraph(db, 'multigraph', relations='multi_edges')
+    multidigraph = ustore.MultiDiGraph(
+        db, 'multidigraph', relations='multidi_edges')
+
+    sources_to_add = np.array([1, 2, 2, 3])
+    targets_to_add = np.array([4, 5, 5, 6])
+
+    graph.add_edges_from(sources_to_add, targets_to_add, weight=2)
+    digraph.add_edges_from(sources_to_add, targets_to_add, weight=2)
+    multigraph.add_edges_from(sources_to_add, targets_to_add, weight=2)
+    multidigraph.add_edges_from(sources_to_add, targets_to_add, weight=2)
+
+    assert list(graph.edges()) == [(1, 4), (2, 5), (3, 6)]
+    assert list(digraph.edges()) == [(1, 4), (2, 5), (3, 6)]
+    assert list(multigraph.edges()) == [(1, 4), (2, 5), (2, 5), (3, 6)]
+    assert list(multidigraph.edges()) == [(1, 4), (2, 5), (2, 5), (3, 6)]
+
+    sources_to_remove = np.array([1, 2])
+    targets_to_remove = np.array([4, 5])
+
+    graph.remove_edges_from(sources_to_remove, targets_to_remove)
+    digraph.remove_edges_from(sources_to_remove, targets_to_remove)
+    multigraph.remove_edges_from(sources_to_remove, targets_to_remove)
+    multidigraph.remove_edges_from(sources_to_remove, targets_to_remove)
+
+    assert list(graph.edges()) == [(3, 6)]
+    assert list(digraph.edges()) == [(3, 6)]
+    assert list(multigraph.edges()) == [(2, 5), (3, 6)]
+    assert list(multidigraph.edges()) == [(2, 5), (3, 6)]
 
 
 def test_transaction_watch():
