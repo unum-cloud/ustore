@@ -369,6 +369,9 @@ auto edges_iter(edges_range_t<type_ak>& range) {
 template <graph_type_t type_ak>
 auto edges_call(edges_range_t<type_ak>& range, bool keys = false, bool data = false) {
     range.keys = keys;
+    if (type_ak == graph_k || type_ak == digraph_k)
+        range.keys = false;
+
     range.data = data;
     range.default_value = "{}";
     return range.shared_from_this();
@@ -377,6 +380,9 @@ auto edges_call(edges_range_t<type_ak>& range, bool keys = false, bool data = fa
 template <graph_type_t type_ak>
 auto edges_call_with_data(edges_range_t<type_ak>& range, std::string& data, py::object def_value, bool keys = false) {
     range.keys = keys;
+    if (type_ak == graph_k || type_ak == digraph_k)
+        range.keys = false;
+
     range.data = true;
     range.field = data;
     std::string str;
@@ -388,6 +394,9 @@ auto edges_call_with_data(edges_range_t<type_ak>& range, std::string& data, py::
 template <graph_type_t type_ak>
 auto edges_call_with_array(edges_range_t<type_ak>& range, py::object vs, bool data = false, bool keys = false) {
     range.keys = keys;
+    if (type_ak == graph_k || type_ak == digraph_k)
+        range.keys = false;
+
     range.data = data;
     range.default_value = "{}";
 
@@ -404,6 +413,9 @@ template <graph_type_t type_ak>
 auto edges_call_with_array_and_data(
     edges_range_t<type_ak>& range, py::object vs, std::string data, py::object def_value, bool keys = false) {
     range.keys = keys;
+    if (type_ak == graph_k || type_ak == digraph_k)
+        range.keys = false;
+
     range.data = true;
     range.field = data;
     std::string str;
