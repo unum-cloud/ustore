@@ -23,7 +23,7 @@ WORKDIR /usr/src/ustore
 
 RUN git config --global http.sslVerify "false"
 
-RUN pip install conan==1.57.0
+RUN pip install conan==1.60.1
 
 
 # Download files and set the archive and package variables based on the architecture

@@ -79,7 +79,7 @@ jobs:
           persist-credentials: false
           ref: 'main'
       - name: Prepare CMake, Conan and PyArrow
-        run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.57.0
+        run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.60.1
 
       - name: Build wheel
         run: |
@@ -126,7 +126,7 @@ jobs:
           persist-credentials: false
           ref: 'main'
       - name: Prepare CMake, Conan and PyArrow
-        run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.57.0
+        run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.60.1
 
       - name: Install ustore dependencies using conan
         run: |

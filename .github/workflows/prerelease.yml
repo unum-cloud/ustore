@@ -34,7 +34,7 @@ jobs:
       - run: git submodule update --init --recursive
 
       - name: Prepare CMake, Conan and PyArrow
-        run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.57.0
+        run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.60.1
 
       - name: Install ustore dependencies using conan
         run: |
@@ -98,7 +98,7 @@ jobs:
           ref: 'main-dev'
 
       - name: Prepare CMake, Conan and PyArrow
-        run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.57.0
+        run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.60.1
 
       - name: Build wheel
         run: |
@@ -118,7 +118,7 @@ jobs:
           ref: 'main-dev'
 
       - name: Prepare CMake, Conan and PyArrow
-        run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.57.0
+        run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.60.1
       
       - name: Install default jdk
         run: sudo apt install default-jdk -y
