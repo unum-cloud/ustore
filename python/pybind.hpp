@@ -125,6 +125,7 @@ struct py_graph_gt : public std::enable_shared_from_this<py_graph_gt<type_ak>> {
     blobs_collection_t index;
     docs_collection_t vertices_attrs;
     docs_collection_t relations_attrs;
+    ustore_key_t key_ = 0;
 
     bool in_txn {false};
     graph_type_t type {type_ak};
@@ -139,6 +140,8 @@ struct py_graph_gt : public std::enable_shared_from_this<py_graph_gt<type_ak>> {
     graph_collection_t ref() {
         return graph_collection_t(index.db(), index, index.txn(), index.snap(), index.member_arena());
     }
+
+    ustore_key_t get_key() { return ++key_; }
 };
 
 struct py_table_keys_range_t {

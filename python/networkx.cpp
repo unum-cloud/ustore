@@ -10,6 +10,10 @@ using namespace unum::ustore::pyb;
 using namespace unum::ustore;
 using namespace unum;
 
+inline ustore_key_t edge_id(ustore_key_t u, ustore_key_t v) {
+    return (u + v) * (u + v + 1) / 2 + u;
+}
+
 embedded_blobs_t read_attributes( //
     docs_collection_t& collection,
     strided_range_gt<ustore_key_t const> keys,
@@ -87,7 +91,7 @@ void compute_degrees(py_graph_gt<type_ak>& graph,
     for (std::size_t i = 0; i != count; ++i) {
         auto edges_count = (*degrees)[i];
         (*degrees)[i] = transform_reduce_n(value_iterator, edges_count, 0ul, [](value_view_t edge_weight) {
-            ustore_vertex_degree_t weight;
+            ustore_vertex_degree_t weight = 1;
             std::from_chars(edge_weight.c_str(), edge_weight.c_str() + edge_weight.size(), weight);
             return weight;
         });
@@ -835,8 +839,25 @@ void add_node(py_graph_gt<type_ak>& g, ustore_key_t v, py::kwargs const& attrs) 
 }
 
 template <graph_type_t type_ak>
-void add_edge(py_graph_gt<type_ak>& g, ustore_key_t v1, ustore_key_t v2) {
-    g.ref().upsert_edge(edge_t {v1, v2}).throw_unhandled();
+void add_edge(py_graph_gt<type_ak>& g, ustore_key_t v1, ustore_key_t v2, py::kwargs const& attrs) {
+
+    ustore_key_t key;
+    if (type_ak == graph_k || type_ak == digraph_k) {
+        key = edge_id(v1, v2);
+    }
+    else {
+        key = g.get_key();
+        auto had_keys = g.ref().edges_between(v1, v2).throw_or_release().edge_ids;
+        while (std::find(had_keys.begin(), had_keys.end(), key) != std::end(had_keys))
+            key = g.get_key();
+    }
+
+    g.ref().upsert_edge(edge_t {v1, v2, key}).throw_unhandled();
+    if (!attrs.size())
+        return;
+    std::string json_str;
+    to_string(attrs.ptr(), json_str);
+    g.relations_attrs[key].assign(value_view_t(json_str)).throw_unhandled();
 }
 
 template <graph_type_t type_ak>
@@ -859,12 +880,25 @@ void remove_node(py_graph_gt<type_ak>& g, ustore_key_t v) {
 
 template <graph_type_t type_ak>
 void remove_edge(py_graph_gt<type_ak>& g, ustore_key_t v1, ustore_key_t v2) {
-    g.ref().remove_edge(edge_t {v1, v2}).throw_unhandled();
+
+    ustore_key_t key;
+    if (type_ak == graph_k || type_ak == digraph_k)
+        key = edge_id(v1, v2);
+    else {
+        auto edge_ids = g.ref().edges_between(v1, v2).throw_or_release().edge_ids;
+        key = edge_ids[edge_ids.size() - 1];
+    }
+
+    g.ref().remove_edge(edge_t {v1, v2, key}).throw_unhandled();
+    if (g.relations_attrs.db())
+        g.relations_attrs[key].clear().throw_unhandled();
 }
 
 template <graph_type_t type_ak>
 void remove_edge_with_id(py_graph_gt<type_ak>& g, ustore_key_t v1, ustore_key_t v2, ustore_key_t e) {
     g.ref().remove_edge(edge_t {v1, v2, e}).throw_unhandled();
+    if (g.relations_attrs.db())
+        g.relations_attrs[e].clear().throw_unhandled();
 }
 
 template <graph_type_t type_ak>
@@ -928,7 +962,38 @@ void remove_edges_from_adjacency_list(py_graph_gt<type_ak>& g, py::object adjace
 }
 
 template <graph_type_t type_ak>
-void add_edges_from_arrays(
+void add_edges_from_arrays(py_graph_gt<type_ak>& g, py::object v1s, py::object v2s, py::kwargs const& attrs) {
+
+    auto graph = g.ref();
+    edges_view_t edges = parsed_adjacency_list_t(v1s.ptr(), v2s.ptr(), Py_None);
+    auto length = edges.size();
+    std::vector<ustore_key_t> keys(length);
+
+    if (type_ak == multigraph_k || type_ak == multidigraph_k) {
+        for (std::size_t i = 0; i != length; ++i) {
+            auto key = g.get_key();
+            auto had_keys = graph.edges_between(edges.source_ids[i], edges.target_ids[i]).throw_or_release().edge_ids;
+            while (std::find(had_keys.begin(), had_keys.end(), key) != std::end(had_keys))
+                key = g.get_key();
+            keys[i] = key;
+        }
+    }
+    else
+        for (std::size_t i = 0; i != length; ++i)
+            keys[i] = edge_id(edges.source_ids[i], edges.target_ids[i]);
+
+    edges.edge_ids = strided_range(keys).immutable();
+    graph.upsert_edges(edges).throw_unhandled();
+
+    if (!attrs.size())
+        return;
+    std::string json_str;
+    to_string(attrs.ptr(), json_str);
+    g.relations_attrs[keys].assign(value_view_t(json_str)).throw_unhandled();
+}
+
+template <graph_type_t type_ak>
+void add_edges_from_arrays_with_ids(
     py_graph_gt<type_ak>& g, py::object v1s, py::object v2s, py::object es, py::kwargs const& attrs) {
     g.ref().upsert_edges(parsed_adjacency_list_t(v1s.ptr(), v2s.ptr(), es.ptr())).throw_unhandled();
 
@@ -954,7 +1019,31 @@ void add_edges_from_arrays(
 }
 
 template <graph_type_t type_ak>
-void remove_edges_from_arrays(py_graph_gt<type_ak>& g, py::object v1s, py::object v2s, py::object es) {
+void remove_edges_from_arrays(py_graph_gt<type_ak>& g, py::object v1s, py::object v2s) {
+
+    auto graph = g.ref();
+    edges_view_t edges = parsed_adjacency_list_t(v1s.ptr(), v2s.ptr(), Py_None);
+    auto length = edges.size();
+    std::vector<ustore_key_t> keys(length);
+
+    if (type_ak == multigraph_k || type_ak == multidigraph_k)
+        for (std::size_t i = 0; i != length; ++i) {
+            auto edge_ids = g.ref().edges_between(edges[i].source_id, edges[i].target_id).throw_or_release().edge_ids;
+            keys[i] = edge_ids[edge_ids.size() - 1];
+        }
+    else
+        for (std::size_t i = 0; i != length; ++i)
+            keys[i] = edge_id(edges[i].source_id, edges[i].target_id);
+
+    edges.edge_ids = strided_range(keys).immutable();
+    graph.remove_edges(edges).throw_unhandled();
+
+    if (g.relations_attrs.db())
+        g.relations_attrs[keys].clear().throw_unhandled();
+}
+
+template <graph_type_t type_ak>
+void remove_edges_from_arrays_with_ids(py_graph_gt<type_ak>& g, py::object v1s, py::object v2s, py::object es) {
     g.ref().remove_edges(parsed_adjacency_list_t(v1s.ptr(), v2s.ptr(), es.ptr())).throw_unhandled();
 
     if (!g.relations_attrs.db())
@@ -1165,12 +1254,8 @@ void ustore::wrap_networkx(py::module& m, std::string const& name) {
     g.def("add_edges_from", &add_edges_from_adjacency_list<type_ak>, py::arg("ebunch_to_add"));
     g.def("remove_nodes_from", &remove_nodes_from<type_ak>, py::arg("nodes"));
     g.def("remove_edges_from", &remove_edges_from_adjacency_list<type_ak>, py::arg("ebunch"));
-    g.def("add_edges_from", &add_edges_from_arrays<type_ak>, py::arg("us"), py::arg("vs"), py::arg("keys") = nullptr);
-    g.def("remove_edges_from",
-          &remove_edges_from_arrays<type_ak>,
-          py::arg("us"),
-          py::arg("vs"),
-          py::arg("keys") = nullptr);
+    g.def("add_edges_from", &add_edges_from_arrays<type_ak>, py::arg("us"), py::arg("vs"));
+    g.def("remove_edges_from", &remove_edges_from_arrays<type_ak>, py::arg("us"), py::arg("vs"));
     g.def("add_edges_from",
           &add_edges_from_table<type_ak>,
           py::arg("table"),
@@ -1190,5 +1275,15 @@ void ustore::wrap_networkx(py::module& m, std::string const& name) {
         g.def("has_edge", &has_edge_with_id<type_ak>, py::arg("u"), py::arg("v"), py::arg("key"));
         g.def("add_edge", &add_edge_with_id<type_ak>, py::arg("u_of_edge"), py::arg("v_of_edge"), py::arg("key"));
         g.def("remove_edge", &remove_edge_with_id<type_ak>, py::arg("u_of_edge"), py::arg("v_of_edge"), py::arg("key"));
+        g.def("add_edges_from",
+              &add_edges_from_arrays_with_ids<type_ak>,
+              py::arg("us"),
+              py::arg("vs"),
+              py::arg("keys") = nullptr);
+        g.def("remove_edges_from",
+              &remove_edges_from_arrays_with_ids<type_ak>,
+              py::arg("us"),
+              py::arg("vs"),
+              py::arg("keys") = nullptr);
     }
 }
