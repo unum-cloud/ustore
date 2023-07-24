@@ -32,9 +32,6 @@ def test_line():
     assert graph.has_node(1) and digraph.has_node(1)
     assert graph.has_node(2) and digraph.has_node(2)
 
-    for edge in graph.edges:
-        print(edge)
-
     assert not graph.has_edge(1, 2) and not digraph.has_edge(1, 2)
     graph.clear()
     digraph.clear()
@@ -591,6 +588,49 @@ def test_add_remove_edges():
     assert list(digraph.edges()) == [(3, 6)]
     assert list(multigraph.edges()) == [(2, 5), (3, 6)]
     assert list(multidigraph.edges()) == [(2, 5), (3, 6)]
+
+
+def test_iterate_edges():
+    db = ustore.DataBase()
+    graph = ustore.Graph(db, 'graph', relations='edges')
+    digraph = ustore.DiGraph(db, 'digraph', relations='di_edges')
+    multigraph = ustore.MultiGraph(db, 'multigraph', relations='multi_edges')
+    multidigraph = ustore.MultiDiGraph(
+        db, 'multidigraph', relations='multidi_edges')
+
+    sources_to_add = np.array([1, 2, 2, 3])
+    targets_to_add = np.array([4, 5, 5, 6])
+
+    graph.add_edges_from(sources_to_add, targets_to_add, weight=2)
+    digraph.add_edges_from(sources_to_add, targets_to_add, weight=2)
+    multigraph.add_edges_from(sources_to_add, targets_to_add, weight=2)
+    multidigraph.add_edges_from(sources_to_add, targets_to_add, weight=2)
+
+    data = {'weight': 2}
+    assert list(graph.edges()) == [(1, 4), (2, 5), (3, 6)]
+    assert list(graph.edges(data=True)) == [
+        (1, 4, data), (2, 5, data), (3, 6, data)]
+
+    assert list(digraph.edges()) == [(1, 4), (2, 5), (3, 6)]
+    assert list(digraph.edges(data=True)) == [
+        (1, 4, data), (2, 5, data), (3, 6, data)]
+
+    assert list(multigraph.edges()) == [(1, 4), (2, 5), (2, 5), (3, 6)]
+    assert list(multigraph.edges(data=True)) == [
+        (1, 4, data), (2, 5, data), (2, 5, data), (3, 6, data)]
+    assert list(multigraph.edges(keys=True)) == [
+        (1, 4, 1), (2, 5, 2), (2, 5, 3), (3, 6, 4)]
+
+    assert list(multidigraph.edges()) == [(1, 4), (2, 5), (2, 5), (3, 6)]
+    assert list(multidigraph.edges(data=True)) == [
+        (1, 4, data), (2, 5, data), (2, 5, data), (3, 6, data)]
+    assert list(multidigraph.edges(keys=True)) == [
+        (1, 4, 1), (2, 5, 2), (2, 5, 3), (3, 6, 4)]
+
+    graph.clear()
+    digraph.clear()
+    multigraph.clear()
+    multidigraph.clear()
 
 
 def test_transaction_watch():
