@@ -1635,6 +1635,9 @@ void ustore_docs_write(ustore_docs_write_t* c_ptr) {
 
     sj::dom::parser parser;
     for (std::size_t i = 0; i < contents.size(); ++i) {
+        if (!contents[i].size())
+            continue;
+
         std::memcpy(document.begin(), contents[i].data(), contents[i].size());
         std::memset(document.begin() + contents[i].size(), 0, sj::SIMDJSON_PADDING);
         auto result = parser.parse((const char*)document.begin(), contents[i].size(), false);
