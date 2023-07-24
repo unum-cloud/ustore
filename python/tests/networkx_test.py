@@ -633,6 +633,38 @@ def test_iterate_edges():
     multidigraph.clear()
 
 
+def test_edge_id():
+
+    db = ustore.DataBase()
+    graph = ustore.Graph(db, 'graph', relations='edges')
+    multigraph = ustore.MultiGraph(db, 'multigraph', relations='multi_edges')
+
+    graph.add_edge(1, 2, weight=1)
+    graph.add_edge(1, 2, weight=2)
+    graph.add_edge(1, 2, weight=3)
+
+    multigraph.add_edge(1, 2, weight=1)
+    multigraph.add_edge(1, 2, weight=2)
+    multigraph.add_edge(1, 2, weight=3)
+
+    assert list(graph.edges()) == [(1, 2)]
+    assert list(multigraph.edges(keys=True, data=True)) == [
+        (1, 2, 1, {'weight': 1}), (1, 2, 2, {'weight': 2}), (1, 2, 3, {'weight': 3})]
+
+    multigraph.remove_edge(1, 2)
+    assert list(multigraph.edges(keys=True, data=True)) == [
+        (1, 2, 1, {'weight': 1}), (1, 2, 2, {'weight': 2})]
+
+    multigraph.add_edge(1, 2, 4, weight=4)
+    assert list(multigraph.edges(keys=True, data=True)) == [
+        (1, 2, 1, {'weight': 1}), (1, 2, 2, {'weight': 2}), (1, 2, 4, {'weight': 4})]
+
+    multigraph.add_edge(1, 2, weight=5)
+    multigraph.add_edge(1, 2, weight=6)
+    assert list(multigraph.edges(keys=True, data=True)) == [
+        (1, 2, 1, {'weight': 1}), (1, 2, 2, {'weight': 2}), (1, 2, 4, {'weight': 4}), (1, 2, 5, {'weight': 5}), (1, 2, 6, {'weight': 6})]
+
+
 def test_transaction_watch():
     db = ustore.DataBase()
     graph = db.main.graph
