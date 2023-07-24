@@ -102,7 +102,7 @@ template <graph_type_t type_ak>
 struct nodes_stream_t {
     keys_stream_t native;
     docs_collection_t& collection;
-    bool read_data;
+    bool data;
     std::string field;
     std::string default_value;
 
@@ -112,9 +112,9 @@ struct nodes_stream_t {
 
     nodes_stream_t(
         keys_stream_t&& stream, docs_collection_t& col, bool data, std::string field, std::string default_value)
-        : native(std::move(stream)), collection(col), read_data(data), field(field), default_value(default_value) {
+        : native(std::move(stream)), collection(col), data(data), field(field), default_value(default_value) {
         nodes = native.keys_batch();
-        if (read_data)
+        if (data)
             attrs = read_attributes(collection, nodes.strided(), field.size() ? field.c_str() : nullptr);
     }
 
@@ -124,12 +124,12 @@ struct nodes_stream_t {
                 throw py::stop_iteration();
             native.seek_to_next_batch();
             nodes = native.keys_batch();
-            if (read_data)
+            if (data)
                 attrs = read_attributes(collection, nodes.strided(), field.size() ? field.c_str() : nullptr);
             index = 0;
         }
         py::object ret;
-        if (read_data) {
+        if (data) {
             auto data = attrs[index] && !attrs[index].empty() ? attrs[index] : value_view_t(default_value);
             ret = py::make_tuple(nodes[index], py::reinterpret_steal<py::object>(from_json(json_t::parse(data))));
         }
@@ -143,7 +143,8 @@ template <graph_type_t type_ak>
 struct edges_stream_t {
     graph_stream_t native;
     docs_collection_t& collection;
-    bool read_data;
+    bool keys;
+    bool data;
     std::string field;
     std::string default_value;
 
@@ -151,11 +152,16 @@ struct edges_stream_t {
     edges_span_t edges;
     std::size_t index = 0;
 
-    edges_stream_t(
-        graph_stream_t&& stream, docs_collection_t& col, bool data, std::string field, std::string default_value)
-        : native(std::move(stream)), collection(col), read_data(data), field(field), default_value(default_value) {
+    edges_stream_t(graph_stream_t&& stream,
+                   docs_collection_t& col,
+                   bool keys,
+                   bool data,
+                   std::string field,
+                   std::string default_value)
+        : native(std::move(stream)), collection(col), keys(keys), data(data), field(field),
+          default_value(default_value) {
         edges = native.edges_batch();
-        if (read_data)
+        if (data)
             attrs = read_attributes(collection, edges.edge_ids.immutable(), field.size() ? field.c_str() : nullptr);
     }
 
@@ -165,20 +171,22 @@ struct edges_stream_t {
                 throw py::stop_iteration();
             native.seek_to_next_batch();
             edges = native.edges_batch();
-            if (read_data)
+            if (data)
                 attrs = read_attributes(collection, edges.edge_ids.immutable(), field.size() ? field.c_str() : nullptr);
             index = 0;
         }
         auto edge = edges[index];
         py::object ret;
-        if (read_data) {
+        if (data) {
             auto data = attrs[index] && !attrs[index].empty() ? attrs[index] : value_view_t(default_value);
-            ret = py::make_tuple(edge.source_id,
-                                 edge.target_id,
-                                 py::reinterpret_steal<py::object>(from_json(json_t::parse(data))));
+            py::object json = py::reinterpret_steal<py::object>(from_json(json_t::parse(data)));
+            ret = keys ? py::make_tuple(edge.source_id, edge.target_id, edge.id, json)
+                       : py::make_tuple(edge.source_id, edge.target_id, json);
         }
         else
-            ret = py::make_tuple(edge.source_id, edge.target_id);
+            ret = keys ? py::make_tuple(edge.source_id, edge.target_id, edge.id)
+                       : py::make_tuple(edge.source_id, edge.target_id);
+
         ++index;
         return ret;
     }
@@ -187,26 +195,29 @@ template <graph_type_t type_ak>
 struct edges_nbunch_iter_t {
     edges_span_t edges;
     embedded_blobs_t attrs;
-    bool read_data;
+    bool keys = false;
+    bool data = false;
     std::string default_value;
     std::size_t index = 0;
 
-    edges_nbunch_iter_t(edges_span_t edges_span, embedded_blobs_t attributes, bool data, std::string default_value)
-        : edges(edges_span), attrs(attributes), read_data(data), default_value(default_value) {}
+    edges_nbunch_iter_t(
+        edges_span_t edges_span, embedded_blobs_t attributes, bool keys, bool data, std::string default_value)
+        : edges(edges_span), attrs(attributes), keys(keys), data(data), default_value(default_value) {}
 
     py::object next() {
         if (index == edges.size())
             throw py::stop_iteration();
         edge_t edge = edges[index];
         py::object ret;
-        if (read_data) {
+        if (data) {
             value_view_t data = attrs[index] && !attrs[index].empty() ? attrs[index] : value_view_t(default_value);
-            ret = py::make_tuple(edge.source_id,
-                                 edge.target_id,
-                                 py::reinterpret_steal<py::object>(from_json(json_t::parse(data))));
+            py::object json = py::reinterpret_steal<py::object>(from_json(json_t::parse(data)));
+            ret = keys ? py::make_tuple(edge.source_id, edge.target_id, edge.id, json)
+                       : py::make_tuple(edge.source_id, edge.target_id, json);
         }
         else
-            ret = py::make_tuple(edge.source_id, edge.target_id);
+            ret = keys ? py::make_tuple(edge.source_id, edge.target_id, edge.id)
+                       : py::make_tuple(edge.source_id, edge.target_id);
         ++index;
         return ret;
     }
@@ -257,7 +268,7 @@ template <graph_type_t type_ak>
 struct nodes_range_t : public std::enable_shared_from_this<nodes_range_t<type_ak>> {
     keys_range_t native;
     docs_collection_t& collection;
-    bool read_data = false;
+    bool data = false;
     std::string field;
     std::string default_value;
 
@@ -268,7 +279,8 @@ template <graph_type_t type_ak>
 struct edges_range_t : public std::enable_shared_from_this<edges_range_t<type_ak>> {
     std::weak_ptr<py_graph_gt<type_ak>> net_ptr;
     std::vector<ustore_key_t> vertices;
-    bool read_data = false;
+    bool keys = false;
+    bool data = false;
     std::string field;
     std::string default_value;
 };
@@ -311,21 +323,21 @@ template <graph_type_t type_ak>
 auto nodes_iter(nodes_range_t<type_ak>& range) {
     return nodes_stream_t<type_ak> {std::move(range.native).begin(),
                                     range.collection,
-                                    range.read_data,
+                                    range.data,
                                     range.field,
                                     range.default_value};
 }
 
 template <graph_type_t type_ak>
 auto nodes_call(nodes_range_t<type_ak>& range, bool data = false) {
-    range.read_data = data;
+    range.data = data;
     range.default_value = "{}";
     return range.shared_from_this();
 }
 
 template <graph_type_t type_ak>
 auto nodes_call_with_data(nodes_range_t<type_ak>& range, std::string& data, py::object def_value) {
-    range.read_data = true;
+    range.data = true;
     range.field = data;
     std::string str;
     to_string(def_value.ptr(), str);
@@ -343,26 +355,29 @@ auto edges_iter(edges_range_t<type_ak>& range) {
         auto attrs = read_attributes(g.relations_attrs,
                                      edges.edge_ids.immutable(),
                                      range.field.size() ? range.field.c_str() : nullptr);
-        return py::cast(edges_nbunch_iter_t<type_ak>(edges, attrs, range.read_data, range.default_value));
+        return py::cast(edges_nbunch_iter_t<type_ak>(edges, attrs, range.keys, range.data, range.default_value));
     }
     auto edges = g.ref().edges(ustore_vertex_source_k).throw_or_release();
     return py::cast(edges_stream_t<type_ak>(std::move(edges).begin(),
                                             g.relations_attrs,
-                                            range.read_data,
+                                            range.keys,
+                                            range.data,
                                             range.field,
                                             range.default_value));
 }
 
 template <graph_type_t type_ak>
-auto edges_call(edges_range_t<type_ak>& range, bool data = false) {
-    range.read_data = data;
+auto edges_call(edges_range_t<type_ak>& range, bool keys = false, bool data = false) {
+    range.keys = keys;
+    range.data = data;
     range.default_value = "{}";
     return range.shared_from_this();
 }
 
 template <graph_type_t type_ak>
-auto edges_call_with_data(edges_range_t<type_ak>& range, std::string& data, py::object def_value) {
-    range.read_data = true;
+auto edges_call_with_data(edges_range_t<type_ak>& range, std::string& data, py::object def_value, bool keys = false) {
+    range.keys = keys;
+    range.data = true;
     range.field = data;
     std::string str;
     to_string(def_value.ptr(), str);
@@ -371,8 +386,9 @@ auto edges_call_with_data(edges_range_t<type_ak>& range, std::string& data, py::
 }
 
 template <graph_type_t type_ak>
-auto edges_call_with_array(edges_range_t<type_ak>& range, py::object vs, bool data = false) {
-    range.read_data = data;
+auto edges_call_with_array(edges_range_t<type_ak>& range, py::object vs, bool data = false, bool keys = false) {
+    range.keys = keys;
+    range.data = data;
     range.default_value = "{}";
 
     if (PyNumber_Check(vs.ptr()))
@@ -385,11 +401,10 @@ auto edges_call_with_array(edges_range_t<type_ak>& range, py::object vs, bool da
 }
 
 template <graph_type_t type_ak>
-auto edges_call_with_array_and_data(edges_range_t<type_ak>& range,
-                                    py::object vs,
-                                    std::string data,
-                                    py::object def_value) {
-    range.read_data = true;
+auto edges_call_with_array_and_data(
+    edges_range_t<type_ak>& range, py::object vs, std::string data, py::object def_value, bool keys = false) {
+    range.keys = keys;
+    range.data = true;
     range.field = data;
     std::string str;
     to_string(def_value.ptr(), str);
@@ -1190,14 +1205,23 @@ void ustore::wrap_networkx(py::module& m, std::string const& name) {
                                                                                                    class_name.c_str(),
                                                                                                    py::module_local());
     edges_range.def("__iter__", &edges_iter<type_ak>);
-    edges_range.def("__call__", &edges_call<type_ak>, py::arg("data") = false);
-    edges_range.def("__call__", &edges_call_with_data<type_ak>, py::arg("data"), py::arg("default") = py::none());
-    edges_range.def("__call__", &edges_call_with_array<type_ak>, py::arg("vs"), py::arg("data"));
+    edges_range.def("__call__", &edges_call<type_ak>, py::arg("keys") = false, py::arg("data") = false);
+    edges_range.def("__call__",
+                    &edges_call_with_data<type_ak>,
+                    py::arg("data"),
+                    py::arg("default") = py::none(),
+                    py::arg("keys") = false);
+    edges_range.def("__call__",
+                    &edges_call_with_array<type_ak>,
+                    py::arg("vs"),
+                    py::arg("data"),
+                    py::arg("keys") = false);
     edges_range.def("__call__",
                     &edges_call_with_array_and_data<type_ak>,
                     py::arg("vs"),
                     py::arg("data"),
-                    py::arg("default") = py::none());
+                    py::arg("default") = py::none(),
+                    py::arg("keys") = false);
 
     class_name = name + "EdgesIter";
     auto edges_iter = py::class_<edges_nbunch_iter_t<type_ak>>(m, class_name.c_str(), py::module_local());
