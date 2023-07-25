@@ -866,36 +866,29 @@ void add_node(py_graph_gt<type_ak>& g, ustore_key_t v, py::kwargs const& attrs) 
 }
 
 template <graph_type_t type_ak>
-void add_edge(py_graph_gt<type_ak>& g, ustore_key_t v1, ustore_key_t v2, py::kwargs const& attrs) {
+void add_edge(
+    py_graph_gt<type_ak>& g, ustore_key_t v1, ustore_key_t v2, std::optional<ustore_key_t> e, py::kwargs const& attrs) {
 
     ustore_key_t key;
-    if (type_ak == graph_k || type_ak == digraph_k) {
-        key = edge_id(v1, v2);
-    }
-    else {
-        key = g.get_key();
-        auto had_keys = g.ref().edges_between(v1, v2).throw_or_release().edge_ids;
-        while (std::find(had_keys.begin(), had_keys.end(), key) != std::end(had_keys))
+    if (!e) {
+        if (type_ak == multigraph_k || type_ak == multidigraph_k) {
             key = g.get_key();
+            auto had_keys = g.ref().edges_between(v1, v2).throw_or_release().edge_ids;
+            while (std::find(had_keys.begin(), had_keys.end(), key) != std::end(had_keys))
+                key = g.get_key();
+        }
+        else
+            key = edge_id(v1, v2);
     }
+    else
+        key = *e;
 
     g.ref().upsert_edge(edge_t {v1, v2, key}).throw_unhandled();
     if (!attrs.size())
         return;
     std::string json_str;
     to_string(attrs.ptr(), json_str);
-    g.relations_attrs[key].assign(value_view_t(json_str)).throw_unhandled();
-}
-
-template <graph_type_t type_ak>
-void add_edge_with_id(
-    py_graph_gt<type_ak>& g, ustore_key_t v1, ustore_key_t v2, ustore_key_t e, py::kwargs const& attrs) {
-    g.ref().upsert_edge(edge_t {v1, v2, e}).throw_unhandled();
-    if (!attrs.size())
-        return;
-    std::string json_str;
-    to_string(attrs.ptr(), json_str);
-    g.relations_attrs[e].assign(value_view_t(json_str)).throw_unhandled();
+    g.relations_attrs[key].merge(value_view_t(json_str)).throw_unhandled();
 }
 
 template <graph_type_t type_ak>
@@ -1283,7 +1276,7 @@ void ustore::wrap_networkx(py::module& m, std::string const& name) {
     // Adding and Removing Nodes and Edges
     // https://networkx.org/documentation/stable/reference/classes/multidigraph.html#adding-and-removing-nodes-and-edges
     g.def("add_node", &add_node<type_ak>, py::arg("node_for_adding"));
-    g.def("add_edge", &add_edge<type_ak>, py::arg("u_of_edge"), py::arg("v_of_edge"));
+    g.def("add_edge", &add_edge<type_ak>, py::arg("u_of_edge"), py::arg("v_of_edge"), py::arg("key") = std::nullopt);
     g.def("remove_node", &remove_node<type_ak>, py::arg("n"));
     g.def("remove_edge", &remove_edge<type_ak>, py::arg("u"), py::arg("v"));
     g.def("add_nodes_from", &add_nodes_from<type_ak>, py::arg("nodes_for_adding"));
@@ -1309,7 +1302,6 @@ void ustore::wrap_networkx(py::module& m, std::string const& name) {
 
     if (type_ak == multigraph_k || type_ak == multidigraph_k) {
         g.def("has_edge", &has_edge_with_id<type_ak>, py::arg("u"), py::arg("v"), py::arg("key"));
-        g.def("add_edge", &add_edge_with_id<type_ak>, py::arg("u_of_edge"), py::arg("v_of_edge"), py::arg("key"));
         g.def("remove_edge", &remove_edge_with_id<type_ak>, py::arg("u_of_edge"), py::arg("v_of_edge"), py::arg("key"));
         g.def("add_edges_from",
               &add_edges_from_arrays_with_ids<type_ak>,
