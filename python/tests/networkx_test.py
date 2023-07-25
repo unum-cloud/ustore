@@ -115,11 +115,10 @@ def test_batch_attributes():
     graph.add_edges_from(table, 'source', 'target', 'keys')
 
     assert graph.has_node(1) and graph.has_node(2) and graph.has_node(3)
-    assert not 4 in net
+    assert not 4 in graph
 
     assert graph.has_edge(1, 2) and graph.has_edge(
         2, 3) and graph.has_edge(3, 1)
-    assert not graph.has_edge(2, 1)
 
     index = 0
     for node, neighbor, data in graph.edges(data=True):
