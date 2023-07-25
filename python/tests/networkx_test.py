@@ -104,15 +104,15 @@ def test_batch_attributes():
 
     source = pa.array([1, 2, 3])
     target = pa.array([2, 3, 1])
-    edge_id = pa.array([1, 2, 3])
+    keys = pa.array([1, 2, 3])
     weight = pa.array([0, 1, 2])
     name = pa.array(['edge0', 'edge1', 'edge2'])
 
-    names = ['source', 'target', 'edge_id', 'weight', 'name']
+    names = ['source', 'target', 'keys', 'weight', 'name']
 
     table = pa.Table.from_arrays(
-        [source, target, edge_id, weight, name], names=names)
-    graph.add_edges_from(table, 'source', 'target', 'edge_id')
+        [source, target, keys, weight, name], names=names)
+    graph.add_edges_from(table, 'source', 'target', 'keys')
 
     assert graph.has_node(1) and graph.has_node(2) and graph.has_node(3)
     assert not 4 in net
@@ -633,7 +633,7 @@ def test_iterate_edges():
     multidigraph.clear()
 
 
-def test_edge_id():
+def test_keys():
 
     db = ustore.DataBase()
     graph = ustore.Graph(db, 'graph', relations='edges')
