@@ -268,7 +268,7 @@ template <graph_type_t type_ak>
 struct nodes_range_t : public std::enable_shared_from_this<nodes_range_t<type_ak>> {
     keys_range_t native;
     docs_collection_t& collection;
-    bool data;
+    bool data = false;
     std::string field;
     std::string default_value;
 
@@ -279,8 +279,8 @@ template <graph_type_t type_ak>
 struct edges_range_t : public std::enable_shared_from_this<edges_range_t<type_ak>> {
     std::weak_ptr<py_graph_gt<type_ak>> net_ptr;
     std::vector<ustore_key_t> vertices;
-    bool keys;
-    bool data;
+    bool keys = false;
+    bool data = false;
     std::string field;
     std::string default_value;
 };
