@@ -619,13 +619,13 @@ def test_iterate_edges():
     assert list(multigraph.edges(data=True)) == [
         (1, 4, data), (2, 5, data), (2, 5, data), (3, 6, data)]
     assert list(multigraph.edges(keys=True)) == [
-        (1, 4, 1), (2, 5, 2), (2, 5, 3), (3, 6, 4)]
+        (1, 4, 0), (2, 5, 1), (2, 5, 2), (3, 6, 3)]
 
     assert list(multidigraph.edges()) == [(1, 4), (2, 5), (2, 5), (3, 6)]
     assert list(multidigraph.edges(data=True)) == [
         (1, 4, data), (2, 5, data), (2, 5, data), (3, 6, data)]
     assert list(multidigraph.edges(keys=True)) == [
-        (1, 4, 1), (2, 5, 2), (2, 5, 3), (3, 6, 4)]
+        (1, 4, 0), (2, 5, 1), (2, 5, 2), (3, 6, 3)]
 
     graph.clear()
     digraph.clear()
@@ -649,20 +649,20 @@ def test_keys():
 
     assert list(graph.edges()) == [(1, 2)]
     assert list(multigraph.edges(keys=True, data=True)) == [
-        (1, 2, 1, {'weight': 1}), (1, 2, 2, {'weight': 2}), (1, 2, 3, {'weight': 3})]
+        (1, 2, 0, {'weight': 1}), (1, 2, 1, {'weight': 2}), (1, 2, 2, {'weight': 3})]
 
     multigraph.remove_edge(1, 2)
     assert list(multigraph.edges(keys=True, data=True)) == [
-        (1, 2, 1, {'weight': 1}), (1, 2, 2, {'weight': 2})]
+        (1, 2, 0, {'weight': 1}), (1, 2, 1, {'weight': 2})]
 
-    multigraph.add_edge(1, 2, 4, weight=4)
+    multigraph.add_edge(1, 2, 3, weight=4)
     assert list(multigraph.edges(keys=True, data=True)) == [
-        (1, 2, 1, {'weight': 1}), (1, 2, 2, {'weight': 2}), (1, 2, 4, {'weight': 4})]
+        (1, 2, 0, {'weight': 1}), (1, 2, 1, {'weight': 2}), (1, 2, 3, {'weight': 4})]
 
     multigraph.add_edge(1, 2, weight=5)
     multigraph.add_edge(1, 2, weight=6)
     assert list(multigraph.edges(keys=True, data=True)) == [
-        (1, 2, 1, {'weight': 1}), (1, 2, 2, {'weight': 2}), (1, 2, 4, {'weight': 4}), (1, 2, 5, {'weight': 5}), (1, 2, 6, {'weight': 6})]
+        (1, 2, 0, {'weight': 1}), (1, 2, 1, {'weight': 2}), (1, 2, 3, {'weight': 4}), (1, 2, 4, {'weight': 5}), (1, 2, 5, {'weight': 6})]
 
 
 def test_add_overwrite_edges():
@@ -677,8 +677,8 @@ def test_add_overwrite_edges():
     multigraph = ustore.MultiGraph(db, 'multigraph', relations='multi_edges')
     multigraph.add_edge(1, 2, name='edge1', weight=2)
     multigraph.add_edge(1, 2, name='edge2', weight=2)
-    multigraph.add_edge(1, 2, key=2, weight=3)
-    assert list(multigraph.edges(keys=True, data=True)) == [(1, 2, 1, {'name': 'edge1', 'weight': 2}), (1, 2, 2, {
+    multigraph.add_edge(1, 2, key=1, weight=3)
+    assert list(multigraph.edges(keys=True, data=True)) == [(1, 2, 0, {'name': 'edge1', 'weight': 2}), (1, 2, 1, {
         'name': 'edge2', 'weight': 3})]
 
 

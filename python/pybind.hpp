@@ -141,7 +141,7 @@ struct py_graph_gt : public std::enable_shared_from_this<py_graph_gt<type_ak>> {
         return graph_collection_t(index.db(), index, index.txn(), index.snap(), index.member_arena());
     }
 
-    ustore_key_t get_key() { return ++key_; }
+    ustore_key_t get_key() { return key_++; }
 };
 
 struct py_table_keys_range_t {
