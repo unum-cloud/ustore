@@ -665,6 +665,23 @@ def test_keys():
         (1, 2, 1, {'weight': 1}), (1, 2, 2, {'weight': 2}), (1, 2, 4, {'weight': 4}), (1, 2, 5, {'weight': 5}), (1, 2, 6, {'weight': 6})]
 
 
+def test_add_overwrite_edges():
+    db = ustore.DataBase()
+
+    graph = ustore.Graph(db, 'graph', relations='edges')
+    graph.add_edge(1, 2, name='edge1', weight=2)
+    graph.add_edge(1, 2, id=1, weight=3)
+    assert list(graph.edges(data=True)) == [
+        (1, 2, {'id': 1, 'name': 'edge1', 'weight': 3})]
+
+    multigraph = ustore.MultiGraph(db, 'multigraph', relations='multi_edges')
+    multigraph.add_edge(1, 2, name='edge1', weight=2)
+    multigraph.add_edge(1, 2, name='edge2', weight=2)
+    multigraph.add_edge(1, 2, key=2, weight=3)
+    assert list(multigraph.edges(keys=True, data=True)) == [(1, 2, 1, {'name': 'edge1', 'weight': 2}), (1, 2, 2, {
+        'name': 'edge2', 'weight': 3})]
+
+
 def test_transaction_watch():
     db = ustore.DataBase()
     graph = db.main.graph
