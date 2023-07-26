@@ -14,6 +14,7 @@ option(USTORE_BUILD_ENGINE_ROCKSDB "Building REST API server for all backends")
 
 if (${USE_CONAN})
   include(${CMAKE_SOURCE_DIR}/conanbuildinfo.cmake)
+  include_directories(${CONAN_INCLUDE_DIRS})
   conan_basic_setup(NO_OUTPUT_DIRS)
 endif()
 
@@ -162,6 +163,13 @@ if (${USE_CONAN})
     set(JEMALLOC_LIBRARIES ${CONAN_LIBS_JEMALLOC})
   endif()
 
+  include_directories(${CONAN_INCLUDE_DIRS_FMT})
+  include_directories(${CONAN_INCLUDE_DIRS_JSON})
+  include_directories(${CONAN_INCLUDE_DIRS_BSON})
+  include_directories(${CONAN_INCLUDE_DIRS_YYJSON})
+  include_directories(${CONAN_INCLUDE_DIRS_SIMDJSON})
+  include_directories(${CONAN_INCLUDE_DIRS_PCRE2})
+
 else()
   # Engines:
   if(${USTORE_BUILD_ENGINE_ROCKSDB})
@@ -199,17 +207,25 @@ endif()
 # > USTORE_BUILD_API_FLIGHT: Uses Arrow Flight RPC as a client-server communication protocol.
 # > USTORE_BUILD_SDK_PYTHON: Uses Arrow for zero-copy data exchage with the Python runtime.
 
-if((${USTORE_BUILD_API_FLIGHT_CLIENT} OR ${USTORE_BUILD_API_FLIGHT_SERVER}) AND (NOT ${USE_CONAN}))
-  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/openssl.cmake")
+if(${USTORE_BUILD_API_FLIGHT_CLIENT} OR ${USTORE_BUILD_API_FLIGHT_SERVER})
+  if (${USE_CONAN})
+    include_directories(${CONAN_INCLUDE_DIRS_OPENSSL})
+  else()
+    include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/openssl.cmake")
+  endif()
 endif()
 
-if((${USTORE_BUILD_SDK_PYTHON} OR ${USTORE_BUILD_API_FLIGHT_CLIENT} OR ${USTORE_BUILD_API_FLIGHT_SERVER} OR ${USTORE_BUILD_ENGINE_UCSET} OR ${USTORE_BUILD_TESTS}) AND (NOT ${USE_CONAN}))
-  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/arrow.cmake")
+if(${USTORE_BUILD_SDK_PYTHON} OR ${USTORE_BUILD_API_FLIGHT_CLIENT} OR ${USTORE_BUILD_API_FLIGHT_SERVER} OR ${USTORE_BUILD_ENGINE_UCSET} OR ${USTORE_BUILD_TESTS})
+  if (${USE_CONAN})
+    include_directories(${CONAN_INCLUDE_DIRS_ARROW})
+  else()
+    include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/arrow.cmake")
+  endif()
 endif()
 
 if(${USTORE_BUILD_API_FLIGHT_SERVER})
   if (${USE_CONAN})
-    include_directories(${CONAN_INCLUDE_DIRS_CLIPP}/include)
+    include_directories(${CONAN_INCLUDE_DIRS_CLIPP})
   else()
     include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/clipp.cmake")
   endif()
@@ -250,10 +266,6 @@ if (${USE_CONAN})
   set(LIB_OPENSSL_SSL ssl)
   set(LIB_OPENSSL_CRYPTO crypto)
   
-  set(LIB_PCRE2 pcre2-8)
-  
-  set(LIB_BSON bson-static-1.0) 
-    
   set(LIB_FMT fmt)
   set(LIB_BSON bson-static-1.0) 
   set(LIB_PCRE2 pcre2-8)
