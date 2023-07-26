@@ -178,35 +178,41 @@ class ConanUStore(ConanFile):
         self.options["rocksdb"].shared = False
         self.options["rocksdb"].fPIC = True
         self.options["rocksdb"].use_rtti = True
-        
+
 
     def requirements(self):
-        # self.requires('rocksdb/7.10.2@unum/ustore')
         self.requires('arrow/10.0.0')
-        self.requires('openssl/3.1.0')
+        # self.requires('re2/20220601')
+        #self.requires('xsimd/9.0.1')
+
+        # https://conan.io/center/openssl
+        # self.requires('openssl/3.1.0')
+        # self.requires('openssl/1.1.1t')
+        self.requires('jemalloc/5.3.0')
         self.requires('pcre2/10.42')
         self.requires('fmt/9.1.0')
         self.requires('mongo-c-driver/1.23.2')
         self.requires('nlohmann_json/3.11.2')
         self.requires('yyjson/0.6.0')
         self.requires('simdjson/3.1.7')
-        self.requires('jemalloc/5.3.0')
-        self.requires('clipp/1.2.3')
+
         # self.requires('gtest/1.13.0')
         self.requires('benchmark/1.7.1')
         self.requires('argparse/2.9')
-        self.requires('re2/20220601')
-        self.requires('xsimd/9.0.1')
+        self.requires('clipp/1.2.3')
+        # self.requires('libcurl/7.80.0')
+
+        #self.requires('grpc/1.50.0')
+        # self.requires('zlib/1.2.13')
+        self.requires('re2/20230301')
+        # self.requires('openssl/3.1.1')
+        # self.requires('c-ares/1.19.0')
+        # self.requires('protobuf/3.21.9')
+        # self.requires('abseil/20220623.0')
         
         self.requires('leveldb/1.23')
-        self.requires('grpc/1.50.1')
-        self.requires('zlib/1.2.13')
-        
+        # self.requires('rocksdb/7.10.2@unum/ustore')
         self.requires('rocksdb/6.29.5')
-        
-        self.requires('abseil/20230125.3')
-        self.requires('libcurl/7.80.0')
-        # https://conan.io/center/openssl
         
 
     def build(self):
@@ -223,6 +229,7 @@ class ConanUStore(ConanFile):
             "pkg_config_name", "flight_rpc")
         self.cpp_info.components["libarrow_flight.a"].libs = [
             f"arrow_flight.a"]
+
 
     def package(self):
         if self.options['arrow'].shared:
