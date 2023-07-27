@@ -259,19 +259,39 @@ endif()
 
 if (${USE_CONAN})
 
-  # add_library(arrow::arrow STATIC IMPORTED)
-  # set_property(TARGET arrow::arrow PROPERTY IMPORTED_LOCATION ${CONAN_LIB_DIRS_ARROW}/libarrow.a)
+  set(BINARY_DIR "${CMAKE_BINARY_DIR}/_deps/arrow-build")
+  set(INSTALL_DIR "${CMAKE_BINARY_DIR}/_deps/arrow-install")
+
+  set(ARROW_INCLUDE_DIR "${BINARY_DIR}/stage/include")
+  set(ARROW_INCLUDE_GEN_DIR "${BINARY_DIR}/stage/src")
+  include_directories(${ARROW_INCLUDE_DIR} ${ARROW_INCLUDE_GEN_DIR})
+  message("ARROW_INCLUDE_DIR: " ${ARROW_INCLUDE_DIR})
+
+  add_library(arrow::arrow STATIC IMPORTED)
+  set_property(TARGET arrow::arrow PROPERTY IMPORTED_LOCATION ${BINARY_DIR}/release/libarrow.a)
+  add_dependencies(arrow::arrow Arrow-external)
+
+  add_library(arrow::flight STATIC IMPORTED)
+  set_property(TARGET arrow::flight PROPERTY IMPORTED_LOCATION ${BINARY_DIR}/release/libarrow_flight.a)
+  add_dependencies(arrow::flight Arrow-external)
+
+  add_library(arrow::cuda STATIC IMPORTED)
+  set_property(TARGET arrow::cuda PROPERTY IMPORTED_LOCATION ${BINARY_DIR}/release/libarrow_cuda.a)
+  add_dependencies(arrow::cuda Arrow-external)
+
+  add_library(arrow::dataset STATIC IMPORTED)
+  set_property(TARGET arrow::dataset PROPERTY IMPORTED_LOCATION ${BINARY_DIR}/release/libarrow_dataset.a)
+  add_dependencies(arrow::dataset Arrow-external)
+
+  add_library(arrow::parquet STATIC IMPORTED)
+  set_property(TARGET arrow::parquet PROPERTY IMPORTED_LOCATION ${BINARY_DIR}/release/libparquet.a)
+  add_dependencies(arrow::parquet Arrow-external)
   set(LIB_ARROW arrow::arrow)
-  # add_library(arrow::flight STATIC IMPORTED)
-  # set_property(TARGET arrow::flight PROPERTY IMPORTED_LOCATION ${CONAN_LIB_DIRS_ARROW}/libarrow_flight.a)
   set(LIB_ARROW_FLIGHT arrow::flight)
-  # add_library(arrow::dataset STATIC IMPORTED)
-  # set_property(TARGET arrow::dataset PROPERTY IMPORTED_LOCATION ${CONAN_LIB_DIRS_ARROW}/libarrow_dataset.a)
   set(LIB_ARROW_DATASET arrow::dataset)
-  # add_library(arrow::parquet STATIC IMPORTED)
-  # set_property(TARGET arrow::parquet PROPERTY IMPORTED_LOCATION ${CONAN_LIB_DIRS_ARROW}/libparquet.a)
   set(LIB_ARROW_PARQUET arrow::parquet)
   set(LIB_ARROW_BUNDLED arrow::bundled)
+
   #set(LIB_ARROW_BUNDLED ${CONAN_LIBS_RE2} ${CONAN_LIBS_UTF8PROC} ${CONAN_LIBS_THRIFT} ${CONAN_LIBS_ABSEIL} ${CONAN_LIBS_SNAPPY} ${CONAN_LIBS_PROTOBUF} ${CONAN_LIBS_ZLIB} ${CONAN_LIBS_C-ARES} ${CONAN_LIBS_GRPC})
   
   set(LIB_OPENSSL_SSL ssl)
