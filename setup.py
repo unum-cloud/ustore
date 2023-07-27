@@ -46,6 +46,8 @@ class CMakeBuild(build_ext):
             f'-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={extension_dir}',
             f'-DCMAKE_ARCHIVE_OUTPUT_DIRECTORY={extension_dir}',
             f'-DPYTHON_EXECUTABLE={sys.executable}',
+            '-DCMAKE_C_COMPILER=/root/miniconda3/bin/gcc',
+            '-DCMAKE_CXX_COMPILER=/root/miniconda3/bin/g++',
             '-DUSTORE_BUILD_ENGINE_UCSET=1',
             '-DUSTORE_BUILD_ENGINE_LEVELDB=0',
             '-DUSTORE_BUILD_ENGINE_ROCKSDB=0',
