@@ -219,7 +219,7 @@ if(${USTORE_BUILD_SDK_PYTHON} OR ${USTORE_BUILD_API_FLIGHT_CLIENT} OR ${USTORE_B
   # if (${USE_CONAN})
   #   include_directories(${CONAN_INCLUDE_DIRS_ARROW})
   # else()
-  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/arrow.cmake")
+  #include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/arrow.cmake")
   include_directories(${ARROW_INCLUDE_DIR} ${ARROW_INCLUDE_GEN_DIR})
   # endif()
 endif()
