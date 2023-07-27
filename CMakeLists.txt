@@ -286,6 +286,11 @@ if (${USE_CONAN})
   add_library(arrow::parquet STATIC IMPORTED)
   set_property(TARGET arrow::parquet PROPERTY IMPORTED_LOCATION ${BINARY_DIR}/release/libparquet.a)
   add_dependencies(arrow::parquet Arrow-external)
+
+  add_library(arrow::bundled STATIC IMPORTED)
+  set_property(TARGET arrow::bundled PROPERTY IMPORTED_LOCATION ${BINARY_DIR}/release/libarrow_bundled_dependencies.a)
+  add_dependencies(arrow::bundled Arrow-external)
+  
   set(LIB_ARROW arrow::arrow)
   set(LIB_ARROW_FLIGHT arrow::flight)
   set(LIB_ARROW_DATASET arrow::dataset)
