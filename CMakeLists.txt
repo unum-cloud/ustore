@@ -305,7 +305,7 @@ if (${USE_CONAN})
   set(LIB_FMT fmt)
   set(LIB_BSON bson-static-1.0) 
   set(LIB_PCRE2 pcre2-8)
-  include_directories(${CMAKE_BINARY_DIR}/_deps/arrow-src/python/pyarrow/src)
+  i#nclude_directories(${CMAKE_BINARY_DIR}/_deps/arrow-src/python/pyarrow/src)
   #include_directories(${CONAN_INCLUDE_DIRS_ABSEIL})
   #include_directories(/root/.conan/data/arrow/10.0.0/_/_/build/8415748d8dbcc2b576606648064a276ff892b1aa/src/python/pyarrow/src)
   #include_directories(${CONAN_INCLUDE_DIRS_RE2})
@@ -478,7 +478,7 @@ if(${USTORE_BUILD_SDK_PYTHON})
 
     string(CONCAT wrap_lib "py_" ${client_lib_name})
     get_target_property(client_dependencies ${client_lib} LINK_LIBRARIES)
-    
+
     pybind11_add_module(${wrap_lib} MODULE python/pybind.cpp python/database.cpp python/networkx.cpp python/documents.cpp python/pandas.cpp)
     target_include_directories(${wrap_lib} PUBLIC python/ ${PYARROW_DIR}/include)
     target_link_directories(${wrap_lib} PUBLIC ${PYARROW_DIR})

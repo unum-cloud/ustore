@@ -15,34 +15,33 @@ before-all = [
     "yum install -y bzip2-devel libffi-devel zlib-devel wget perl-IPC-Cmd perl-Test-Simple",
 ]
 
-#manylinux-x86_64-image = "manylinux_2_28"
+manylinux-x86_64-image = "manylinux_2_28"
 environment = "CMAKE_ARGS_F=/tmp/cmake_args"
 before-build = [
     "rm {project}/CMakeCache.txt {project}/build {project}/CMakeFiles.txt {project}/_deps || true",
-    "wget -q https://github.com/gurgenyegoryan/ustore-conan/releases/download/v0.1.7/miniconda3.tar.gz",
-    "tar -xzf miniconda3.tar.gz -C ~/",
-    "rm -rf {project}/miniconda3.tar.gz",
+    "wget -q https://github.com/gurgenyegoryan/ustore-conan/releases/download/v0.1.8/miniconda.tar.gz",
+    "tar -xzf miniconda.tar.gz -C ~/",
+    "rm -rf {project}/miniconda.tar.gz",
     "export PATH='~/miniconda3/bin:/usr/bin:$PATH'",
     "~/miniconda3/bin/conda init",
     "source ~/.bashrc || true",
-    "pip install auditwheel conan==1.57.0 cmake",
+    "pip install auditwheel conan==1.57.0 cmake pyarrow",
     "export CC=~/miniconda3/bin/gcc",
     "export CXX=~/miniconda3/bin/g++",
     "export LD_LIBRARY_PATH=~/miniconda3/lib:~/miniconda3/x86_64-conda-linux-gnu/sysroot/usr/lib64:$LD_LIBRARY_PATH",
-    #"export LD_LIBRARY_PATH=~/miniconda3/lib/python3.11/site-packages/pyarrow:/usr/bin:$LD_LIBRARY_PATH",
-    "wget -q https://github.com/gurgenyegoryan/ustore-conan/releases/download/v0.1.7/arrow_source.tar.gz",
+    "export LD_LIBRARY_PATH=~/miniconda3/lib/python3.11/site-packages/pyarrow:/usr/bin:$LD_LIBRARY_PATH",
+    "wget -q https://github.com/gurgenyegoryan/ustore-conan/releases/download/v0.1.8/arrow_source.tar.gz",
     "tar -xzf {project}/arrow_source.tar.gz -C {project}/",
     "rm -rf {project}/arrow_source.tar.gz",
     "conan profile new --detect default",
     "conan profile update settings.compiler=gcc default",
     "conan profile update settings.compiler.libcxx=libstdc++11 default",
-    "wget -q https://github.com/gurgenyegoryan/ustore-conan/releases/download/v0.1.7/ustore_deps_x86_linux.tar.gz",
+    "wget -q https://github.com/gurgenyegoryan/ustore-conan/releases/download/v0.1.8/ustore_deps_x86_linux.tar.gz",
     "tar -xzf {project}/ustore_deps_x86_linux.tar.gz -C ~/.conan",
     "rm -rf {project}/ustore_deps_x86_linux.tar.gz",
     "conan install ustore_deps/0.12.1@unum/x86_linux -g cmake -s compiler.version=11",
-    #"conan profile update settings.compiler.version=11 default",
     "export PYST=$(python -c 'import site; print(site.getsitepackages()[0])')",
-    #"echo \"-DCMAKE_BUILD_TYPE=Release -DPYARROW_DIR=${PYST}/pyarrow/\" > ${CMAKE_ARGS_F}",
+    "echo \"-DCMAKE_BUILD_TYPE=Release -DPYARROW_DIR=${PYST}/pyarrow/\" > ${CMAKE_ARGS_F}",
     "mkdir -p build/ustore",
 ]
 
