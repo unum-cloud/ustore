@@ -260,8 +260,11 @@ endif()
 
 if (${USE_CONAN})
   if (${USTORE_BUILD_SDK_PYTHON})
-    set(ARROW_INCLUDE_DIR "${CMAKE_BINARY_DIR}/_deps/arrow-build/stage/include")
-    set(ARROW_INCLUDE_GEN_DIR "${CMAKE_BINARY_DIR}/_deps/arrow-build/stage/src")
+    set(BINARY_DIR "${CMAKE_BINARY_DIR}/_deps/arrow-build")
+    set(INSTALL_DIR "${CMAKE_BINARY_DIR}/_deps/arrow-install")
+  
+    set(ARROW_INCLUDE_DIR "${BINARY_DIR}/stage/include")
+    set(ARROW_INCLUDE_GEN_DIR "${BINARY_DIR}/stage/src")
     include_directories(${ARROW_INCLUDE_DIR} ${ARROW_INCLUDE_GEN_DIR})
     message("ARROW_INCLUDE_DIR: " ${ARROW_INCLUDE_DIR})
 
