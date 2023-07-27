@@ -187,7 +187,7 @@ class ConanUStore(ConanFile):
         self.requires('xsimd/9.0.1')
 
         # https://conan.io/center/openssl
-        # self.requires('openssl/3.1.0')
+        self.requires('openssl/3.1.0')
         self.requires('jemalloc/5.3.0')
         self.requires('pcre2/10.42')
         self.requires('fmt/9.1.0')
