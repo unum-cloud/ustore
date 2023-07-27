@@ -290,7 +290,7 @@ if (${USE_CONAN})
   add_library(arrow::bundled STATIC IMPORTED)
   set_property(TARGET arrow::bundled PROPERTY IMPORTED_LOCATION ${BINARY_DIR}/release/libarrow_bundled_dependencies.a)
   add_dependencies(arrow::bundled Arrow-external)
-  
+
   set(LIB_ARROW arrow::arrow)
   set(LIB_ARROW_FLIGHT arrow::flight)
   set(LIB_ARROW_DATASET arrow::dataset)
@@ -465,7 +465,7 @@ endif()
 # Build Python bindings linking to precompiled client SDKs
 if(${USTORE_BUILD_SDK_PYTHON})
   # find_package(Python 3.9 REQUIRED COMPONENTS Interpreter Development.module)
-  set(PYARROW_DIR "/root/miniconda3/lib/python3.11/site-packages/pyarrow" CACHE PATH "Path to pyarrow install dir")
+  set(PYARROW_DIR "" CACHE PATH "Path to pyarrow install dir")
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/pybind11.cmake")
   file(MAKE_DIRECTORY ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/ustore)
   
@@ -478,9 +478,7 @@ if(${USTORE_BUILD_SDK_PYTHON})
 
     string(CONCAT wrap_lib "py_" ${client_lib_name})
     get_target_property(client_dependencies ${client_lib} LINK_LIBRARIES)
-
-    #add_library(gugo STATIC IMPORTED)
-    #set_property(TARGET gugo PROPERTY IMPORTED_LOCATION ${PYARROW_DIR}/libarrow.so)
+    
     pybind11_add_module(${wrap_lib} MODULE python/pybind.cpp python/database.cpp python/networkx.cpp python/documents.cpp python/pandas.cpp)
     target_include_directories(${wrap_lib} PUBLIC python/ ${PYARROW_DIR}/include)
     target_link_directories(${wrap_lib} PUBLIC ${PYARROW_DIR})

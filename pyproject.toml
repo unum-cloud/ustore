@@ -42,7 +42,7 @@ before-build = [
     "conan install ustore_deps/0.12.1@unum/x86_linux -g cmake -s compiler.version=11",
     #"conan profile update settings.compiler.version=11 default",
     "export PYST=$(python -c 'import site; print(site.getsitepackages()[0])')",
-    "echo \"-DCMAKE_BUILD_TYPE=Release -DPYARROW_DIR=${PYST}/pyarrow/\" > ${CMAKE_ARGS_F}",
+    #"echo \"-DCMAKE_BUILD_TYPE=Release -DPYARROW_DIR=${PYST}/pyarrow/\" > ${CMAKE_ARGS_F}",
     "mkdir -p build/ustore",
 ]
 
