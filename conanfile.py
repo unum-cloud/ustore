@@ -61,6 +61,7 @@ class ConanUStore(ConanFile):
         tc.variables['ARROW_BUILD_SHARED'] = False
         tc.variables['ARROW_SIMD_LEVEL'] = "AVX2"
         tc.variables["ARROW_DEPENDENCY_USE_SHARED"] = False
+        tc.variables["ARROW_BUNDLED_STATIC_LIBS"] = True
         tc.variables["ARROW_OPENSSL_USE_SHARED"] = True
         tc.variables["ARROW_BUILD_TESTS"] = False
         tc.variables["ARROW_ENABLE_TIMING_TESTS"] = False
