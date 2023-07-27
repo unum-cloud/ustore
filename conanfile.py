@@ -173,7 +173,7 @@ class ConanUStore(ConanFile):
         self.options["leveldb"].with_snappy = False
         self.options["leveldb"].with_crc32c = False
         
-        self.options["abseil"].shared = False
+        # self.options["abseil"].shared = False
         
         self.options["rocksdb"].shared = False
         self.options["rocksdb"].fPIC = True
@@ -183,11 +183,10 @@ class ConanUStore(ConanFile):
     def requirements(self):
         self.requires('arrow/10.0.0')
         # self.requires('re2/20220601')
-        #self.requires('xsimd/9.0.1')
+        self.requires('xsimd/9.0.1')
 
         # https://conan.io/center/openssl
         # self.requires('openssl/3.1.0')
-        # self.requires('openssl/1.1.1t')
         self.requires('jemalloc/5.3.0')
         self.requires('pcre2/10.42')
         self.requires('fmt/9.1.0')
@@ -196,22 +195,20 @@ class ConanUStore(ConanFile):
         self.requires('yyjson/0.6.0')
         self.requires('simdjson/3.1.7')
 
-        # self.requires('gtest/1.13.0')
+        self.requires('gtest/1.13.0')
         self.requires('benchmark/1.7.1')
         self.requires('argparse/2.9')
         self.requires('clipp/1.2.3')
-        # self.requires('libcurl/7.80.0')
+        self.requires('libcurl/7.80.0')
 
-        #self.requires('grpc/1.50.0')
-        # self.requires('zlib/1.2.13')
+        self.requires('grpc/1.50.0')
+        self.requires('zlib/1.2.13')
         self.requires('re2/20230301')
-        # self.requires('openssl/3.1.1')
-        # self.requires('c-ares/1.19.0')
-        # self.requires('protobuf/3.21.9')
-        # self.requires('abseil/20220623.0')
+        self.requires('c-ares/1.19.0')
+        self.requires('protobuf/3.21.9')
+        self.requires('abseil/20220623.0')
         
         self.requires('leveldb/1.23')
-        # self.requires('rocksdb/7.10.2@unum/ustore')
         self.requires('rocksdb/6.29.5')
         
 
