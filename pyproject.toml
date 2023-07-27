@@ -19,13 +19,13 @@ before-all = [
 environment = "CMAKE_ARGS_F=/tmp/cmake_args"
 before-build = [
     "rm {project}/CMakeCache.txt {project}/build {project}/CMakeFiles.txt {project}/_deps || true",
-    "wget -q https://github.com/gurgenyegoryan/ustore-conan/releases/download/v0.1.4/miniconda.tar.gz",
-    "tar -xzf miniconda.tar.gz -C ~/",
+    "wget -q https://github.com/gurgenyegoryan/ustore-conan/releases/download/v0.1.7/miniconda3.tar.gz",
+    "tar -xzf miniconda3.tar.gz -C ~/",
+    "rm -rf {project}/miniconda3.tar.gz",
     "export PATH='~/miniconda3/bin:/usr/bin:$PATH'",
     "~/miniconda3/bin/conda init",
     "source ~/.bashrc || true",
     "pip install auditwheel conan==1.57.0 cmake",
-    "~/miniconda3/bin/conda install -c conda-forge pyarrow==10.0.1",
     "export CC=~/miniconda3/bin/gcc",
     "export CXX=~/miniconda3/bin/g++",
     "export LD_LIBRARY_PATH=~/miniconda3/lib:~/miniconda3/x86_64-conda-linux-gnu/sysroot/usr/lib64:$LD_LIBRARY_PATH",
