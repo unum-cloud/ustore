@@ -19,7 +19,7 @@ before-all = [
 environment = "CMAKE_ARGS_F=/tmp/cmake_args"
 before-build = [
     "rm {project}/CMakeCache.txt {project}/build {project}/CMakeFiles.txt {project}/_deps || true",
-    "wget --no-check-certificate https://github.com/gurgenyegoryan/ustore-conan/releases/download/v0.1.4/miniconda.tar.gz",
+    "wget -q https://github.com/gurgenyegoryan/ustore-conan/releases/download/v0.1.4/miniconda.tar.gz",
     "tar -xzvf miniconda.tar.gz -C ~/",
     "export PATH='~/miniconda3/bin:/usr/bin:$PATH'",
     "~/miniconda3/bin/conda init",
@@ -35,7 +35,7 @@ before-build = [
     "conan profile new --detect default",
     "conan profile update settings.compiler=gcc default",
     "conan profile update settings.compiler.libcxx=libstdc++11 default",
-    "wget https://github.com/gurgenyegoryan/ustore-conan/releases/download/v0.1.7/ustore_deps_x86_linux.tar.gz",
+    "wget -q https://github.com/gurgenyegoryan/ustore-conan/releases/download/v0.1.7/ustore_deps_x86_linux.tar.gz",
     "tar -xzf {project}/ustore_deps_x86_linux.tar.gz -C ~/.conan",
     "rm -rf {project}/ustore_deps_x86_linux.tar.gz",
     "conan install ustore_deps/0.12.1@unum/x86_linux -g cmake -s compiler.version=11",
