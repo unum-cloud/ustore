@@ -205,3 +205,4 @@ setup(
     extras_require={'test': 'pytest'},
     python_requires='>=3.7',
 )
+
