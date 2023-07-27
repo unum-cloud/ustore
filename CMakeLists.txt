@@ -307,8 +307,10 @@ if (${USE_CONAN})
   
   add_library(openssl::ssl STATIC IMPORTED)
   set_property(TARGET openssl::ssl PROPERTY IMPORTED_LOCATION ${CONAN_LIB_DIRS_OPENSSL}/libssl.a)
+  add_dependencies(openssl::ssl openssl-external)
   add_library(openssl::crypto STATIC IMPORTED)
   set_property(TARGET openssl::crypto PROPERTY IMPORTED_LOCATION ${CONAN_LIB_DIRS_OPENSSL}/libcrypto.a)
+  add_dependencies(openssl::crypto openssl-external)
 
   set(LIB_OPENSSL_SSL openssl::ssl)
   set(LIB_OPENSSL_CRYPTO openssl::crypto)
