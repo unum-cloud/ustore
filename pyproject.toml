@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=42", "wheel", "cmake>=3.22", "pybind11-stubgen", "pyarrow>=10.0.0,<11"]
+requires = ["setuptools>=42", "wheel", "cmake>=3.22", "pybind11-stubgen"]
 build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]
@@ -12,22 +12,32 @@ testpaths = ["python/tests"]
 [tool.cibuildwheel]
 build-verbosity = 0
 before-all = [
-    "yum install -y bzip2-devel libffi-devel zlib-devel wget python3-devel perl-IPC-Cmd perl-Test-Simple cmake",
-    "yum groupinstall -y 'Development Tools'",
+    "yum install -y bzip2-devel libffi-devel zlib-devel wget perl-IPC-Cmd perl-Test-Simple",
 ]
 
+#manylinux-x86_64-image = "manylinux_2_28"
 environment = "CMAKE_ARGS_F=/tmp/cmake_args"
 before-build = [
-    "rm -rf {project}/CMakeCache.txt {project}/build {project}/CMakeFiles.txt {project}/_deps",
-    "pip install pyarrow==10.0.0 conan==1.57.0 auditwheel",
-    "wget -q https://github.com/unum-cloud/ustore-deps/releases/download/v0.1.3/ustore_deps_x86_linux.tar.gz",
-    "conan profile new --detect default",
-    "conan profile update settings.compiler.libcxx=libstdc++11 default",
-    "tar -xzf {project}/ustore_deps_x86_linux.tar.gz -C ~/.conan",
-    "rm -rf ./ustore_deps_x86_linux.tar.gz",
-    "conan export . unum/x86_linux",
-    "conan install ustore_deps/0.12.1@unum/x86_linux --build=ustore_deps -g cmake -s compiler.version=11",
+    "rm {project}/CMakeCache.txt {project}/build {project}/CMakeFiles.txt {project}/_deps || true",
+    "wget --no-check-certificate https://github.com/gurgenyegoryan/ustore-conan/releases/download/v0.1.4/miniconda.tar.gz",
+    "tar -xzvf miniconda.tar.gz -C ~/",
+    "export PATH='~/miniconda3/bin:/usr/bin:$PATH'",
+    "~/miniconda3/bin/conda init",
+    "source ~/.bashrc || true",
+    "pip install pyarrow==10.0.1 auditwheel conan==1.57.0 cmake",
     "export PYST=$(python -c 'import site; print(site.getsitepackages()[0])')",
+    "export CMAKE_C_COMPILER=~/miniconda3/bin/gcc",
+    "export CMAKE_CXX_COMPILER=~/miniconda3/bin/g++",
+    "export LD_LIBRARY_PATH=~/miniconda3/lib:~/miniconda3/x86_64-conda-linux-gnu/sysroot/usr/lib64:$LD_LIBRARY_PATH",
+    "wget https://github.com/gurgenyegoryan/ustore-conan/releases/download/v0.1.7/arrow10_0_0.tar.gz",
+    "tar -xzvf {project}/arrow10_0_0.tar.gz -C {project}",
+    "wget https://github.com/gurgenyegoryan/ustore-conan/releases/download/v0.1.7/ustore_deps_x86_linux.tar.gz",
+    "conan profile new --detect default",
+    "conan profile update settings.compiler=gcc default",
+    #"conan profile update settings.compiler.version=11 default",
+    "conan profile update settings.compiler.libcxx=libstdc++11 default",
+    "tar -xzvf {project}/ustore_deps_x86_linux.tar.gz -C ~/.conan",
+    "conan install ustore_deps/0.12.1@unum/x86_linux -g cmake -s compiler.version=11",
     "echo \"-DCMAKE_BUILD_TYPE=Release -DPYARROW_DIR=${PYST}/pyarrow/\" > ${CMAKE_ARGS_F}",
     "mkdir -p build/ustore",
 ]
