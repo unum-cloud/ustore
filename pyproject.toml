@@ -25,7 +25,7 @@ before-build = [
     "export PATH='~/miniconda3/bin:/usr/bin:$PATH'",
     "~/miniconda3/bin/conda init",
     "source ~/.bashrc || true",
-    "pip install auditwheel conan==1.57.0 cmake pyarrow",
+    "pip install auditwheel conan==1.57.0 cmake pyarrow==10.0.1",
     "export CC=~/miniconda3/bin/gcc",
     "export CXX=~/miniconda3/bin/g++",
     "export LD_LIBRARY_PATH=~/miniconda3/lib:~/miniconda3/x86_64-conda-linux-gnu/sysroot/usr/lib64:$LD_LIBRARY_PATH",
