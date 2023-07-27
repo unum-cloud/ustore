@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=42", "wheel", "cmake>=3.22", "pybind11-stubgen"]
+requires = ["setuptools>=42", "wheel", "cmake>=3.22", "pybind11-stubgen","pyarrow>=10.0.0,<11"]
 build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]
@@ -15,7 +15,7 @@ before-all = [
     "yum install -y bzip2-devel libffi-devel zlib-devel wget perl-IPC-Cmd perl-Test-Simple",
 ]
 
-#manylinux-x86_64-image = "manylinux_2_28"
+manylinux-x86_64-image = "manylinux_2_28"
 environment = "CMAKE_ARGS_F=/tmp/cmake_args"
 before-build = [
     "rm {project}/CMakeCache.txt {project}/build {project}/CMakeFiles.txt {project}/_deps || true",
