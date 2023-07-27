@@ -305,8 +305,13 @@ if (${USE_CONAN})
     set(LIB_ARROW_BUNDLED re2 utf8proc thrift ${CONAN_LIBS_ABSEIL} snappy ${CONAN_LIBS_PROTOBUF} ${CONAN_LIBS_ZLIB} cares ${CONAN_LIBS_GRPC})
   endif()
   
-  set(LIB_OPENSSL_SSL ssl)
-  set(LIB_OPENSSL_CRYPTO crypto)
+  add_library(openssl::ssl STATIC IMPORTED)
+  set_property(TARGET openssl::ssl PROPERTY IMPORTED_LOCATION ${CONAN_LIB_DIRS_OPENSSL}/libssl.a)
+  add_library(openssl::crypto STATIC IMPORTED)
+  set_property(TARGET crypto::ssl PROPERTY IMPORTED_LOCATION ${CONAN_LIB_DIRS_OPENSSL}/libcrypto.a)
+
+  set(LIB_OPENSSL_SSL openssl::ssl)
+  set(LIB_OPENSSL_CRYPTO openssl::crypto)
   
   set(LIB_FMT fmt)
   set(LIB_BSON bson-static-1.0) 
