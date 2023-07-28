@@ -23,8 +23,8 @@ before-build = [
     "rm -rf {project}/CMakeCache.txt {project}/build {project}/CMakeFiles.txt {project}/_deps",
     "wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh",
     "chmod +x Miniconda3-latest-Linux-x86_64.sh",
-    "echo -e "\nyes\n\nyes" | bash ./Miniconda3-latest-Linux-x86_64.sh"
-    "rm -f Miniconda3-latest-Linux-x86_64.sh"
+    "echo -e '\nyes\n\nyes' | bash ./Miniconda3-latest-Linux-x86_64.sh",
+    "rm -f Miniconda3-latest-Linux-x86_64.sh",
     "export PATH='~/miniconda3/bin:/usr/bin:$PATH'",
     "~/miniconda3/bin/conda init",
     "source ~/.bashrc || true",
@@ -34,7 +34,7 @@ before-build = [
     "conan profile update settings.compiler.libcxx=libstdc++11 default",
     
     "wget -q https://github.com/gurgenyegoryan/ustore-conan/releases/download/v0.1.8/ustore_deps_x86_linux.tar.gz",
-    "tar -xzvf {project}/ustore_deps_x86_linux.tar.gz -C ~/.conan",
+    "tar -xzvf {project}/ustore_deps_x86_linux.tar.gz_ -C ~/.conan",
     "conan install ustore_deps/0.12.1@unum/x86_missing -g cmake",
     "rm -rf {project}/ustore_deps_x86_linux.tar.gz",
 
