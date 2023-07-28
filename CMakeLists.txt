@@ -452,7 +452,7 @@ if(${USTORE_BUILD_SDK_PYTHON})
     string(CONCAT wrap_lib "py_" ${client_lib_name})
     get_target_property(client_dependencies ${client_lib} LINK_LIBRARIES)
     message("LIST BEFORE ${client_dependencies}")
-    list(FILTER ${client_dependencies} INCLUDE REGEX "*arrow*")
+    list(FILTER ${client_dependencies} EXCLUDE REGEX "arrow")
     message("LIST AFTER ${client_dependencies}")
 
     pybind11_add_module(${wrap_lib} MODULE python/pybind.cpp python/database.cpp python/networkx.cpp python/documents.cpp python/pandas.cpp)
