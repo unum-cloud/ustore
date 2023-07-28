@@ -222,7 +222,6 @@ if(${USTORE_BUILD_SDK_PYTHON} OR ${USTORE_BUILD_API_FLIGHT_CLIENT} OR ${USTORE_B
     endif()
   else()
     include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/arrow.cmake")
-    include_directories(${ARROW_INCLUDE_DIR} ${ARROW_INCLUDE_GEN_DIR})
   endif()
 endif()
 
@@ -451,9 +450,9 @@ if(${USTORE_BUILD_SDK_PYTHON})
 
     string(CONCAT wrap_lib "py_" ${client_lib_name})
     get_target_property(client_dependencies ${client_lib} LINK_LIBRARIES)
-    message("LIST BEFORE ${client_dependencies}")
-    list(FILTER ${client_dependencies} EXCLUDE REGEX "arrow")
-    message("LIST AFTER ${client_dependencies}")
+    if(${USE_PYARROW_LIBS})
+      list(FILTER client_dependencies EXCLUDE REGEX "arrow")
+    endif()
 
     pybind11_add_module(${wrap_lib} MODULE python/pybind.cpp python/database.cpp python/networkx.cpp python/documents.cpp python/pandas.cpp)
     target_include_directories(${wrap_lib} PUBLIC python/ ${PYARROW_DIR}/include)
