@@ -198,7 +198,7 @@ setup(
     zip_safe=False,
     install_requires=[
         'numpy>=1.16',
-        'pyarrow>=10.0.0,<11'
+        'pyarrow>=10.0.1'
     ],
     extras_require={'test': 'pytest'},
     python_requires='>=3.7',
