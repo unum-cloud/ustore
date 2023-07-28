@@ -34,8 +34,8 @@ before-build = [
     "conan profile update settings.compiler.libcxx=libstdc++11 default",
     
     "wget -q https://github.com/gurgenyegoryan/ustore-conan/releases/download/v0.1.8/ustore_deps_x86_linux.tar.gz",
-    "tar -xzvf {project}/ustore_deps_x86_linux.tar.gz_ -C ~/.conan",
-    "conan install ustore_deps/0.12.1@unum/x86_missing -g cmake",
+    "tar -xzvf {project}/ustore_deps_x86_linux.tar.gz -C ~/.conan",
+    "conan install ustore_deps/0.12.1@unum/x86_linux -g cmake",
     "rm -rf {project}/ustore_deps_x86_linux.tar.gz",
 
     "export PYST=$(python -c 'import site; print(site.getsitepackages()[0])')",
