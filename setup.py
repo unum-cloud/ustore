@@ -48,7 +48,7 @@ class CMakeBuild(build_ext):
             f'-DPYTHON_EXECUTABLE={sys.executable}',
             '-DCMAKE_C_COMPILER=/root/miniconda3/bin/gcc',
             '-DCMAKE_CXX_COMPILER=/root/miniconda3/bin/g++',
-            '-DPYARROW_DIR=/root/miniconda3/lib/python3.11/site-packages',
+            '-DPYARROW_DIR=/root/miniconda3/lib/python3.11/site-packages/pyarrow',
             '-DUSTORE_BUILD_ENGINE_UCSET=1',
             '-DUSTORE_BUILD_ENGINE_LEVELDB=0',
             '-DUSTORE_BUILD_ENGINE_ROCKSDB=0',
