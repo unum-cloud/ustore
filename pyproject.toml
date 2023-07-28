@@ -31,6 +31,7 @@ before-build = [
 
     "pip install conan==1.60.1 cmake pyarrow==10.0.1 auditwheel",
     "conan profile new --detect default",
+    "conan profile update settings.compiler=gcc default",
     "conan profile update settings.compiler.libcxx=libstdc++11 default",
     
     "wget -q https://github.com/gurgenyegoryan/ustore-conan/releases/download/v0.1.8/ustore_deps_x86_linux.tar.gz",
