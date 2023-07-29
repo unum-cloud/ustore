@@ -51,7 +51,8 @@ class CMakeBuild(build_ext):
             '-DUSTORE_BUILD_ENGINE_ROCKSDB=1',
             '-DUSTORE_BUILD_API_FLIGHT_CLIENT=1',
             '-DUSTORE_BUILD_SDK_PYTHON=1',
-            '-DUSE_CONAN=1'
+            '-DUSE_PYARROW_LIBS=0',
+            '-DUSE_CONAN=0'
         ]
 
         # Adding CMake arguments set as environment variable
@@ -203,4 +204,3 @@ setup(
     extras_require={'test': 'pytest'},
     python_requires='>=3.7',
 )
-

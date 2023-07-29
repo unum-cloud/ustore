@@ -62,7 +62,7 @@ class ConanUStore(ConanFile):
         tc.variables['ARROW_SIMD_LEVEL'] = "AVX2"
         tc.variables["ARROW_DEPENDENCY_USE_SHARED"] = False
         tc.variables["ARROW_BUNDLED_STATIC_LIBS"] = True
-        tc.variables["ARROW_OPENSSL_USE_SHARED"] = True
+        tc.variables["ARROW_OPENSSL_USE_SHARED"] = False
         tc.variables["ARROW_BUILD_TESTS"] = False
         tc.variables["ARROW_ENABLE_TIMING_TESTS"] = False
         tc.variables["ARROW_BUILD_EXAMPLES"] = False
@@ -101,15 +101,7 @@ class ConanUStore(ConanFile):
         tc.variables["Thrift_SOURCE"] = "BUNDLED"
         tc.variables["utf8proc_SOURCE"] = "BUNDLED"
         tc.variables["ARROW_INCLUDE_DIR"] = True
-        tc.variables["ARROW_WITH_THRIFT"] = self._with_thrift()
         tc.variables["ARROW_UTF8PROC_USE_SHARED"] = False
-        tc.variables["Thrift_SOURCE"] = "BUNDLED"
-        if self._with_thrift():
-            # a recent thrift does not require boost
-            tc.variables["THRIFT_VERSION"] = bool(
-                self.dependencies["thrift"].ref.version)
-            tc.variables["ARROW_THRIFT_USE_SHARED"] = bool(
-                self.dependencies["thrift"].options.shared)
         tc.cache_variables["ENABLE_STATIC"] = "ON"
         tc.cache_variables["ENABLE_BSON"] = "ON"
         tc.cache_variables["ENABLE_TESTS"] = "OFF"
@@ -216,7 +208,9 @@ class ConanUStore(ConanFile):
         
 
     def build(self):
-        pass
+        cmake = CMake(self)
+        cmake.configure()
+        cmake.build()
     
     
     def system_requirements(self):
@@ -239,11 +233,6 @@ class ConanUStore(ConanFile):
         self.copy(pattern="*.h", dst="lib", keep_path=False)
         self.copy(pattern="*.hpp", dst="lib", keep_path=False)
         
-
-    def _with_thrift(self, required=False):
-        # No self.options.with_thift exists
-        return bool(required or self._parquet())
-    
 
     def _parquet(self, required=False):
         if required or self.options['arrow'].parquet == "auto":
