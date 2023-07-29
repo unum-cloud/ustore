@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=42", "wheel", "cmake>=3.22", "pybind11-stubgen", "pyarrow==10.0.1,<11"]
+requires = ["setuptools>=42", "wheel", "cmake>=3.22", "pybind11-stubgen", "pyarrow>=10.0.1,<11"]
 build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]
@@ -13,7 +13,7 @@ testpaths = ["python/tests"]
 manylinux-x86_64-image = "manylinux_2_28"
 
 before-all = [
-    "yum install -y wget bzip2-devel libffi-devel zlib-devel perl-IPC-Cmd perl-Test-Simple perl-Pod-Html",
+    "yum install -y wget python3-devel bzip2-devel libffi-devel zlib-devel perl-IPC-Cmd perl-Test-Simple perl-Pod-Html",
     "cd /usr/src && wget https://www.openssl.org/source/openssl-3.1.0.tar.gz",
     "tar -zxf openssl-3.1.0.tar.gz && rm openssl-3.1.0.tar.gz && cd /usr/src/openssl-3.1.0",
     "./config && make -j && make install",

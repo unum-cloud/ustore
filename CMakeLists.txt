@@ -8,15 +8,10 @@ project(UStore
   HOMEPAGE_URL "https://github.com/unum-cloud/ustore"
   DESCRIPTION "Universal Binary DBMS Interface to manage Docs • Graphs • Blobs • Vectors × in Local • Remote × RocksDB • LevelDB • UCSet • UDisk × from C • C++ • Python • Java • GoLang"
 )
+
 option(USTORE_BUILD_ENGINE_UCSET "Building REST API server for all backends" ON)
 option(USTORE_BUILD_ENGINE_LEVELDB "Building REST API server for all backends")
 option(USTORE_BUILD_ENGINE_ROCKSDB "Building REST API server for all backends")
-
-if(${USE_CONAN})
-  include(${CMAKE_SOURCE_DIR}/conanbuildinfo.cmake)
-  #include_directories(${CONAN_INCLUDE_DIRS})
-  conan_basic_setup(NO_OUTPUT_DIRS)
-endif()
 
 option(USTORE_BUILD_TESTS "Building C/C++ native tests" ON)
 option(USTORE_BUILD_SANITIZE "Use memory sanitizers for debug builds" ON)
@@ -46,6 +41,13 @@ if(USTORE_BUILD_API_FLIGHT)
   set(USTORE_BUILD_API_FLIGHT_CLIENT ON)
 elseif(${USTORE_BUILD_API_FLIGHT_CLIENT} OR ${USTORE_BUILD_API_FLIGHT_SERVER})
   set(USTORE_BUILD_API_FLIGHT ON)
+endif()
+
+# Include conan dependencies
+if(${USE_CONAN})
+  include(${CMAKE_SOURCE_DIR}/conanbuildinfo.cmake)
+  #include_directories(${CONAN_INCLUDE_DIRS})
+  conan_basic_setup(NO_OUTPUT_DIRS)
 endif()
 
 # Some settings are mutually dependant
@@ -455,7 +457,7 @@ if(${USTORE_BUILD_BENCHMARKS})
     
     string(CONCAT bench_name "bench_tabular_graph_" ${client_lib})
     add_executable(${bench_name} benchmarks/tabular_graph.cpp src/tools/dataset.cpp)
-    target_link_libraries(${bench_name} benchmark argparse ${LIB_FMT} ${LIB_ARROW} ${LIB_ARROW_FLIGHT} ${LIB_ARROW_PARQUET} ${LIB_ARROW} ${LIB_ARROW_BUNDLED} ${client_lib} ${client_dependencies})
+    target_link_libraries(${bench_name} benchmark argparse ${LIB_FMT} ${LIB_ARROW_FLIGHT} ${LIB_ARROW_PARQUET} ${LIB_ARROW} ${LIB_ARROW_BUNDLED} ${client_lib} ${client_dependencies})
   endforeach()
 endif()
 
