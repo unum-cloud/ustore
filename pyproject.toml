@@ -11,9 +11,11 @@ testpaths = ["python/tests"]
 
 [tool.cibuildwheel]
 #manylinux-x86_64-image = "manylinux_2_28"
+build-verbosity = 0
+environment = "CMAKE_ARGS_F=/tmp/cmake_args"
 
 before-all = [
-    "yum install -y wget python3-devel bzip2-devel libffi-devel zlib-devel perl-IPC-Cmd perl-Test-Simple perl-Pod-Html",
+    "yum install -y wget python3-devel bzip2-devel libffi-devel zlib-devel perl-IPC-Cmd perl-Test-Simple",
     "cd /usr/src && wget https://www.openssl.org/source/openssl-3.1.0.tar.gz",
     "tar -zxf openssl-3.1.0.tar.gz && rm openssl-3.1.0.tar.gz && cd /usr/src/openssl-3.1.0",
     "./config && make -j && make install",
@@ -21,11 +23,9 @@ before-all = [
     "ln -s /usr/local/lib64/libcrypto.so.3 /usr/lib64/libcrypto.so.3"
 ]
 
-build-verbosity = 0
-environment = "CMAKE_ARGS_F=/tmp/cmake_args"
-
 before-build = [
-    # Removing the contents of previous builds, if they exist
+    # Removing the contents of previous builds from project if they exist
+    "cd {project}",
     "rm -rf {project}/CMakeCache.txt {project}/build {project}/CMakeFiles.txt {project}/_deps",
 
     "pip install conan==1.60.1 cmake pyarrow==10.0.1 auditwheel",
@@ -36,7 +36,7 @@ before-build = [
     "conan profile update settings.compiler.version=10 default",
     "conan profile update settings.compiler.libcxx=libstdc++11 default",
     
-    "wget -q https://github.com/gurgenyegoryan/ustore-conan/releases/download/v0.1.8/ustore_deps_x86_linux.tar.gz",
+    "wget -q https://github.com/gurgenyegoryan/ustore-conan/releases/download/v0.1.9/ustore_deps_x86_linux.tar.gz",
     "tar -xzvf {project}/ustore_deps_x86_linux.tar.gz -C ~/.conan",
     "conan install ustore_deps/0.12.1@unum/x86_linux -g cmake",
     "rm -rf {project}/ustore_deps_x86_linux.tar.gz",
