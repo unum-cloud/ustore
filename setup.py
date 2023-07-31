@@ -188,8 +188,8 @@ setup(
 
     ext_modules=[
         CMakeExtension('ustore.ucset'),
-        #CMakeExtension('ustore.rocksdb'),
-        #CMakeExtension('ustore.leveldb'),
+        CMakeExtension('ustore.rocksdb'),
+        CMakeExtension('ustore.leveldb'),
         CMakeExtension('ustore.flight_client'),
     ],
     cmdclass={
