@@ -85,7 +85,7 @@ test {
 }
 
 jar {
-    dependsOn("ustoreUmemSharedLibrary")
+    dependsOn("ustoreUcsetSharedLibrary")
     dependsOn("ustoreRocksdbSharedLibrary")
     dependsOn("ustoreLeveldbSharedLibrary")
 

@@ -25,7 +25,6 @@ env:
 
 
 jobs:
-
   versioning:
     name: Semantic Release
     runs-on: ubuntu-latest
@@ -36,14 +35,13 @@ jobs:
     - uses: actions/setup-node@v3
     - run: cp .github/workflows/package.json . && npm install && npx semantic-release
 
-
   # Single deploy job since we're just deploying
   deploy:
     name: Deploy Docs
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     needs: versioning
     steps:
       - name: Checkout
@@ -65,8 +63,125 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-pages-artifact@v1
         with:
-          # Upload entire repository
           path: "./build/docs/html/"
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v1
+
+  
+  build_wheel:
+    name: Build python
+    runs-on: ubuntu-latest
+    needs: versioning
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          persist-credentials: false
+          ref: 'main'
+      - name: Prepare CMake, Conan and PyArrow
+        run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.60.1
+
+      - name: Build wheel
+        run: |
+          pip install cibuildwheel twine
+          CIBW_BUILD="cp39-*" cibuildwheel --platform linux
+          CIBW_BUILD="cp310-*" cibuildwheel --platform linux
+          
+      - uses: actions/upload-artifact@v3
+        with:
+          path: ./wheelhouse/*.whl
+
+    
+  publish_python:
+    name: Publish Python
+    needs: build_wheels
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/usearch
+    permissions:
+      id-token: write
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v3.0.2
+        with:
+          path: ./dist/
+
+      - name: Publish to PyPi
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: ./dist/artifact
+          verbose: true
+          print-hash: true
+
+  
+  build_publish_java:
+    name: Build and publish Java
+    needs: versioning
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          persist-credentials: false
+          ref: 'main'
+      - name: Prepare CMake, Conan and PyArrow
+        run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.60.1
+
+      - name: Install ustore dependencies using conan
+        run: |
+          wget -q https://github.com/unum-cloud/ustore-deps/releases/download/v0.1.3/ustore_deps_x86_linux.tar.gz
+          conan profile new --detect default
+          conan profile update settings.compiler.libcxx=libstdc++11 default
+          tar -xzf ./ustore_deps_x86_linux.tar.gz -C ~/.conan
+          conan install ustore_deps/0.12.1@unum/x86_linux -g cmake -s compiler.version=11
+          rm -rf ./ustore_deps_x86_linux.tar.gz
+      
+      - name: Install default jdk
+        run: sudo apt install default-jdk -y
+
+      - name: Build and test java
+        run: |
+          export JAVA_HOME="/usr/lib/jvm/java-11-openjdk-amd64"
+          bash java/pack.sh
+      
+      - name: Publish java
+        run: ./java/gradlew publish
+
+
+  build_publish_docker:
+    name: Build and publish docker
+    needs: versioning
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          persist-credentials: false
+          ref: 'main'
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+        
+      - name: docker login
+        uses: azure/docker-login@v1
+        with:
+          login-server: index.docker.io
+          username: ${{ secrets.DOCKERIO_USERNAME }}
+          password: ${{ secrets.DOCKERIO_PASSWORD }}
+
+      - name: Build Docker
+        run: |
+          export version=$(cat VERSION)
+          sed -i 's/make -j32/make -j4/' ./Dockerfile
+          docker buildx create --use
+          docker buildx build \
+          --platform "linux/amd64,linux/arm64" \
+          --build-arg version=$version \
+          --file ./Dockerfile \
+          --tag unum/ustore:$version-jammy \
+          --tag unum/ustore:latest \
+          --push .
