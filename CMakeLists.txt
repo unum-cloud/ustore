@@ -162,9 +162,9 @@ endif()
 
 if(${USE_CONAN})
   # Engines:
-  include_directories(CONAN_INCLUDE_DIRS_LEVELDB)
+  include_directories(${CONAN_INCLUDE_DIRS_LEVELDB})
   set(LIB_LEVELDB ${CONAN_LIBS_LEVELDB})
-  include_directories(CONAN_INCLUDE_DIRS_ROCKSDB)
+  include_directories(${CONAN_INCLUDE_DIRS_ROCKSDB})
   set(LIB_ROCKSDB ${CONAN_LIBS_ROCKSDB})
 
   # Modalities:  

@@ -52,7 +52,7 @@ class CMakeBuild(build_ext):
             '-DUSTORE_BUILD_API_FLIGHT_CLIENT=1',
             '-DUSTORE_BUILD_SDK_PYTHON=1',
             '-DUSTORE_BUILD_TESTS=0',
-            '-DUSE_PYARROW_LIBS=1',
+            '-DUSTORE_USE_PYARROW=1',
             '-DUSE_CONAN=0'
         ]
 
