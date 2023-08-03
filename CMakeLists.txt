@@ -355,7 +355,7 @@ endif()
 
 if(${USTORE_BUILD_ENGINE_ROCKSDB})
   add_library(ustore_embedded_rocksdb src/engine_rocksdb.cpp src/modality_docs.cpp src/modality_paths.cpp src/modality_graph.cpp src/modality_vectors.cpp)
-  target_link_libraries(ustore_embedded_rocksdb ${LIB_ROCKSDB} pthread yyjson simdjson ${LIB_BSON} ${LIB_PCRE2} ${JEMALLOC_LIBRARIES})
+  target_link_libraries(ustore_embedded_rocksdb ${LIB_ROCKSDB} pthread yyjson simdjson ${LIB_BSON} ${LIB_PCRE2} ${LIB_ARROW_BUNDLED} ${JEMALLOC_LIBRARIES})
   target_compile_definitions(ustore_embedded_rocksdb INTERFACE USTORE_VERSION="${USTORE_VERSION}")
   target_compile_definitions(ustore_embedded_rocksdb INTERFACE USTORE_ENGINE_IS_ROCKSDB=1)
 
