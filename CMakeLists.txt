@@ -162,19 +162,25 @@ endif()
 
 if(${USE_CONAN})
   # Engines:
-  include_directories(${CONAN_INCLUDE_DIRS_LEVELDB})
-  set(LIB_LEVELDB ${CONAN_LIBS_LEVELDB})
-  include_directories(${CONAN_INCLUDE_DIRS_ROCKSDB})
-  set(LIB_ROCKSDB ${CONAN_LIBS_ROCKSDB})
+  if(${USTORE_BUILD_ENGINE_LEVELDB})
+    include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/leveldb.cmake")
+    set(LIB_LEVELDB leveldb)
+  endif()
+
+  if(${USTORE_BUILD_ENGINE_ROCKSDB})
+    include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/rocksdb.cmake")
+    set(LIB_ROCKSDB rocksdb)
+  endif()
 
   # Modalities:  
-  include_directories(${CONAN_INCLUDE_DIRS_FMT})
+  # include_directories(${CONAN_INCLUDE_DIRS_FMT})
   include_directories(${CONAN_INCLUDE_DIRS_JSON})
   include_directories(${CONAN_INCLUDE_DIRS_BSON})
   include_directories(${CONAN_INCLUDE_DIRS_YYJSON})
   include_directories(${CONAN_INCLUDE_DIRS_SIMDJSON})
   include_directories(${CONAN_INCLUDE_DIRS_PCRE2})
 
+  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/fmt.cmake")
   include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/mpack.cmake")
 
   if(${USTORE_USE_JEMALLOC})
@@ -318,7 +324,7 @@ if(${USE_CONAN})
   set(LIB_SSL ssl)
   set(LIB_CRYPTO crypto)
   
-  set(LIB_FMT fmt)
+  set(LIB_FMT fmt::fmt)
   set(LIB_BSON bson-static-1.0) 
   set(LIB_PCRE2 pcre2-8)
 else()
