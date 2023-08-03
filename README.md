@@ -6,17 +6,17 @@ For Artificial Intelligence <sup>4</sup> and Semantic Search <sup>5</sup><br/>
 <br/>
 
 <p align="center">
-<a href="https://www.youtube.com/watch?v=ybWeUf_hC7o"><img height="25" src="assets/icons/youtube.svg" alt="Youtube"></a>
+<a href="https://www.youtube.com/watch?v=ybWeUf_hC7o"><img height="25" width="25" src="https://github.com/unum-cloud/.github/raw/main/assets/youtube.svg" alt="Youtube"></a>
 &nbsp;&nbsp;&nbsp;
-<a href="https://discord.gg/4mxGrenbNt"><img height="25" src="assets/icons/discord.svg" alt="Discord"></a>
+<a href="https://discord.gg/4mxGrenbNt"><img height="25" width="25" src="https://github.com/unum-cloud/.github/raw/main/assets/discord.svg" alt="Discord"></a>
 &nbsp;&nbsp;&nbsp;
-<a href="https://www.linkedin.com/company/unum-cloud/"><img height="25" src="assets/icons/linkedin.svg" alt="LinkedIn"></a>
+<a href="https://www.linkedin.com/company/unum-cloud/"><img height="25" width="25" src="https://github.com/unum-cloud/.github/raw/main/assets/linkedin.svg" alt="LinkedIn"></a>
 &nbsp;&nbsp;&nbsp;
-<a href="https://twitter.com/unum_cloud"><img height="25" src="assets/icons/twitter.svg" alt="Twitter"></a>
+<a href="https://twitter.com/unum_cloud"><img height="25" width="25" src="https://github.com/unum-cloud/.github/raw/main/assets/twitter.svg" alt="Twitter"></a>
 &nbsp;&nbsp;&nbsp;
-<a href="https://unum.cloud/post"><img height="25" src="assets/icons/blog.svg" alt="Blog"></a>
+<a href="https://unum.cloud/post"><img height="25" width="25" src="https://github.com/unum-cloud/.github/raw/main/assets/blog.svg" alt="Blog"></a>
 &nbsp;&nbsp;&nbsp;
-<a href="https://github.com/unum-cloud/ustore"><img height="25" src="assets/icons/github.svg" alt="GitHub"></a>
+<a href="https://github.com/unum-cloud/ukv"><img height="25" width="25" src="https://github.com/unum-cloud/.github/raw/main/assets/github.svg" alt="GitHub"></a>
 </p>
 
 <div align="center">
@@ -81,7 +81,7 @@ GoLang
 Java
 <br/>
 <b>packages</b>:
-<a href="https://pypi.org/project/ustore/">PyPI</a>
+<a href="https://pypi.org/project/ukv/">PyPI</a>
 •
 <a href="#cmake">CMake</a>
 •
@@ -89,7 +89,7 @@ Java
 
 <a href="https://www.youtube.com/watch?v=ybWeUf_hC7o">Youtube</a> intro • 
 <a href="https://discord.gg/4mxGrenbNt">Discord</a> chat • 
-Full <a href="https://unum.cloud/ustore">documentation</a>
+Full <a href="https://unum-cloud.github.io/ustore">documentation</a>
 
 <a href="https://discord.gg/4mxGrenbNt"><img src="https://img.shields.io/discord/1063947616615923875?label=discord"></a>
 &nbsp;&nbsp;
@@ -114,9 +114,9 @@ Installing UStore is a breeze, and the usage is about as simple as a Python `dic
 $ pip install ukv
 $ python
 
-from ustore import ucset
+from ukv import umem
 
-db = ucset.DataBase()
+db = umem.DataBase()
 db.main[42] = 'Hi'
 ```
 
@@ -125,7 +125,7 @@ Would you prefer that data on disk?
 Change one line.
 
 ```python
-from ustore import rocksdb
+from ukv import rocksdb
 
 db = rocksdb.DataBase('/some-folder/')
 ```
@@ -134,7 +134,7 @@ Would you prefer to connect to a remote UStore server?
 UStore comes with an Apache Arrow Flight RPC interface!
 
 ```python
-from ustore import flight_client
+from ukv import flight_client
 
 db = flight_client.DataBase('grpc://0.0.0.0:38709')
 ```
@@ -565,7 +565,6 @@ Upcoming tasks include:
 [ucsb-10]: https://unum.cloud/post/2022-03-22-ucsb
 [ucsb-1]: https://unum.cloud/post/2021-11-25-ycsb
 [ucsb]: https://github.com/unum-cloud/ucsb
-
 [blas]: https://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms
 [flight]: https://arrow.apache.org/docs/format/Flight.html
 [networkx]: https://networkx.org
