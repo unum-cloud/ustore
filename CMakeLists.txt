@@ -26,6 +26,7 @@ option(USTORE_BUILD_API_FLIGHT_CLIENT "Building Apache Arrow Flight RPC client f
 option(USTORE_BUILD_API_FLIGHT_SERVER "Building Apache Arrow Flight RPC server for all backends")
 option(USTORE_BUILD_API_REST_SERVER "Building REST API server for all backends")
 
+option(USTORE_USE_PYARROW "Ready-made arrow libraries from the installed pip package pyarrow")
 option(USTORE_USE_JEMALLOC "Faster allocator, that requires autoconf to be installed")
 option(USTORE_USE_ONEAPI "Faster concurrency primitives from Intel")
 option(USTORE_USE_UUID "Replaces default 64-bit keys with 128-bit UUID compatible integers")
@@ -34,6 +35,10 @@ set(USTORE_ENGINE_UDISK_PATH "" CACHE STRING "Pass a path to UDisk binary to pro
 
 if(${USTORE_BUILD_CLI})
   set(USTORE_BUILD_API_FLIGHT_CLIENT ON)
+endif()
+
+if(USTORE_BUILD_SDK_PYTHON)
+  set(USTORE_USE_PYARROW ON)
 endif()
 
 if(USTORE_BUILD_API_FLIGHT)
@@ -225,7 +230,7 @@ if(${USTORE_BUILD_API_FLIGHT_CLIENT} OR ${USTORE_BUILD_API_FLIGHT_SERVER})
 endif()
 
 if(${USTORE_BUILD_SDK_PYTHON} OR ${USTORE_BUILD_API_FLIGHT_CLIENT} OR ${USTORE_BUILD_API_FLIGHT_SERVER} OR ${USTORE_BUILD_ENGINE_UCSET} OR ${USTORE_BUILD_TESTS})
-  if(NOT ${USE_PYARROW_LIBS})
+  if(NOT ${USTORE_USE_PYARROW})
     if(${USE_CONAN})
       include_directories(${CONAN_INCLUDE_DIRS_ARROW})
     else()
@@ -285,7 +290,7 @@ if(${USTORE_BUILD_BENCHMARKS})
 endif()
 
 if(${USE_CONAN})
-  if (NOT ${USE_PYARROW_LIBS})
+  if (NOT ${USTORE_USE_PYARROW})
     add_library(arrow::arrow STATIC IMPORTED)
     set_property(TARGET arrow::arrow PROPERTY IMPORTED_LOCATION ${CONAN_LIB_DIRS_ARROW}/libarrow.a)
 
@@ -317,7 +322,7 @@ if(${USE_CONAN})
   set(LIB_BSON bson-static-1.0) 
   set(LIB_PCRE2 pcre2-8)
 else()
-  if(NOT ${USE_PYARROW_LIBS})
+  if(NOT ${USTORE_USE_PYARROW})
     set(LIB_ARROW arrow::arrow) 
     set(LIB_ARROW_FLIGHT arrow::flight)
     set(LIB_ARROW_DATASET arrow::dataset)
@@ -488,7 +493,7 @@ if(${USTORE_BUILD_SDK_PYTHON})
 
     string(CONCAT wrap_lib "py_" ${client_lib_name})
     get_target_property(client_dependencies ${client_lib} LINK_LIBRARIES)
-    if(${USE_PYARROW_LIBS})
+    if(${USTORE_USE_PYARROW})
       list(FILTER client_dependencies EXCLUDE REGEX "arrow")
       list(FILTER client_dependencies EXCLUDE REGEX "parquet")
 
