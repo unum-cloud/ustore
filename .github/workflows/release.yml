@@ -140,7 +140,9 @@ jobs:
           rm -rf ./ustore_deps_x86_linux.tar.gz
       
       - name: Install default jdk
-        run: sudo apt install default-jdk -y
+        run: |
+          sudo apt update
+          sudo apt install default-jdk -y
 
       - name: Build and test java
         run: |

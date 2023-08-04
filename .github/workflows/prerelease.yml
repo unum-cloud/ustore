@@ -121,7 +121,9 @@ jobs:
         run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.60.1
       
       - name: Install default jdk
-        run: sudo apt install default-jdk -y
+        run: |
+          sudo apt update
+          sudo apt install default-jdk -y
       
       - name: Install ustore dependencies using conan
         run: |
