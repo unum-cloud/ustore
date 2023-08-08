@@ -82,7 +82,7 @@ static char const* path() {
 static std::string config() {
     auto dir = path();
     if (!dir)
-        return {};
+        return "";
     return fmt::format(R"({{"version": "1.0", "directory": "{}"}})", dir);
 }
 
@@ -2281,7 +2281,7 @@ int main(int argc, char** argv) {
     if (srv_id == 0) {
         usleep(1); // TODO Any statement is required to be run for successful `execl` run...
         std::string cli_args = fmt::format("--quiet --config {}", path());
-        execl(srv_path.c_str(), srv_path.c_str(), cli_args, (char*)(NULL));
+        execl(srv_path.c_str(), srv_path.c_str(), cli_args.c_str(), (char*)(NULL));
         exit(0);
     }
     usleep(1000000); // 1 sec
