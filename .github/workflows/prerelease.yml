@@ -84,11 +84,17 @@ jobs:
       - name: Change Permissions
         run: chmod +x /home/runner/work/ustore/ustore/*
       
-      - name: Run Tests
+      - name: Run Embeded servers unit tests
         run: |
           mkdir -p ./tmp/ustore/
-          export USTORE_TEST_PATH="./tmp/ustore/"
-          for test in $(ls /home/runner/work/ustore/ustore/*test_units*); do  echo -e "------ \e[93mRunning $test\e[0m ------"; timeout -v --kill-after=5 300 $test; done
+          export USTORE_TEST_PATH="./tmp/"
+          for test in $(ls /home/runner/work/ustore/ustore/*test_units_ustore_embedded*); do
+            echo -e "------ \e[93mRunning $test\e[0m ------"
+            timeout -v --kill-after=5 300 $test
+          done
+
+      - name: Run flight client test
+        run: /home/runner/work/ustore/ustore/test_units_ustore_flight_client
 
 
   build_test_wheel:
