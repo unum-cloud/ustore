@@ -2280,7 +2280,8 @@ int main(int argc, char** argv) {
     auto srv_id = fork();
     if (srv_id == 0) {
         usleep(1); // TODO Any statement is required to be run for successful `execl` run...
-        execl(srv_path.c_str(), srv_path.c_str(), "--quiet", (char*)(NULL));
+        std::string cli_args = fmt::format("--quiet --config {}", path());
+        execl(srv_path.c_str(), srv_path.c_str(), cli_args, (char*)(NULL));
         exit(0);
     }
     usleep(1000000); // 1 sec
