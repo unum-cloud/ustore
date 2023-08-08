@@ -32,9 +32,9 @@ before-build = [
     "conan profile update settings.compiler.version=11 default",
     "conan profile update settings.compiler.libcxx=libstdc++11 default",
     
-    "wget -q https://github.com/unum-cloud/ustore-deps/releases/download/v0.1.3/ustore_deps_x86_linux.tar.gz",
-    "tar -xzvf {project}/ustore_deps_x86_linux.tar.gz -C ~/.conan",
-    "conan install ustore_deps/0.12.1@unum/x86_linux -g cmake",
+    "wget -q https://github.com/unum-cloud/ustore-deps/releases/download/v0.1.4/ustore_deps_x86_linux.tar.gz",
+    "tar -xzf {project}/ustore_deps_x86_linux.tar.gz -C ~/.conan",
+    "conan install ustore_deps/0.13.2@unum/x86_linux -g cmake",
     "rm -rf {project}/ustore_deps_x86_linux.tar.gz",
 
     "echo \"-DCMAKE_BUILD_TYPE=Release -DPYARROW_DIR=${PYST}/pyarrow/\" > ${CMAKE_ARGS_F}",
