@@ -30,13 +30,18 @@ RUN pip install conan==1.60.1
 RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
         wget -O $ARCHIVE https://github.com/unum-cloud/ustore-deps/releases/download/v0.1.2/ustore_deps_x86_linux.tar.gz; \
     elif [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
-        wget -O $ARCHIVE https://github.com/unum-cloud/ustore-deps/releases/download/v0.1.2/ustore_deps_arm_linux.tar.gz; \ 
+        wget -O $ARCHIVE https://github.com/unum-cloud/ustore-deps/releases/download/v0.1.2/ustore_deps_arm_linux.tar.gz; \
     fi
 
 RUN conan profile new --detect default && \
     conan profile update settings.compiler.libcxx=libstdc++11 default && \
-    tar -xzf $ARCHIVE -C ~/.conan && \
-    conan install ustore_deps/0.12.1@unum/x86_linux -g cmake -s compiler.version=11 && \
+    tar -xzf $ARCHIVE -C ~/.conan
+
+RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
+        conan install ustore_deps/0.12.1@unum/x86_linux -g cmake -s compiler.version=11; \
+    elif [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
+        conan install ustore_deps/0.12.1@unum/arm_linux -g cmake -s compiler.version=11; \
+    fi && \
     rm -rf $ARCHIVE
 
 RUN cmake \
