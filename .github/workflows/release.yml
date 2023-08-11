@@ -96,7 +96,7 @@ jobs:
     
   publish_python:
     name: Publish Python
-    needs: deploy
+    needs: build_wheel
     runs-on: ubuntu-latest
     environment:
       name: pypi
