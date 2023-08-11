@@ -288,8 +288,7 @@ if(${USTORE_BUILD_API_REST_SERVER})
 endif()
 
 if(${USTORE_BUILD_TESTS})
-  if(${USE_CONAN})
-    include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/gtest.cmake")
+  include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/gtest.cmake")
 endif()
 
 if(${USTORE_BUILD_BENCHMARKS})
