@@ -74,7 +74,7 @@ jobs:
   build_wheel:
     name: Build python
     runs-on: ubuntu-latest
-    needs: versioning
+    needs: deploy
     steps:
       - uses: actions/checkout@v3
         with:
@@ -96,7 +96,7 @@ jobs:
     
   publish_python:
     name: Publish Python
-    needs: build_wheels
+    needs: deploy
     runs-on: ubuntu-latest
     environment:
       name: pypi
