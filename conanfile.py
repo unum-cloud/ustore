@@ -42,10 +42,8 @@ class ConanUStore(ConanFile):
         'with_arrow': False,
     }
 
-
     def layout(self):
         cmake_layout(self)
-
 
     def generate(self):
         tc = CMakeToolchain(self)
@@ -114,16 +112,15 @@ class ConanUStore(ConanFile):
         tc.cache_variables["ENABLE_HTML_DOCS"] = "OFF"
         tc.generate()
 
-
     def configure(self):
         self.options["openssl"].shared = False
 
         self.options["pcre2"].fPIC = True
         self.options["pcre2"].support_jit = True
         self.options["pcre2"].build_pcre2grep = True
-        
+
         self.options['re2'].shared = False
-        
+
         self.options['xsimd'].xtl_complex = False
 
         self.options["arrow"].shared = False
@@ -148,9 +145,9 @@ class ConanUStore(ConanFile):
         self.options["arrow"].cli = True
         self.options["arrow"].gandiva = False
         self.options["arrow"].with_s3 = False
-        
+
         self.options['grpc'].shared = False
-        
+
         self.options['googleapis'].shared = False
         self.options['googleapis'].fPIC = False
 
@@ -160,18 +157,17 @@ class ConanUStore(ConanFile):
         self.options["mongo-c-driver"].with_snappy = False
         self.options["mongo-c-driver"].with_zlib = False
         self.options["mongo-c-driver"].with_zstd = False
-        
+
         self.options["leveldb"].shared = False
         self.options["leveldb"].fPIC = True
         self.options["leveldb"].with_snappy = False
         self.options["leveldb"].with_crc32c = False
-        
+
         self.options["abseil"].shared = False
-        
+
         self.options["rocksdb"].shared = False
         self.options["rocksdb"].fPIC = True
         self.options["rocksdb"].use_rtti = True
-
 
     def requirements(self):
         self.requires('arrow/10.0.1')
@@ -188,7 +184,6 @@ class ConanUStore(ConanFile):
         self.requires('yyjson/0.6.0')
         self.requires('simdjson/3.1.7')
 
-        self.requires('gtest/1.13.0')
         self.requires('benchmark/1.7.1')
         self.requires('argparse/2.9')
         self.requires('clipp/1.2.3')
@@ -201,21 +196,18 @@ class ConanUStore(ConanFile):
         # self.requires('c-ares/1.19.0')
         # self.requires('protobuf/3.21.9')
         # self.requires('abseil/20220623.0')
-        
+
         self.requires('leveldb/1.23')
         # self.requires('rocksdb/7.10.2@unum/ustore')
         self.requires('rocksdb/6.29.5')
-        
 
     def build(self):
         cmake = CMake(self)
         cmake.configure()
         cmake.build()
-    
-    
+
     def system_requirements(self):
         pass
-    
 
     def package_info(self):
 
@@ -224,7 +216,6 @@ class ConanUStore(ConanFile):
         self.cpp_info.components["libarrow_flight.a"].libs = [
             f"arrow_flight.a"]
 
-
     def package(self):
         if self.options['arrow'].shared:
             self.copy(pattern="*.dll", dst="bin", keep_path=False)
@@ -232,7 +223,6 @@ class ConanUStore(ConanFile):
         self.copy(pattern="*.a", dst="lib", keep_path=False)
         self.copy(pattern="*.h", dst="lib", keep_path=False)
         self.copy(pattern="*.hpp", dst="lib", keep_path=False)
-        
 
     def _parquet(self, required=False):
         if required or self.options['arrow'].parquet == "auto":

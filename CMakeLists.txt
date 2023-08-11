@@ -289,10 +289,7 @@ endif()
 
 if(${USTORE_BUILD_TESTS})
   if(${USE_CONAN})
-    include_directories(${CONAN_INCLUDE_DIRS_GTEST})
-  else()
     include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/gtest.cmake")
-  endif()
 endif()
 
 if(${USTORE_BUILD_BENCHMARKS})
