@@ -163,7 +163,7 @@ endif()
 if(${USE_CONAN})
   # Engines:
   if(${USTORE_BUILD_ENGINE_LEVELDB})
-    if(${USTORE_BUILD_SDK_PYTHON})
+    if(${USTORE_BUILD_SDK_PYTHON} OR ${USTORE_BUILD_BUNDLES})
       include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/leveldb.cmake")
       set(LIB_LEVELDB leveldb)
     else()
@@ -173,12 +173,12 @@ if(${USE_CONAN})
   endif()
 
   if(${USTORE_BUILD_ENGINE_ROCKSDB})
-    if(${USTORE_BUILD_SDK_PYTHON})
+    if(${USTORE_BUILD_SDK_PYTHON} OR ${USTORE_BUILD_BUNDLES})
       include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/rocksdb.cmake")
       set(LIB_ROCKSDB rocksdb)
     else()
       include_directories(${CONAN_INCLUDE_DIRS_ROCKSDB})
-      set(LIB_ROCKSDB ${CONAN_LIBS_ROCKSDB})
+      set(LIB_ROCKSDB rocksdb)
     endif()
   endif()
 
@@ -309,24 +309,31 @@ if(${USE_CONAN})
   if (NOT ${USTORE_USE_PYARROW})
     add_library(arrow::arrow STATIC IMPORTED)
     set_property(TARGET arrow::arrow PROPERTY IMPORTED_LOCATION ${CONAN_LIB_DIRS_ARROW}/libarrow.a)
+    set(LIB_ARROW arrow::arrow)
 
     add_library(arrow::flight STATIC IMPORTED)
     set_property(TARGET arrow::flight PROPERTY IMPORTED_LOCATION ${CONAN_LIB_DIRS_ARROW}/libarrow_flight.a)
+    set(LIB_ARROW_FLIGHT arrow::flight)
 
     add_library(arrow::dataset STATIC IMPORTED)
     set_property(TARGET arrow::dataset PROPERTY IMPORTED_LOCATION ${CONAN_LIB_DIRS_ARROW}/libarrow_dataset.a)
+    set(LIB_ARROW_DATASET arrow::dataset)
 
     add_library(arrow::parquet STATIC IMPORTED)
     set_property(TARGET arrow::parquet PROPERTY IMPORTED_LOCATION ${CONAN_LIB_DIRS_ARROW}/libparquet.a)
-  
+    set(LIB_ARROW_PARQUET arrow::parquet)
+
+    add_library(thrift STATIC IMPORTED)
+    set_property(TARGET thrift PROPERTY IMPORTED_LOCATION ${CONAN_LIB_DIRS_THRIFT}/libthrift.a)
+    set(LIB_THRIFT thrift)
+
+    add_library(re2 STATIC IMPORTED)
+    set_property(TARGET re2 PROPERTY IMPORTED_LOCATION ${CONAN_LIB_DIRS_RE2}/libre2.a)
+    set(LIB_RE2 re2)
+
     # add_library(arrow::bundled STATIC IMPORTED)
     # set_property(TARGET arrow::bundled ${CONAN_LIBS_RE2} ${CONAN_LIBS_UTF8PROC} ${CONAN_LIBS_THRIFT} ${CONAN_LIBS_ABSEIL} ${CONAN_LIBS_SNAPPY} ${CONAN_LIBS_PROTOBUF} ${CONAN_LIBS_ZLIB} ${CONAN_LIBS_C-ARES} ${CONAN_LIBS_GRPC})
-    set(LIB_ARROW_BUNDLED ${CONAN_LIBS_RE2} ${CONAN_LIBS_UTF8PROC} ${CONAN_LIBS_THRIFT} ${CONAN_LIBS_ABSEIL} ${CONAN_LIBS_SNAPPY} ${CONAN_LIBS_PROTOBUF} ${CONAN_LIBS_ZLIB} ${CONAN_LIBS_C-ARES} ${CONAN_LIBS_GRPC})
-
-    set(LIB_ARROW arrow::arrow)
-    set(LIB_ARROW_FLIGHT arrow::flight)
-    set(LIB_ARROW_DATASET arrow::dataset)
-    set(LIB_ARROW_PARQUET arrow::parquet)
+    set(LIB_ARROW_BUNDLED ${LIB_RE2} ${CONAN_LIBS_UTF8PROC} thriftz thriftnb ${LIB_THRIFT} ${CONAN_LIBS_ABSEIL} ${CONAN_LIBS_SNAPPY} ${CONAN_LIBS_PROTOBUF} ${CONAN_LIBS_ZLIB} ${CONAN_LIBS_C-ARES} ${CONAN_LIBS_GRPC})
     # set(LIB_ARROW_BUNDLED arrow::bundled)
   endif()
 
