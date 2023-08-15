@@ -65,7 +65,7 @@ RUN if [ "$TEST_USTORE" == "True" ]; then \
             timeout -v --kill-after=5 300 $test; \
         done && \
         # Run Arrow Flight tests
-        ./build_release/build/bin/test_units_ustore_flight_client && exit 0;
+        ./build_release/build/bin/test_units_ustore_flight_client && exit 0; \
     fi
 
 
