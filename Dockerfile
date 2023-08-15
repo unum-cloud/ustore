@@ -47,7 +47,7 @@ RUN package_version=$(ls ~/.conan/data/ustore_deps/) && \
     fi && \
     rm -rf $ARCHIVE
 
-RUN if [ "$TEST_USTORE" == "True" ]; then \
+RUN if [ "$TEST_USTORE" = "True" ]; then \
         cmake -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
         -DUSTORE_BUILD_ENGINE_UCSET=1 \
         -DUSTORE_BUILD_ENGINE_LEVELDB=1 \
