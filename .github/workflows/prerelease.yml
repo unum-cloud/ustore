@@ -100,7 +100,7 @@ jobs:
 
 
   build_test_ustore_arm64:
-    name: Build and test arm docker
+    name: Build and Test Libraries arm
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
