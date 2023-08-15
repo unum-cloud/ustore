@@ -22,7 +22,7 @@ jobs:
     - run: cp .github/workflows/package.json . && npm install && npx semantic-release
   
   
-  build_ustore:
+  build_ustore_amd64:
     name: Build Libraries
     runs-on: ubuntu-latest
     steps:
@@ -38,11 +38,13 @@ jobs:
 
       - name: Install Conan dependencies
         run: |
-          wget -q https://github.com/unum-cloud/ustore-deps/releases/download/v0.1.3/ustore_deps_x86_linux.tar.gz
+          last_tag=$(curl https://api.github.com/repos/unum-cloud/ustore-deps/releases/latest | grep -i 'tag_name' | awk -F '\"' '{print $4}')
+          wget -q https://github.com/unum-cloud/ustore-deps/releases/download/"$last_tag"/ustore_deps_x86_linux.tar.gz
           conan profile new --detect default
           conan profile update settings.compiler.libcxx=libstdc++11 default
           tar -xzf ./ustore_deps_x86_linux.tar.gz -C ~/.conan
-          conan install ustore_deps/0.12.1@unum/x86_linux -g cmake -s compiler.version=11
+          package_version=$(ls ~/.conan/data/ustore_deps/)
+          conan install ustore_deps/"$package_version"@unum/x86_linux -g cmake -s compiler.version=11
           rm -rf ./ustore_deps_x86_linux.tar.gz
 
       - name: Configure CMake
@@ -95,6 +97,37 @@ jobs:
 
       - name: Run Arrow Flight tests
         run: /home/runner/work/ustore/ustore/test_units_ustore_flight_client
+
+
+  build_test_ustore_arm64:
+    name: Build and publish docker
+    needs: versioning
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          persist-credentials: false
+          ref: 'main'
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build Docker
+        run: |
+          export version=$(cat VERSION)
+          sed -i 's/make -j32/make -j4/' ./Dockerfile
+          docker buildx create --use
+          docker buildx build \
+          --platform "linux/arm64" \
+          --build-arg version=$version \
+          --build-arg TEST_USTORE="True" \
+          --file ./Dockerfile \
+          --tag unum/ustore:latest \
+          --load .
 
 
   test_python:
