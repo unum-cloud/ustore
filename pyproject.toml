@@ -53,4 +53,4 @@ skip = ["*musllinux*", "*i686*", "pp*", "cp36-*"]
 
 [tool.cibuildwheel.linux]
 repair-wheel-command = "auditwheel repair --lib-sdir . -w {dest_dir} {wheel}"
-archs = ["x86_64", "arm64"]
+archs = ["x86_64", "aarch64"]
