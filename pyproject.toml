@@ -37,7 +37,7 @@ before-build = [
     "wget -q https://github.com/unum-cloud/ustore-deps/releases/download/${last_tag}/${package_name}.tar.gz",
     "tar -xzf {project}/${package_name}.tar.gz -C ~/.conan",
     "package_version=$(ls ~/.conan/data/ustore_deps/)",
-    "if $arch=='amd64'; then export package_arch='x86_linux'; elif $arch=="arm64"; then export package_arch='arm_linux'; fi",
+    "if $arch=='amd64'; then export package_arch='x86_linux'; elif $arch=='arm64'; then export package_arch='arm_linux'; fi",
     "conan install ustore_deps/${package_version}@unum/${package_arch} -g cmake",
     "rm -rf {project}/${package_name}.tar.gz",
 
