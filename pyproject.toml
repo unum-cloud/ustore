@@ -32,7 +32,7 @@ before-build = [
     "conan profile update settings.compiler.version=11 default",
     "conan profile update settings.compiler.libcxx=libstdc++11 default",
     "export arch=$(rpm --eval '%{_arch}')",
-    "if $arch=='amd64'; then export package_name='ustore_deps_x86_linux'; elif $arch=="arm64"; then export package_name='ustore_deps_arm_linux'; fi",
+    "if $arch=='amd64'; then export package_name='ustore_deps_x86_linux'; elif $arch=='arm64'; then export package_name='ustore_deps_arm_linux'; fi",
     "last_tag=$(curl https://api.github.com/repos/unum-cloud/ustore-deps/releases/latest | grep -i 'tag_name' | awk -F '\"' '{print $4}')",
     "wget -q https://github.com/unum-cloud/ustore-deps/releases/download/${last_tag}/${package_name}.tar.gz",
     "tar -xzf {project}/${package_name}.tar.gz -C ~/.conan",
