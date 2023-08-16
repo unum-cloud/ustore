@@ -24,8 +24,8 @@ jobs:
     - run: cp .github/workflows/package.json . && npm install && npx semantic-release
   
   
-  build_test_ustore_amd64:
-    name: Build and Test Libraries on AMD
+  build_ustore_amd64:
+    name: Build Libraries on AMD
     runs-on: ubuntu-latest
     if: ${{ github.event_name == 'push' }}
     steps:
@@ -64,20 +64,11 @@ jobs:
       - name: Build   
         run: make -j 4 -C ./build_release
 
-      - name: Run embeded tests
-        run: |
-          mkdir ../test_path
-          mv ./build_release/build/bin/* ../test_path/
-          rm -rf * && mv ../test_path/* .
-          mkdir -p ./tmp/ustore/
-          export USTORE_TEST_PATH="./tmp/"
-          for test in $(ls /home/runner/work/ustore/ustore/*test_units_ustore_embedded*); do
-            echo -e "------ \e[93mRunning $test\e[0m ------"
-            timeout -v --kill-after=5 300 $test
-          done
-
-      - name: Run Arrow Flight tests
-        run: /home/runner/work/ustore/ustore/test_units_ustore_flight_client
+      - name: Upload Binaries
+        uses: actions/upload-artifact@v3.1.1
+        with:
+          name: binaries
+          path: build_release/build/bin/*
 
       - name: Upload archive to release Assets
         uses: xresloader/upload-to-github-release@v1
@@ -86,6 +77,36 @@ jobs:
         with:
           file: "./build_release/build/bin/ustore_flight_server*"
           update_latest_release: true
+  
+
+  test_ustore_amd64:
+    name: Test Libraries on AMD
+    runs-on: ubuntu-latest
+    needs: build_ustore_amd64
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          persist-credentials: false
+          ref: 'main-dev'
+
+      - name: Download a Build Artifact
+        uses: actions/download-artifact@v3.0.1
+        with:
+          name: binaries
+
+      - name: Change permissions
+        run: chmod +x /home/runner/work/ustore/ustore/*
+      
+      - name: Run embeded tests
+        run: |
+          mkdir -p ./tmp/ustore/
+          export USTORE_TEST_PATH="./tmp/"
+          for test in $(ls /home/runner/work/ustore/ustore/*test_units_ustore_embedded*); do
+            echo -e "------ \e[93mRunning $test\e[0m ------"
+            timeout -v --kill-after=5 300 $test
+          done
+      - name: Run Arrow Flight tests
+        run: /home/runner/work/ustore/ustore/test_units_ustore_flight_client
 
 
   build_test_ustore_arm64:
