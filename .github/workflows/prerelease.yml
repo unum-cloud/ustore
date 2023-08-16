@@ -69,14 +69,6 @@ jobs:
         with:
           name: binaries
           path: build_release/build/bin/*
-
-      - name: Upload archive to release Assets
-        uses: xresloader/upload-to-github-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          file: "./build_release/build/bin/ustore_flight_server*"
-          update_latest_release: true
   
 
   test_ustore_amd64:
