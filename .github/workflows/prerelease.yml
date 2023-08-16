@@ -132,6 +132,9 @@ jobs:
   test_python:
     name: Test Python 3.9 & 3.10
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: ["x86_64", "aarch64"]
     steps:
       - uses: actions/checkout@v3
         with:
@@ -146,6 +149,8 @@ jobs:
           pip install cibuildwheel twine
           CIBW_BUILD="cp39-*" cibuildwheel --platform linux
           CIBW_BUILD="cp310-*" cibuildwheel --platform linux
+        env:
+          CIBW_ARCHS: ${{ matrix.arch }}
   
 
   test_java:
