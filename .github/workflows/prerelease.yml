@@ -66,15 +66,18 @@ jobs:
 
       - name: Run embeded tests
         run: |
-          mkdir -p ./build_release/build/bin/tmp/ustore/
+          mkdir ../test_path
+          mv ./build_release/build/bin/* ../test_path/
+          rm -rf * && mv ../test_path/* .
+          mkdir -p ./tmp/ustore/
           export USTORE_TEST_PATH="./tmp/"
-          for test in $(ls ./build_release/build/bin/*test_units_ustore_embedded*); do
+          for test in $(ls /home/runner/work/ustore/ustore/*test_units_ustore_embedded*); do
             echo -e "------ \e[93mRunning $test\e[0m ------"
             timeout -v --kill-after=5 300 $test
           done
 
       - name: Run Arrow Flight tests
-        run: ./build_release/build/bin/test_units_ustore_flight_client
+        run: /home/runner/work/ustore/ustore/test_units_ustore_flight_client
 
       - name: Upload archive to release Assets
         uses: xresloader/upload-to-github-release@v1
@@ -88,7 +91,7 @@ jobs:
   build_test_ustore_arm64:
     name: Build and Test Libraries on ARM
     runs-on: ubuntu-latest
-    if: ${{ github.ref_name == 'main-dev' && github.event_name == 'workflow_dispatch' }}
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -123,7 +126,7 @@ jobs:
   build_and_test_python:
     name: Build and Test Python ${{ matrix.arch }}
     runs-on: ubuntu-latest
-    if: ${{ github.ref_name == 'main-dev' && github.event_name == 'workflow_dispatch' }}
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     strategy:
       matrix:
         arch: ["x86_64", "aarch64"]
@@ -154,7 +157,7 @@ jobs:
   build_and_test_java:
     name: Build and Test Java on AMD
     runs-on: ubuntu-latest
-    if: ${{ github.ref_name == 'main-dev' && github.event_name == 'workflow_dispatch' }}
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
