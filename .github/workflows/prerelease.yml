@@ -68,10 +68,10 @@ jobs:
         run: |
           chmod +x ./build_release/build/bin/*
           mkdir -p ./build_release/build/bin/tmp/ustore/
-          export USTORE_TEST_PATH="./tmp/"
 
       - name: Run embeded tests
         run: |
+          export USTORE_TEST_PATH="./tmp/"
           for test in $(ls ./build_release/build/bin/*test_units_ustore_embedded*); do
             echo -e "------ \e[93mRunning $test\e[0m ------"
             timeout -v --kill-after=5 300 $test
