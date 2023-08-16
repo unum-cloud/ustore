@@ -128,7 +128,7 @@ jobs:
           print-hash: true
 
   
-  build_publish_java:
+  build_and_publish_java:
     name: Build and publish Java
     needs: versioning
     runs-on: ubuntu-latest
@@ -166,7 +166,7 @@ jobs:
         run: ./java/gradlew publish
 
 
-  build_publish_docker:
+  build_and_publish_docker:
     name: Build and publish docker
     needs: versioning
     runs-on: ubuntu-latest

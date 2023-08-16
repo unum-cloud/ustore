@@ -22,8 +22,8 @@ jobs:
     - run: cp .github/workflows/package.json . && npm install && npx semantic-release
   
   
-  build_ustore_amd64:
-    name: Build Libraries
+  build_test_ustore_amd64:
+    name: Build and Test Libraries on AMD
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -61,42 +61,29 @@ jobs:
       - name: Build   
         run: make -j 4 -C ./build_release
 
-      - name: Upload Binaries
-        uses: actions/upload-artifact@v3.1.1
-        with:
-          name: binaries
-          path: build_release/build/bin/*
+      - name: Prepare Test
+        run: |
+          chmod +x ./build_release/build/bin/*
+          mkdir -p ./build_release/build/bin/tmp/ustore/
+          export USTORE_TEST_PATH="./build_release/build/bin/tmp/"
 
-
-  test_cpp:
-    name: Test C++ on AMD
-    runs-on: ubuntu-latest
-    needs: build_ustore_amd64
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          persist-credentials: false
-          ref: 'main-dev'
-
-      - name: Download a Build Artifact
-        uses: actions/download-artifact@v3.0.1
-        with:
-          name: binaries
-
-      - name: Change permissions
-        run: chmod +x /home/runner/work/ustore/ustore/*
-      
       - name: Run embeded tests
         run: |
-          mkdir -p ./tmp/ustore/
-          export USTORE_TEST_PATH="./tmp/"
-          for test in $(ls /home/runner/work/ustore/ustore/*test_units_ustore_embedded*); do
+          for test in $(ls ./build_release/build/bin/*test_units_ustore_embedded*); do
             echo -e "------ \e[93mRunning $test\e[0m ------"
             timeout -v --kill-after=5 300 $test
           done
 
       - name: Run Arrow Flight tests
-        run: /home/runner/work/ustore/ustore/test_units_ustore_flight_client
+        run: ./build_release/build/bin/test_units_ustore_flight_client
+
+      - name: Upload archive to release Assets
+        uses: xresloader/upload-to-github-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          file: "ustore_flight_server*"
+          update_latest_release: true
 
 
   build_test_ustore_arm64:
@@ -133,8 +120,8 @@ jobs:
           --load .
 
 
-  test_python:
-    name: Test Python 3.9 & 3.10
+  build_and_test_python:
+    name: Build and Test Python ${{ matrix.arch }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -163,8 +150,8 @@ jobs:
           CIBW_ARCHS_LINUX: ${{ matrix.arch }}
   
 
-  test_java:
-    name: Test Java
+  build_and_test_java:
+    name: Build and Test Java on AMD
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
