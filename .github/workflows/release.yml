@@ -256,7 +256,7 @@ jobs:
           docker buildx build \
           --platform "linux/amd64,linux/arm64" \
           --build-arg version=$version \
-          --build-arg TEST_USTORE="False"
+          --build-arg TEST_USTORE="False" \
           --file ./Dockerfile \
           --tag unum/ustore:$version-jammy \
           --tag unum/ustore:latest \
