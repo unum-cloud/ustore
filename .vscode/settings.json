@@ -122,6 +122,9 @@
         "__bits": "cpp",
         "__std_stream": "cpp"
     },
+    "[cpp]": {
+        "editor.defaultFormatter": "xaver.clang-format"
+    },
     "java.configuration.updateBuildConfiguration": "automatic",
     "python.testing.pytestEnabled": true,
     "python.testing.pytestArgs": [
