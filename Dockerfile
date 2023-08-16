@@ -60,12 +60,9 @@ RUN if [ "$TEST_USTORE" = "True" ]; then \
         mkdir -p ./tmp/ustore/ && \
         export USTORE_TEST_PATH="./tmp/" && \
         # Run embeded tests
-        for test in $(ls ./build_release/build/bin/*test_units_ustore_embedded*); do \
-            echo -e "------ \e[93mRunning $test\e[0m ------" \
-            timeout -v --kill-after=5 300 $test; \
-        done && \
-        # Run Arrow Flight tests
-        ./build_release/build/bin/test_units_ustore_flight_client && exit 0; \
+        for test in $(ls ./build_release/build/bin/*test_units_ustore_embedded*); do echo -e "------ \e[93mRunning $test\e[0m ------"; timeout -v --kill-after=5 300 $test; done && \
+        ./build_release/build/bin/test_units_ustore_flight_client && \
+        exit 0; \
     fi
 
 
