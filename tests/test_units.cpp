@@ -66,6 +66,9 @@ static json_t json_parse(char const* begin, char const* end) {
     EXPECT_EQ(json_t::from_msgpack(str_begin(str1), str_end(str1)), json_parse(str_begin(str2), str_end(str2)));
 
 static char const* path() {
+    #if defined(USTORE_FLIGHT_CLIENT)
+        return nullptr;
+    #endif
     char* path = std::getenv("USTORE_TEST_PATH");
     if (path)
         return std::strlen(path) ? path : nullptr;
