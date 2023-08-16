@@ -150,11 +150,13 @@ jobs:
         with:
           platforms: all
 
-      - name: Build wheels
-        uses: pypa/cibuildwheel@v2.15.0
+      - name: Build wheel
+        run: |
+          pip install cibuildwheel twine
+          CIBW_BUILD="cp39-*" cibuildwheel --platform linux
+          CIBW_BUILD="cp310-*" cibuildwheel --platform linux
         env:
           CIBW_ARCHS_LINUX: ${{ matrix.arch }}
-          CIBW_BUILD: cp39-* cp310-*
   
 
   test_java:
