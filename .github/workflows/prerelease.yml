@@ -137,9 +137,9 @@ jobs:
 
 
   build_and_test_python:
-    name: Build and Test Python ${{ matrix.arch }}
+    name: Build and Test Python ${{ matrix.python }} on ${{ matrix.arch }}
     runs-on: ubuntu-latest
-    # if: ${{ github.event_name == 'workflow_dispatch' }}
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     strategy:
       matrix:
         arch: ["x86_64", "aarch64"]
@@ -163,7 +163,6 @@ jobs:
         run: |
           pip install cibuildwheel twine
           CIBW_BUILD=${{ matrix.python }} cibuildwheel --platform linux
-          # CIBW_BUILD="cp310-*" cibuildwheel --platform linux
         env:
           CIBW_ARCHS_LINUX: ${{ matrix.arch }}
   
