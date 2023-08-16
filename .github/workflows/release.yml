@@ -192,6 +192,11 @@ jobs:
       - name: Prepare CMake, Conan and PyArrow
         run: python -m pip install --force-reinstall numpy pyarrow cmake conan==1.60.1
 
+      - name: Install default jdk
+        run: |
+          sudo apt update
+          sudo apt install default-jdk -y
+
       - name: Install UStore dependencies using conan
         run: |
           last_tag=$(curl https://api.github.com/repos/unum-cloud/ustore-deps/releases/latest | grep -i 'tag_name' | awk -F '\"' '{print $4}')
@@ -202,14 +207,12 @@ jobs:
           package_version=$(ls ~/.conan/data/ustore_deps/)
           conan install ustore_deps/"$package_version"@unum/x86_linux -g cmake -s compiler.version=11
           rm -rf ./ustore_deps_x86_linux.tar.gz
-      
-      - name: Install default jdk
-        run: |
-          sudo apt update
-          sudo apt install default-jdk -y
 
       - name: Build and test java
         run: |
+          mkdir -p ./tmp
+          export USTORE_TEST_PATH="./tmp/"
+          sed -i 's/make -j/make -j4/' /home/runner/work/ustore/ustore/java/pack.sh
           export JAVA_HOME="/usr/lib/jvm/java-11-openjdk-amd64"
           bash java/pack.sh
       
