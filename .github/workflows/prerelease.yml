@@ -64,13 +64,9 @@ jobs:
       - name: Build   
         run: make -j 4 -C ./build_release
 
-      - name: Prepare Test
-        run: |
-          chmod +x ./build_release/build/bin/*
-          mkdir -p ./build_release/build/bin/tmp/ustore/
-
       - name: Run embeded tests
         run: |
+          mkdir -p ./build_release/build/bin/tmp/ustore/
           export USTORE_TEST_PATH="./tmp/"
           for test in $(ls ./build_release/build/bin/*test_units_ustore_embedded*); do
             echo -e "------ \e[93mRunning $test\e[0m ------"
@@ -85,7 +81,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          file: "ustore_flight_server*"
+          file: "./build_release/build/bin/ustore_flight_server*"
           update_latest_release: true
 
 
