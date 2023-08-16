@@ -3,7 +3,8 @@ name: Pre-Release
 on:
   push:
     branches: ["main-dev"]
-  workflow_dispatch:
+
+  workflow_dispatch: {}
 
 env:
   GH_TOKEN: ${{ secrets.SEMANTIC_RELEASE_TOKEN }}
@@ -65,19 +66,22 @@ jobs:
 
       - name: Prepare Test
         run: |
-          chmod +x ./build_release/build/bin/*
-          mkdir -p ./build_release/build/bin/tmp/ustore/
-          export USTORE_TEST_PATH="./build_release/build/bin/tmp/"
+          mkdir test_path
+          mv ./build_release/build/bin/* test_path
+          chmod +x ./test_path/*
+          mkdir -p ./test_path/tmp/ustore/
+
 
       - name: Run embeded tests
         run: |
-          for test in $(ls ./build_release/build/bin/*test_units_ustore_embedded*); do
+          cd test_path/ && export USTORE_TEST_PATH="./tmp/"
+          for test in $(ls *test_units_ustore_embedded*); do
             echo -e "------ \e[93mRunning $test\e[0m ------"
             timeout -v --kill-after=5 300 $test
           done
 
       - name: Run Arrow Flight tests
-        run: ./build_release/build/bin/test_units_ustore_flight_client
+        run: ./test_path/test_units_ustore_flight_client
 
       - name: Upload archive to release Assets
         uses: xresloader/upload-to-github-release@v1
