@@ -10,7 +10,7 @@ filterwarnings = ["error"]
 testpaths = ["python/tests"]
 
 [tool.cibuildwheel]
-build-verbosity = 3
+build-verbosity = 0
 #manylinux-x86_64-image = "manylinux_2_28"
 environment = "CMAKE_ARGS_F=/tmp/cmake_args"
 
