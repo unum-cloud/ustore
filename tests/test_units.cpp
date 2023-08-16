@@ -66,9 +66,9 @@ static json_t json_parse(char const* begin, char const* end) {
     EXPECT_EQ(json_t::from_msgpack(str_begin(str1), str_end(str1)), json_parse(str_begin(str2), str_end(str2)));
 
 static char const* path() {
-    #if defined(USTORE_FLIGHT_CLIENT)
-        return nullptr;
-    #endif
+    // #if defined(USTORE_FLIGHT_CLIENT)
+    //     return nullptr;
+    // #endif
     char* path = std::getenv("USTORE_TEST_PATH");
     if (path)
         return std::strlen(path) ? path : nullptr;
@@ -2284,6 +2284,7 @@ int main(int argc, char** argv) {
     if (srv_id == 0) {
         usleep(1); // TODO Any statement is required to be run for successful `execl` run...
         std::string cli_args = "--quiet" + (path() ? fmt::format(" --config {}", path()) : "");
+        fmt::print("{}\n", cli_args);
         execl(srv_path.c_str(), srv_path.c_str(), cli_args.c_str(), (char*)(NULL));
         exit(0);
     }
