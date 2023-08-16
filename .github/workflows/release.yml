@@ -144,7 +144,7 @@ jobs:
       - name: Install UStore dependencies using conan
         run: |
           last_tag=$(curl https://api.github.com/repos/unum-cloud/ustore-deps/releases/latest | grep -i 'tag_name' | awk -F '\"' '{print $4}')
-          wget -q https://github.com/unum-cloud/ustore-deps/releases/download/v0.1.3/ustore_deps_x86_linux.tar.gz
+          wget -q https://github.com/unum-cloud/ustore-deps/releases/download/"$last_tag"/ustore_deps_x86_linux.tar.gz
           conan profile new --detect default
           conan profile update settings.compiler.libcxx=libstdc++11 default
           tar -xzf ./ustore_deps_x86_linux.tar.gz -C ~/.conan
@@ -202,6 +202,7 @@ jobs:
           docker buildx build \
           --platform "linux/amd64,linux/arm64" \
           --build-arg version=$version \
+          --build-arg TEST_USTORE="False"
           --file ./Dockerfile \
           --tag unum/ustore:$version-jammy \
           --tag unum/ustore:latest \
