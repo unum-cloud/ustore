@@ -228,6 +228,9 @@ jobs:
     name: Build and Publish Docker
     needs: versioning
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     strategy:
       matrix:
         arch: ["amd64", "arm64"]
