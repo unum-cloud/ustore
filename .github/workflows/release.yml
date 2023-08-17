@@ -228,6 +228,9 @@ jobs:
     name: Build and Publish Docker
     needs: versioning
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: ["amd64", "arm64"]
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -238,7 +241,7 @@ jobs:
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
         with:
-          platforms: 'arm64,amd64'
+          platforms: 'amd64,arm64'
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
@@ -251,16 +254,30 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build Docker
+      - name: Log in to GitHub Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prepare Dockerfile and ARGS
+        id: args
         run: |
-          export version=$(cat VERSION)
           sed -i 's/make -j32/make -j4/' ./Dockerfile
-          docker buildx create --use
-          docker buildx build \
-          --platform "linux/amd64,linux/arm64" \
-          --build-arg version=$version \
-          --build-arg TEST_USTORE="False" \
-          --file ./Dockerfile \
-          --tag unum/ustore:$version-jammy \
-          --tag unum/ustore:latest \
-          --push .
+          echo "version=$(cat VERSION)" >> $GITHUB_OUTPUT
+
+      - name: Build and push
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          platforms: linux/${{ matrix.arch }}
+          build-args: |
+            version=${{ steps.args.outputs.version }}
+            TEST_USTORE="False"
+          tags: |
+            unum/ustore:${{ steps.args.outputs.version }}-jammy
+            unum/ustore:latest
+            ghcr.io/unum-cloud/ustore:${{ steps.args.outputs.version }}-jammy
+            ghcr.io/unum-cloud/ustore:latest
