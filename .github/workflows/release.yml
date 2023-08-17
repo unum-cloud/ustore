@@ -219,6 +219,9 @@ jobs:
       
       - name: Publish java
         run: ./java/gradlew publish
+        env:
+          MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
+          MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
 
 
   build_and_publish_docker:
