@@ -184,6 +184,9 @@ jobs:
     name: Build and Publish Java
     needs: versioning
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Checkout
         uses: actions/checkout@v3
