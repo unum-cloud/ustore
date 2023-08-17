@@ -57,8 +57,8 @@ jobs:
         run: git clone https://github.com/unum-cloud/www.unum.cloud-furo && cd www.unum.cloud-furo && pip install . && cd ../
       - name: Install UKV from PyPi
         run: pip install ukv
-      - name: Fetch GoLang repo
-        run: git submodule update --init --recursive --remote go-ustore/
+      # - name: Fetch GoLang repo
+      #   run: git submodule update --init --recursive --remote go-ustore/
       - name: Build documentation
         run: cd docs && doxygen conf.dox && make html
       - name: Copy assets
