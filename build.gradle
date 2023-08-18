@@ -121,6 +121,7 @@ publishing {
         }
     }
 
+    // Publishing to GitHub is much easier ;)
     // repositories {
     //     maven {
     //         name = "OSSRH"
