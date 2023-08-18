@@ -10,7 +10,7 @@ on:
 
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -117,7 +117,7 @@ jobs:
       - name: Upload Precompiled binaries to Release Assets
         uses: xresloader/upload-to-github-release@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.SEMANTIC_RELEASE_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           file: "./build_release/build/bin/ustore_flight_server*"
           update_latest_release: true
@@ -222,6 +222,8 @@ jobs:
       
       - name: Publish java
         run: ./java/gradlew publish
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 
   build_and_publish_docker:
