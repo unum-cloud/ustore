@@ -287,7 +287,6 @@ jobs:
             ghcr.io/unum-cloud/ustore:${{ steps.args.outputs.version }}-jammy
             ghcr.io/unum-cloud/ustore:latest
 
-  
 
   build_and_publish_rhel_docker:
     name: Build and Publish Docker
@@ -317,13 +316,13 @@ jobs:
         uses: docker/login-action@v2
         with:
           registry: quay.io
-          username: ${{ secrets.QUAY_USERNAME }}
+          username: ${{ secrets.QUAY_USERNAME }} # Username+RobotName
           password: ${{ secrets.QUAY_ROBOT_TOKEN }}
 
       - name: Prepare Dockerfile and ARGS
         id: args
         run: |
-          sed -i 's/make -j32/make -j4/' ./Dockerfile
+          sed -i 's/make -j32/make -j4/' ./Dockerfile.rhel
           echo "version=$(cat VERSION)" >> $GITHUB_OUTPUT
 
       - name: Build and push
