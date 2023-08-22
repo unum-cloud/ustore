@@ -4,6 +4,7 @@ plugins {
     id 'java-library'
     id 'c'
     id 'maven-publish'
+    id 'com.github.simkuenzi.readme' version '0.1'
 }
 
 group "cloud.unum.ustore"
@@ -14,6 +15,11 @@ targetCompatibility = 1.8
 
 repositories {
     mavenCentral()
+}
+
+readme {
+    readmeFile = file("java/README.md")
+    overwrite = true
 }
 
 sourceSets {
@@ -102,45 +108,71 @@ jar {
     }
 }
 
+task copyReadme(type: Copy) {
+    from projectDir
+    include 'README.md'
+    into "$buildDir/resources/main"
+}
+
 publishing {
-    publications {
-        library(MavenPublication) {
-            from components.java
-
-            pom {
-                name = "UStore"
-                description = "Universal Key-Value store interface for both in-memory and persistent transactional collections for Java"
-                url = "https://github.com/unum-cloud/ustore"
-                licenses {
-                    license {
-                        name = 'The Apache License, Version 2.0'
-                        url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
-                    }
-                }
-            }
-        }
-    }
-
-    // Publishing to GitHub is much easier ;)
-    // repositories {
-    //     maven {
-    //         name = "OSSRH"
-    //         url = "https://oss.sonatype.org/service/local/staging/deploy/maven2/"
-    //         credentials {
-    //             username = System.getenv("MAVEN_USERNAME")
-    //             password = System.getenv("MAVEN_PASSWORD")
-    //         }
-    //     }
-    // }
-
     repositories {
         maven {
             name = "GitHubPackages"
-            url = "https://maven.pkg.github.com/unum-cloud/ustore"
+            url = uri("https://maven.pkg.github.com/gurgenyegoryan/ustore")
             credentials {
-                username = System.getenv("GITHUB_ACTOR")
-                password = System.getenv("GITHUB_TOKEN")
+                username = project.findProperty("gpr.user") ?: System.getenv("GITHUB_ACTOR")
+                password = project.findProperty("gpr.key") ?: System.getenv("GITHUB_TOKEN")
             }
         }
     }
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+            artifact tasks.copyReadme
+        }
+    }
 }
+
+
+// publishing {
+//     publications {
+//         library(MavenPublication) {
+//             from components.java
+//             readme
+//             pom {
+//                 name = "UStore"
+//                 description = "Universal Key-Value store interface for both in-memory and persistent transactional collections for Java"
+//                 url = "https://github.com/unum-cloud/ustore"
+//                 licenses {
+//                     license {
+//                         name = 'The Apache License, Version 2.0'
+//                         url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+//                     }
+//                 }
+//             }
+//         }
+//     }
+
+//     // Publishing to GitHub is much easier ;)
+//     // repositories {
+//     //     maven {
+//     //         name = "OSSRH"
+//     //         url = "https://oss.sonatype.org/service/local/staging/deploy/maven2/"
+//     //         credentials {
+//     //             username = System.getenv("MAVEN_USERNAME")
+//     //             password = System.getenv("MAVEN_PASSWORD")
+//     //         }
+//     //     }
+//     // }
+
+//     repositories {
+//         maven {
+//             name = "GitHubPackages"
+//             url = "https://maven.pkg.github.com/gurgenyegoryan/ustore"
+//             credentials {
+//                 username = System.getenv("GITHUB_ACTOR")
+//                 password = System.getenv("GITHUB_TOKEN")
+//             }
+//         }
+//     }
+// }
