@@ -109,70 +109,50 @@ jar {
 }
 
 task copyReadme(type: Copy) {
-    from projectDir
+    from "$projectDir/java"
     include 'README.md'
     into "$buildDir/resources/main"
 }
 
 publishing {
-    repositories {
-        maven {
-            name = "GitHubPackages"
-            url = uri("https://maven.pkg.github.com/gurgenyegoryan/ustore")
-            credentials {
-                username = project.findProperty("gpr.user") ?: System.getenv("GITHUB_ACTOR")
-                password = project.findProperty("gpr.key") ?: System.getenv("GITHUB_TOKEN")
+    publications {
+        library(MavenPublication) {
+            from components.java
+            artifact tasks.copyReadme
+            pom {
+                name = "UStore"
+                description = "Universal Key-Value store interface for both in-memory and persistent transactional collections for Java"
+                url = "https://github.com/gurgenyegoryan/ustore"
+                licenses {
+                    license {
+                        name = 'The Apache License, Version 2.0'
+                        url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                    }
+                }
             }
         }
     }
-    publications {
-        mavenJava(MavenPublication) {
-            from components.java
-            artifact tasks.copyReadme
+
+    repositories {
+        maven {
+            name = "GitHubPackages"
+            url = "https://maven.pkg.github.com/gurgenyegoryan/ustore"
+            credentials {
+                username = System.getenv("GITHUB_ACTOR")
+                password = System.getenv("GITHUB_TOKEN")
+            }
         }
     }
 }
 
-
-// publishing {
-//     publications {
-//         library(MavenPublication) {
-//             from components.java
-//             readme
-//             pom {
-//                 name = "UStore"
-//                 description = "Universal Key-Value store interface for both in-memory and persistent transactional collections for Java"
-//                 url = "https://github.com/unum-cloud/ustore"
-//                 licenses {
-//                     license {
-//                         name = 'The Apache License, Version 2.0'
-//                         url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
-//                     }
-//                 }
-//             }
-//         }
-//     }
-
-//     // Publishing to GitHub is much easier ;)
-//     // repositories {
-//     //     maven {
-//     //         name = "OSSRH"
-//     //         url = "https://oss.sonatype.org/service/local/staging/deploy/maven2/"
-//     //         credentials {
-//     //             username = System.getenv("MAVEN_USERNAME")
-//     //             password = System.getenv("MAVEN_PASSWORD")
-//     //         }
-//     //     }
-//     // }
-
-//     repositories {
-//         maven {
-//             name = "GitHubPackages"
-//             url = "https://maven.pkg.github.com/gurgenyegoryan/ustore"
-//             credentials {
-//                 username = System.getenv("GITHUB_ACTOR")
-//                 password = System.getenv("GITHUB_TOKEN")
-//             }
-//         }
-//     }
-// }
+    // Publishing to GitHub is much easier ;)
+    // repositories {
+    //     maven {
+    //         name = "OSSRH"
+    //         url = "https://oss.sonatype.org/service/local/staging/deploy/maven2/"
+    //         credentials {
+    //             username = System.getenv("MAVEN_USERNAME")
+    //             password = System.getenv("MAVEN_PASSWORD")
+    //         }
+    //     }
+    // }
