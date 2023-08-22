@@ -226,8 +226,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 
-  build_and_publish_docker:
-    name: Build and Publish Docker
+  build_and_publish_ubuntu_docker:
+    name: Build and Publish Docker Ubuntu
     needs: versioning
     runs-on: ubuntu-latest
     permissions:
@@ -282,7 +282,7 @@ jobs:
 
 
   build_and_publish_rhel_docker:
-    name: Build and Publish Docker
+    name: Build and Publish Docker RHEL
     needs: versioning
     runs-on: ubuntu-latest
     steps:
