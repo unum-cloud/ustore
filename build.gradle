@@ -108,20 +108,15 @@ jar {
     }
 }
 
-task copyReadme(type: Copy) {
-    from "$projectDir/java"
-    include 'README.md'
-    into "$buildDir/resources/main"
-}
 
 publishing {
     publications {
         library(MavenPublication) {
             from components.java
-            artifact tasks.copyReadme
             pom {
                 name = "UStore"
-                description = "Universal Key-Value store interface for both in-memory and persistent transactional collections for Java"
+                // description = "Universal Key-Value store interface for both in-memory and persistent transactional collections for Java"
+                description = file("README.md").text
                 url = "https://github.com/gurgenyegoryan/ustore"
                 licenses {
                     license {
