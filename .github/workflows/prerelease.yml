@@ -3,6 +3,8 @@ name: Pre-Release
 on:
   push:
     branches: ["main-dev"]
+  pull_request:
+    branches: ["main-dev"]
 
   workflow_dispatch: {}
 
@@ -27,7 +29,7 @@ jobs:
   build_ustore_amd64:
     name: Build Libraries on AMD
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'push' }}
+    if: ${{ github.event_name == 'push' || github.event_name == 'pull_request'}}
     steps:
       - uses: actions/checkout@v3
         with:
