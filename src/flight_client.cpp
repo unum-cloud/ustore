@@ -1325,31 +1325,33 @@ void ustore_collection_create(ustore_collection_create_t* c_ptr) {
     auto name_len = c.name ? std::strlen(c.name) : 0;
     return_error_if_m(name_len, c.error, args_wrong_k, "Default collection is always present");
 
-    rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
+    safe_section("Creating Collection", c.error, [&] {
+        rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
 
-    arf::Action action;
-    fmt::format_to(std::back_inserter(action.type), "{}?{}={}", kFlightColCreate, kParamCollectionName, c.name);
-    if (c.config)
-        action.body = std::make_shared<ar::Buffer>(std::string_view {c.config});
+        arf::Action action;
+        fmt::format_to(std::back_inserter(action.type), "{}?{}={}", kFlightColCreate, kParamCollectionName, c.name);
+        if (c.config)
+            action.body = std::make_shared<ar::Buffer>(std::string_view {c.config});
 
-    ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream;
-    {
-        std::lock_guard<std::mutex> lk(db.arena_lock);
-        arrow_mem_pool_t pool(db.arena);
-        arf::FlightCallOptions options = arrow_call_options(pool);
-        maybe_stream = db.flight->DoAction(options, action);
-    }
-    return_error_if_m(maybe_stream.ok(), c.error, network_k, "Failed to act on Arrow server");
-    auto& stream_ptr = maybe_stream.ValueUnsafe();
-    ar::Result<std::unique_ptr<arf::Result>> maybe_id = stream_ptr->Next();
-    return_error_if_m(maybe_id.ok(), c.error, network_k, "No response received");
+        ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream;
+        {
+            std::lock_guard<std::mutex> lk(db.arena_lock);
+            arrow_mem_pool_t pool(db.arena);
+            arf::FlightCallOptions options = arrow_call_options(pool);
+            maybe_stream = db.flight->DoAction(options, action);
+        }
+        return_error_if_m(maybe_stream.ok(), c.error, network_k, "Failed to act on Arrow server");
+        auto& stream_ptr = maybe_stream.ValueUnsafe();
+        ar::Result<std::unique_ptr<arf::Result>> maybe_id = stream_ptr->Next();
+        return_error_if_m(maybe_id.ok(), c.error, network_k, "No response received");
 
-    auto& id_ptr = maybe_id.ValueUnsafe();
-    return_error_if_m(id_ptr->body->size() == sizeof(ustore_collection_t),
-                      c.error,
-                      error_unknown_k,
-                      "Inadequate response");
-    std::memcpy(c.id, id_ptr->body->data(), sizeof(ustore_collection_t));
+        auto& id_ptr = maybe_id.ValueUnsafe();
+        return_error_if_m(id_ptr->body->size() == sizeof(ustore_collection_t),
+                          c.error,
+                          error_unknown_k,
+                          "Inadequate response");
+        std::memcpy(c.id, id_ptr->body->data(), sizeof(ustore_collection_t));
+    });
 }
 
 void ustore_collection_drop(ustore_collection_drop_t* c_ptr) {
@@ -1357,77 +1359,82 @@ void ustore_collection_drop(ustore_collection_drop_t* c_ptr) {
     ustore_collection_drop_t& c = *c_ptr;
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    std::string_view mode;
-    switch (c.mode) {
-    case ustore_drop_vals_k: mode = kParamDropModeValues; break;
-    case ustore_drop_keys_vals_k: mode = kParamDropModeContents; break;
-    case ustore_drop_keys_vals_handle_k: mode = kParamDropModeCollection; break;
-    }
+    safe_section("Dropping Collection", c.error, [&] {
+        std::string_view mode;
+        switch (c.mode) {
+        case ustore_drop_vals_k: mode = kParamDropModeValues; break;
+        case ustore_drop_keys_vals_k: mode = kParamDropModeContents; break;
+        case ustore_drop_keys_vals_handle_k: mode = kParamDropModeCollection; break;
+        }
 
-    rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
+        rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
 
-    arf::Action action;
-    fmt::format_to(std::back_inserter(action.type),
-                   "{}?{}=0x{:0>16x}&{}={}",
-                   kFlightColDrop,
-                   kParamCollectionID,
-                   c.id,
-                   kParamDropMode,
-                   mode);
+        arf::Action action;
+        fmt::format_to(std::back_inserter(action.type),
+                       "{}?{}=0x{:0>16x}&{}={}",
+                       kFlightColDrop,
+                       kParamCollectionID,
+                       c.id,
+                       kParamDropMode,
+                       mode);
 
-    std::lock_guard<std::mutex> lk(db.arena_lock);
-    arrow_mem_pool_t pool(db.arena);
-    arf::FlightCallOptions options = arrow_call_options(pool);
-    ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream = db.flight->DoAction(options, action);
-    return_error_if_m(maybe_stream.ok(), c.error, network_k, "Failed to act on Arrow server");
+        std::lock_guard<std::mutex> lk(db.arena_lock);
+        arrow_mem_pool_t pool(db.arena);
+        arf::FlightCallOptions options = arrow_call_options(pool);
+        ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream = db.flight->DoAction(options, action);
+        return_error_if_m(maybe_stream.ok(), c.error, network_k, "Failed to act on Arrow server");
+    });
 }
 
 void ustore_collection_list(ustore_collection_list_t* c_ptr) {
 
     ustore_collection_list_t& c = *c_ptr;
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
-    rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
-    if (!(c.options & ustore_option_dont_discard_memory_k))
-        db.readers.clear();
 
-    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
-    return_if_error_m(c.error);
+    safe_section("Getting Collection List", c.error, [&] {
+        rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
+        if (!(c.options & ustore_option_dont_discard_memory_k))
+            db.readers.clear();
 
-    ar::Status ar_status;
-    arrow_mem_pool_t pool(arena);
-    arf::FlightCallOptions options = arrow_call_options(pool);
+        linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
+        return_if_error_m(c.error);
 
-    arf::Ticket ticket {kFlightListCols};
-    if (c.transaction)
-        fmt::format_to(std::back_inserter(ticket.ticket),
-                       "?{}=0x{:0>16x}",
-                       kParamTransactionID,
-                       std::uintptr_t(c.transaction));
+        ar::Status ar_status;
+        arrow_mem_pool_t pool(arena);
+        arf::FlightCallOptions options = arrow_call_options(pool);
 
-    auto maybe_stream = db.flight->DoGet(options, ticket);
-    return_error_if_m(maybe_stream.ok(), c.error, network_k, "Failed to act on Arrow server");
-    auto& stream_ptr = maybe_stream.ValueUnsafe();
+        arf::Ticket ticket {kFlightListCols};
+        if (c.transaction)
+            fmt::format_to(std::back_inserter(ticket.ticket),
+                           "?{}=0x{:0>16x}",
+                           kParamTransactionID,
+                           std::uintptr_t(c.transaction));
 
-    auto maybe_table = stream_ptr->ToTable();
-    return_error_if_m(maybe_table.ok(), c.error, error_unknown_k, "Failed to create table");
-    auto table = maybe_table.ValueUnsafe();
+        auto maybe_stream = db.flight->DoGet(options, ticket);
+        return_error_if_m(maybe_stream.ok(), c.error, network_k, "Failed to act on Arrow server");
+        auto& stream_ptr = maybe_stream.ValueUnsafe();
 
-    if (c.count)
-        *c.count = static_cast<ustore_size_t>(table->num_rows());
-    if (c.names) {
-        auto array = std::static_pointer_cast<ar::BinaryArray>(table->column(1)->chunk(0));
-        return_error_if_m(table->column(1)->num_chunks() == 1, c.error, network_k, "Expected one chunk");
-        *c.names = (ustore_str_span_t)array->value_data()->data();
-        if (c.offsets)
-            *c.offsets = (ustore_length_t*)array->value_offsets()->data();
-    }
-    if (c.ids) {
-        auto array = std::static_pointer_cast<ar::NumericArray<ar::Int64Type>>(table->column(0)->chunk(0));
-        return_error_if_m(table->column(0)->num_chunks() == 1, c.error, network_k, "Expected one chunk");
-        *c.ids = (ustore_collection_t*)array->raw_values();
-    }
+        auto maybe_table = stream_ptr->ToTable();
+        return_error_if_m(maybe_table.ok(), c.error, error_unknown_k, "Failed to create table");
+        auto table = maybe_table.ValueUnsafe();
 
-    db.readers.push_back(std::move(stream_ptr));
+        if (c.count)
+            *c.count = static_cast<ustore_size_t>(table->num_rows());
+        if (c.names) {
+            auto array = std::static_pointer_cast<ar::BinaryArray>(table->column(1)->chunk(0));
+            return_error_if_m(table->column(1)->num_chunks() == 1, c.error, network_k, "Expected one chunk");
+            *c.names = (ustore_str_span_t)array->value_data()->data();
+            if (c.offsets)
+                *c.offsets = (ustore_length_t*)array->value_offsets()->data();
+        }
+        if (c.ids) {
+            auto array = std::static_pointer_cast<ar::NumericArray<ar::Int64Type>>(table->column(0)->chunk(0));
+            return_error_if_m(table->column(0)->num_chunks() == 1, c.error, network_k, "Expected one chunk");
+            *c.ids = (ustore_collection_t*)array->raw_values();
+        }
+
+        db.readers.push_back(std::move(stream_ptr));
+    });
 }
 
 void ustore_database_control(ustore_database_control_t* c_ptr) {
@@ -1447,70 +1454,74 @@ void ustore_snapshot_list(ustore_snapshot_list_t* c_ptr) {
     ustore_snapshot_list_t& c = *c_ptr;
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
-    return_if_error_m(c.error);
+    safe_section("Getting Snapshot List", c.error, [&] {
+        linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
+        return_if_error_m(c.error);
 
-    ar::Status ar_status;
-    arrow_mem_pool_t pool(arena);
-    arf::FlightCallOptions options = arrow_call_options(pool);
+        ar::Status ar_status;
+        arrow_mem_pool_t pool(arena);
+        arf::FlightCallOptions options = arrow_call_options(pool);
 
-    rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
+        rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
 
-    arf::Ticket ticket {kFlightListSnap};
-    ar::Result<std::unique_ptr<arf::FlightStreamReader>> maybe_stream = db.flight->DoGet(options, ticket);
-    return_error_if_m(maybe_stream.ok(), c.error, network_k, "Failed to act on Arrow server");
+        arf::Ticket ticket {kFlightListSnap};
+        ar::Result<std::unique_ptr<arf::FlightStreamReader>> maybe_stream = db.flight->DoGet(options, ticket);
+        return_error_if_m(maybe_stream.ok(), c.error, network_k, "Failed to act on Arrow server");
 
-    auto& stream_ptr = maybe_stream.ValueUnsafe();
-    ar::Result<std::shared_ptr<ar::Table>> maybe_table = stream_ptr->ToTable();
+        auto& stream_ptr = maybe_stream.ValueUnsafe();
+        ar::Result<std::shared_ptr<ar::Table>> maybe_table = stream_ptr->ToTable();
 
-    ArrowSchema schema_c;
-    ArrowArray batch_c;
-    ar_status = unpack_table(maybe_table, schema_c, batch_c, &pool);
-    return_error_if_m(ar_status.ok(), c.error, args_combo_k, "Failed to unpack list of snapshots");
+        ArrowSchema schema_c;
+        ArrowArray batch_c;
+        ar_status = unpack_table(maybe_table, schema_c, batch_c, &pool);
+        return_error_if_m(ar_status.ok(), c.error, args_combo_k, "Failed to unpack list of snapshots");
 
-    auto ids_column_idx = column_idx(schema_c, kArgSnaps);
-    return_error_if_m(ids_column_idx, c.error, args_combo_k, "Expecting one column");
+        auto ids_column_idx = column_idx(schema_c, kArgSnaps);
+        return_error_if_m(ids_column_idx, c.error, args_combo_k, "Expecting one column");
 
-    if (c.count)
-        *c.count = static_cast<ustore_size_t>(batch_c.length);
-    if (c.ids)
-        *c.ids = (ustore_collection_t*)batch_c.children[*ids_column_idx]->buffers[1];
+        if (c.count)
+            *c.count = static_cast<ustore_size_t>(batch_c.length);
+        if (c.ids)
+            *c.ids = (ustore_collection_t*)batch_c.children[*ids_column_idx]->buffers[1];
+    });
 }
 
 void ustore_snapshot_create(ustore_snapshot_create_t* c_ptr) {
     ustore_snapshot_create_t& c = *c_ptr;
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
+    safe_section("Creating Snapshot", c.error, [&] {
+        rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
 
-    arf::Action action;
-    fmt::format_to(std::back_inserter(action.type), "{}", kFlightSnapCreate);
+        arf::Action action;
+        fmt::format_to(std::back_inserter(action.type), "{}", kFlightSnapCreate);
 
-    ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream;
-    {
-        std::lock_guard<std::mutex> lk(db.arena_lock);
-        arrow_mem_pool_t pool(db.arena);
-        arf::FlightCallOptions options = arrow_call_options(pool);
-        maybe_stream = db.flight->DoAction(options, action);
-    }
-    return_error_if_m(maybe_stream.ok(), c.error, network_k, "Failed to act on Arrow server");
-    auto& stream_ptr = maybe_stream.ValueUnsafe();
-    ar::Result<std::unique_ptr<arf::Result>> maybe_id = stream_ptr->Next();
-    return_error_if_m(maybe_id.ok(), c.error, network_k, "No response received");
+        ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream;
+        {
+            std::lock_guard<std::mutex> lk(db.arena_lock);
+            arrow_mem_pool_t pool(db.arena);
+            arf::FlightCallOptions options = arrow_call_options(pool);
+            maybe_stream = db.flight->DoAction(options, action);
+        }
+        return_error_if_m(maybe_stream.ok(), c.error, network_k, "Failed to act on Arrow server");
+        auto& stream_ptr = maybe_stream.ValueUnsafe();
+        ar::Result<std::unique_ptr<arf::Result>> maybe_id = stream_ptr->Next();
+        return_error_if_m(maybe_id.ok(), c.error, network_k, "No response received");
 
-    auto& id_ptr = maybe_id.ValueUnsafe();
-    return_error_if_m(id_ptr->body->size() == sizeof(ustore_snapshot_t),
-                      c.error,
-                      error_unknown_k,
-                      "Inadequate response");
-    std::memcpy(c.id, id_ptr->body->data(), sizeof(ustore_snapshot_t));
+        auto& id_ptr = maybe_id.ValueUnsafe();
+        return_error_if_m(id_ptr->body->size() == sizeof(ustore_snapshot_t),
+                          c.error,
+                          error_unknown_k,
+                          "Inadequate response");
+        std::memcpy(c.id, id_ptr->body->data(), sizeof(ustore_snapshot_t));
+    });
 }
 
 void ustore_snapshot_export(ustore_snapshot_export_t* c_ptr) {
     ustore_snapshot_export_t& c = *c_ptr;
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    try {
+    safe_section("Exporting Snapshot", c.error, [&] {
         rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
 
         arf::Action action;
@@ -1527,26 +1538,25 @@ void ustore_snapshot_export(ustore_snapshot_export_t* c_ptr) {
         arf::FlightCallOptions options = arrow_call_options(pool);
         ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream = db.flight->DoAction(options, action);
         return_error_if_m(maybe_stream.ok(), c.error, network_k, "Failed to act on Arrow server");
-    }
-    catch (...) {
-        *c.error = "Snapshot Export Failure";
-    }
+    });
 }
 
 void ustore_snapshot_drop(ustore_snapshot_drop_t* c_ptr) {
     ustore_snapshot_drop_t& c = *c_ptr;
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
+    safe_section("Dropping Collection", c.error, [&] {
+        rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
 
-    arf::Action action;
-    fmt::format_to(std::back_inserter(action.type), "{}?{}={}", kFlightSnapDrop, kParamSnapshotID, c.id);
+        arf::Action action;
+        fmt::format_to(std::back_inserter(action.type), "{}?{}={}", kFlightSnapDrop, kParamSnapshotID, c.id);
 
-    std::lock_guard<std::mutex> lk(db.arena_lock);
-    arrow_mem_pool_t pool(db.arena);
-    arf::FlightCallOptions options = arrow_call_options(pool);
-    ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream = db.flight->DoAction(options, action);
-    return_error_if_m(maybe_stream.ok(), c.error, network_k, "Failed to act on Arrow server");
+        std::lock_guard<std::mutex> lk(db.arena_lock);
+        arrow_mem_pool_t pool(db.arena);
+        arf::FlightCallOptions options = arrow_call_options(pool);
+        ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream = db.flight->DoAction(options, action);
+        return_error_if_m(maybe_stream.ok(), c.error, network_k, "Failed to act on Arrow server");
+    });
 }
 
 /*********************************************************/
@@ -1559,35 +1569,37 @@ void ustore_transaction_init(ustore_transaction_init_t* c_ptr) {
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
     return_error_if_m(c.transaction, c.error, uninitialized_state_k, "Transaction is uninitialized");
 
-    rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
+    safe_section("Initializing Transaction", c.error, [&] {
+        rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
 
-    arf::Action action;
-    ustore_size_t txn_id = *reinterpret_cast<ustore_size_t*>(c.transaction);
-    fmt::format_to(std::back_inserter(action.type), "{}?", kFlightTxnBegin);
-    if (txn_id != 0)
-        fmt::format_to(std::back_inserter(action.type), "{}=0x{:0>16x}&", kParamTransactionID, txn_id);
-    if (c.options & ustore_option_transaction_dont_watch_k)
-        fmt::format_to(std::back_inserter(action.type), "{}&", kParamFlagDontWatch);
+        arf::Action action;
+        ustore_size_t txn_id = *reinterpret_cast<ustore_size_t*>(c.transaction);
+        fmt::format_to(std::back_inserter(action.type), "{}?", kFlightTxnBegin);
+        if (txn_id != 0)
+            fmt::format_to(std::back_inserter(action.type), "{}=0x{:0>16x}&", kParamTransactionID, txn_id);
+        if (c.options & ustore_option_transaction_dont_watch_k)
+            fmt::format_to(std::back_inserter(action.type), "{}&", kParamFlagDontWatch);
 
-    ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream;
-    {
-        std::lock_guard<std::mutex> lk(db.arena_lock);
-        arrow_mem_pool_t pool(db.arena);
-        arf::FlightCallOptions options = arrow_call_options(pool);
-        maybe_stream = db.flight->DoAction(options, action);
-    }
-    return_error_if_m(maybe_stream.ok(), c.error, network_k, "Failed to act on Arrow server");
+        ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream;
+        {
+            std::lock_guard<std::mutex> lk(db.arena_lock);
+            arrow_mem_pool_t pool(db.arena);
+            arf::FlightCallOptions options = arrow_call_options(pool);
+            maybe_stream = db.flight->DoAction(options, action);
+        }
+        return_error_if_m(maybe_stream.ok(), c.error, network_k, "Failed to act on Arrow server");
 
-    auto& stream_ptr = maybe_stream.ValueUnsafe();
-    ar::Result<std::unique_ptr<arf::Result>> maybe_id = stream_ptr->Next();
-    return_error_if_m(maybe_id.ok(), c.error, network_k, "No response received");
+        auto& stream_ptr = maybe_stream.ValueUnsafe();
+        ar::Result<std::unique_ptr<arf::Result>> maybe_id = stream_ptr->Next();
+        return_error_if_m(maybe_id.ok(), c.error, network_k, "No response received");
 
-    auto& id_ptr = maybe_id.ValueUnsafe();
-    return_error_if_m(id_ptr->body->size() == sizeof(ustore_transaction_t),
-                      c.error,
-                      error_unknown_k,
-                      "Inadequate response");
-    std::memcpy(c.transaction, id_ptr->body->data(), sizeof(ustore_transaction_t));
+        auto& id_ptr = maybe_id.ValueUnsafe();
+        return_error_if_m(id_ptr->body->size() == sizeof(ustore_transaction_t),
+                          c.error,
+                          error_unknown_k,
+                          "Inadequate response");
+        std::memcpy(c.transaction, id_ptr->body->data(), sizeof(ustore_transaction_t));
+    });
 }
 
 void ustore_transaction_commit(ustore_transaction_commit_t* c_ptr) {
@@ -1595,22 +1607,24 @@ void ustore_transaction_commit(ustore_transaction_commit_t* c_ptr) {
     ustore_transaction_commit_t& c = *c_ptr;
     return_error_if_m(c.transaction, c.error, uninitialized_state_k, "Transaction is uninitialized");
 
-    rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
+    safe_section("Commiting Transaction", c.error, [&] {
+        rpc_client_t& db = *reinterpret_cast<rpc_client_t*>(c.db);
 
-    arf::Action action;
-    fmt::format_to(std::back_inserter(action.type),
-                   "{}?{}=0x{:0>16x}&",
-                   kFlightTxnCommit,
-                   kParamTransactionID,
-                   std::uintptr_t(c.transaction));
-    if (c.options & ustore_option_write_flush_k)
-        fmt::format_to(std::back_inserter(action.type), "{}&", kParamFlagFlushWrite);
+        arf::Action action;
+        fmt::format_to(std::back_inserter(action.type),
+                       "{}?{}=0x{:0>16x}&",
+                       kFlightTxnCommit,
+                       kParamTransactionID,
+                       std::uintptr_t(c.transaction));
+        if (c.options & ustore_option_write_flush_k)
+            fmt::format_to(std::back_inserter(action.type), "{}&", kParamFlagFlushWrite);
 
-    std::lock_guard<std::mutex> lk(db.arena_lock);
-    arrow_mem_pool_t pool(db.arena);
-    arf::FlightCallOptions options = arrow_call_options(pool);
-    ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream = db.flight->DoAction(options, action);
-    return_error_if_m(maybe_stream.ok(), c.error, network_k, "Failed to act on Arrow server");
+        std::lock_guard<std::mutex> lk(db.arena_lock);
+        arrow_mem_pool_t pool(db.arena);
+        arf::FlightCallOptions options = arrow_call_options(pool);
+        ar::Result<std::unique_ptr<arf::ResultStream>> maybe_stream = db.flight->DoAction(options, action);
+        return_error_if_m(maybe_stream.ok(), c.error, network_k, "Failed to act on Arrow server");
+    });
 }
 
 /*********************************************************/

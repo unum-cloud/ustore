@@ -247,21 +247,24 @@ void ustore_snapshot_list(ustore_snapshot_list_t* c_ptr) {
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
     return_error_if_m(c.count && c.ids, c.error, args_combo_k, "Need outputs!");
 
-    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
-    return_if_error_m(c.error);
+    auto list_snap = [&] {
+        linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
+        return_if_error_m(c.error);
 
-    rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
-    std::lock_guard<std::mutex> locker(db.mutex);
-    std::size_t snapshots_count = db.snapshots.size();
-    *c.count = static_cast<ustore_size_t>(snapshots_count);
+        rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
+        std::lock_guard<std::mutex> locker(db.mutex);
+        std::size_t snapshots_count = db.snapshots.size();
+        *c.count = static_cast<ustore_size_t>(snapshots_count);
 
-    // For every snapshot we also need to export IDs
-    auto ids = arena.alloc_or_dummy(snapshots_count, c.error, c.ids);
-    return_if_error_m(c.error);
+        // For every snapshot we also need to export IDs
+        auto ids = arena.alloc_or_dummy(snapshots_count, c.error, c.ids);
+        return_if_error_m(c.error);
 
-    std::size_t i = 0;
-    for (const auto& [id, _] : db.snapshots)
-        ids[i++] = id;
+        std::size_t i = 0;
+        for (const auto& [id, _] : db.snapshots)
+            ids[i++] = id;
+    };
+    safe_section("Getting Snapshot List", c.error, list_snap);
 }
 
 void ustore_snapshot_create(ustore_snapshot_create_t* c_ptr) {
@@ -269,29 +272,33 @@ void ustore_snapshot_create(ustore_snapshot_create_t* c_ptr) {
     ustore_snapshot_create_t& c = *c_ptr;
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
-    std::lock_guard<std::mutex> locker(db.mutex);
-    auto it = db.snapshots.find(*c.id);
-    if (it != db.snapshots.end())
-        return_error_if_m(it->second, c.error, args_wrong_k, "Such snapshot already exists!");
+    auto create_snap = [&] {
+        rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
+        std::lock_guard<std::mutex> locker(db.mutex);
+        auto it = db.snapshots.find(*c.id);
+        if (it != db.snapshots.end())
+            return_error_if_m(it->second, c.error, args_wrong_k, "Such snapshot already exists!");
 
-    rocks_snapshot_t* rocks_snapshot = nullptr;
-    safe_section("Allocating snapshot handle", c.error, [&] { rocks_snapshot = new rocks_snapshot_t(); });
-    return_if_error_m(c.error);
+        rocks_snapshot_t* rocks_snapshot = nullptr;
+        safe_section("Allocating snapshot handle", c.error, [&] { rocks_snapshot = new rocks_snapshot_t(); });
+        return_if_error_m(c.error);
 
-    rocks_snapshot->snapshot = db.native->GetSnapshot();
-    if (!rocks_snapshot->snapshot)
-        *c.error = "Couldn't get a snapshot!";
+        rocks_snapshot->snapshot = db.native->GetSnapshot();
+        if (!rocks_snapshot->snapshot)
+            *c.error = "Couldn't get a snapshot!";
 
-    *c.id = reinterpret_cast<ustore_snapshot_t>(rocks_snapshot);
-    db.snapshots[*c.id] = rocks_snapshot;
+        *c.id = reinterpret_cast<ustore_snapshot_t>(rocks_snapshot);
+        db.snapshots[*c.id] = rocks_snapshot;
+    };
+    safe_section("Creating Snapshot", c.error, create_snap);
 }
 
 void ustore_snapshot_export(ustore_snapshot_export_t* c_ptr) {
+
     ustore_snapshot_export_t& c = *c_ptr;
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    try {
+    auto export_snap = [&] {
         rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
 
         rocksdb::Checkpoint* chp_ptr = nullptr;
@@ -309,33 +316,31 @@ void ustore_snapshot_export(ustore_snapshot_export_t* c_ptr) {
         rocks_status_t status = chp_ptr->CreateCheckpoint(c.path, 0, &snapshot_id);
 
         export_error(status, c.error);
-    }
-    catch (...) {
-        *c.error = "Snapshot Export Failure";
-    }
+    };
+    safe_section("Exporting Snapshot", c.error, export_snap);
 }
 
 void ustore_snapshot_drop(ustore_snapshot_drop_t* c_ptr) {
-
-    if (!c_ptr)
-        return;
 
     ustore_snapshot_drop_t& c = *c_ptr;
     if (!c.id)
         return;
 
-    rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
-    rocks_snapshot_t& snap = *reinterpret_cast<rocks_snapshot_t*>(c.id);
-    if (!snap.snapshot)
-        return;
+    auto drop_snap = [&] {
+        rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
+        rocks_snapshot_t& snap = *reinterpret_cast<rocks_snapshot_t*>(c.id);
+        if (!snap.snapshot)
+            return;
 
-    db.native->ReleaseSnapshot(snap.snapshot);
-    snap.snapshot = nullptr;
+        db.native->ReleaseSnapshot(snap.snapshot);
+        snap.snapshot = nullptr;
 
-    auto id = reinterpret_cast<ustore_size_t>(c.id);
-    db.mutex.lock();
-    db.snapshots.erase(id);
-    db.mutex.unlock();
+        auto id = reinterpret_cast<ustore_size_t>(c.id);
+        db.mutex.lock();
+        db.snapshots.erase(id);
+        db.mutex.unlock();
+    };
+    safe_section("Dropping Snapshot", c.error, drop_snap);
 }
 
 void write_one( //
@@ -776,21 +781,26 @@ void ustore_collection_create(ustore_collection_create_t* c_ptr) {
     return_error_if_m(name_len, c.error, args_wrong_k, "Default collection is always present");
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
 
-    rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
+    safe_section("Creating Collection", c.error, [&] {
+        rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
 
-    for (auto handle : db.columns) {
-        if (handle)
-            return_error_if_m(handle->GetName() != c.name, c.error, args_wrong_k, "Such collection already exists!");
-    }
+        for (auto handle : db.columns) {
+            if (handle)
+                return_error_if_m(handle->GetName() != c.name,
+                                  c.error,
+                                  args_wrong_k,
+                                  "Such collection already exists!");
+        }
 
-    rocks_collection_t* collection = nullptr;
-    auto cf_options = rocksdb::ColumnFamilyOptions();
-    cf_options.comparator = &key_comparator_k;
-    rocks_status_t status = db.native->CreateColumnFamily(std::move(cf_options), c.name, &collection);
-    if (!export_error(status, c.error)) {
-        db.columns.push_back(collection);
-        *c.id = reinterpret_cast<ustore_collection_t>(collection);
-    }
+        rocks_collection_t* collection = nullptr;
+        auto cf_options = rocksdb::ColumnFamilyOptions();
+        cf_options.comparator = &key_comparator_k;
+        rocks_status_t status = db.native->CreateColumnFamily(std::move(cf_options), c.name, &collection);
+        if (!export_error(status, c.error)) {
+            db.columns.push_back(collection);
+            *c.id = reinterpret_cast<ustore_collection_t>(collection);
+        }
+    });
 }
 
 void ustore_collection_drop(ustore_collection_drop_t* c_ptr) {
@@ -804,56 +814,58 @@ void ustore_collection_drop(ustore_collection_drop_t* c_ptr) {
                       args_combo_k,
                       "Default collection can't be invalidated.");
 
-    rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
-    rocks_collection_t* collection_ptr = reinterpret_cast<rocks_collection_t*>(c.id);
-    rocks_collection_t* collection_ptr_to_clear = nullptr;
+    safe_section("Dropping Collection", c.error, [&] {
+        rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
+        rocks_collection_t* collection_ptr = reinterpret_cast<rocks_collection_t*>(c.id);
+        rocks_collection_t* collection_ptr_to_clear = nullptr;
 
-    if (c.id == ustore_collection_main_k)
-        collection_ptr_to_clear = db.native->DefaultColumnFamily();
-    else {
-        for (auto it = db.columns.begin(); it != db.columns.end(); it++) {
-            collection_ptr_to_clear = reinterpret_cast<rocks_collection_t*>(*it);
-            if (collection_ptr_to_clear == collection_ptr)
-                break;
-        }
-    }
-
-    rocksdb::WriteOptions options;
-    options.sync = true;
-
-    if (c.mode == ustore_drop_keys_vals_handle_k) {
-        for (auto it = db.columns.begin(); it != db.columns.end(); it++) {
-            if (collection_ptr_to_clear == *it) {
-                rocks_status_t status = db.native->DropColumnFamily(collection_ptr_to_clear);
-                if (export_error(status, c.error))
-                    return;
-                db.columns.erase(it);
-                break;
+        if (c.id == ustore_collection_main_k)
+            collection_ptr_to_clear = db.native->DefaultColumnFamily();
+        else {
+            for (auto it = db.columns.begin(); it != db.columns.end(); it++) {
+                collection_ptr_to_clear = reinterpret_cast<rocks_collection_t*>(*it);
+                if (collection_ptr_to_clear == collection_ptr)
+                    break;
             }
         }
-        return;
-    }
-    else if (c.mode == ustore_drop_keys_vals_k) {
-        rocksdb::WriteBatch batch;
-        auto it =
-            std::unique_ptr<rocksdb::Iterator>(db.native->NewIterator(rocksdb::ReadOptions(), collection_ptr_to_clear));
-        for (it->SeekToFirst(); it->Valid(); it->Next())
-            batch.Delete(collection_ptr_to_clear, it->key());
-        rocks_status_t status = db.native->Write(options, &batch);
-        export_error(status, c.error);
-        return;
-    }
 
-    else if (c.mode == ustore_drop_vals_k) {
-        rocksdb::WriteBatch batch;
-        auto it =
-            std::unique_ptr<rocksdb::Iterator>(db.native->NewIterator(rocksdb::ReadOptions(), collection_ptr_to_clear));
-        for (it->SeekToFirst(); it->Valid(); it->Next())
-            batch.Put(collection_ptr_to_clear, it->key(), rocksdb::Slice());
-        rocks_status_t status = db.native->Write(options, &batch);
-        export_error(status, c.error);
-        return;
-    }
+        rocksdb::WriteOptions options;
+        options.sync = true;
+
+        if (c.mode == ustore_drop_keys_vals_handle_k) {
+            for (auto it = db.columns.begin(); it != db.columns.end(); it++) {
+                if (collection_ptr_to_clear == *it) {
+                    rocks_status_t status = db.native->DropColumnFamily(collection_ptr_to_clear);
+                    if (export_error(status, c.error))
+                        return;
+                    db.columns.erase(it);
+                    break;
+                }
+            }
+            return;
+        }
+        else if (c.mode == ustore_drop_keys_vals_k) {
+            rocksdb::WriteBatch batch;
+            auto it = std::unique_ptr<rocksdb::Iterator>(
+                db.native->NewIterator(rocksdb::ReadOptions(), collection_ptr_to_clear));
+            for (it->SeekToFirst(); it->Valid(); it->Next())
+                batch.Delete(collection_ptr_to_clear, it->key());
+            rocks_status_t status = db.native->Write(options, &batch);
+            export_error(status, c.error);
+            return;
+        }
+
+        else if (c.mode == ustore_drop_vals_k) {
+            rocksdb::WriteBatch batch;
+            auto it = std::unique_ptr<rocksdb::Iterator>(
+                db.native->NewIterator(rocksdb::ReadOptions(), collection_ptr_to_clear));
+            for (it->SeekToFirst(); it->Valid(); it->Next())
+                batch.Put(collection_ptr_to_clear, it->key(), rocksdb::Slice());
+            rocks_status_t status = db.native->Write(options, &batch);
+            export_error(status, c.error);
+            return;
+        }
+    });
 }
 
 void ustore_collection_list(ustore_collection_list_t* c_ptr) {
@@ -862,42 +874,44 @@ void ustore_collection_list(ustore_collection_list_t* c_ptr) {
     return_error_if_m(c.db, c.error, uninitialized_state_k, "DataBase is uninitialized");
     return_error_if_m(c.count && c.names, c.error, args_combo_k, "Need names and outputs!");
 
-    linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
-    return_if_error_m(c.error);
+    safe_section("Getting  Collection List", c.error, [&] {
+        linked_memory_lock_t arena = linked_memory(c.arena, c.options, c.error);
+        return_if_error_m(c.error);
 
-    rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
-    std::size_t collections_count = db.columns.size() - 1;
-    *c.count = static_cast<ustore_size_t>(collections_count);
+        rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
+        std::size_t collections_count = db.columns.size() - 1;
+        *c.count = static_cast<ustore_size_t>(collections_count);
 
-    // Every string will be null-terminated
-    std::size_t strings_length = 0;
-    for (auto const& column : db.columns)
-        strings_length += column->GetName().size() + 1;
+        // Every string will be null-terminated
+        std::size_t strings_length = 0;
+        for (auto const& column : db.columns)
+            strings_length += column->GetName().size() + 1;
 
-    auto names = arena.alloc<char>(strings_length, c.error).begin();
-    *c.names = names;
-    return_if_error_m(c.error);
+        auto names = arena.alloc<char>(strings_length, c.error).begin();
+        *c.names = names;
+        return_if_error_m(c.error);
 
-    // For every collection we also need to export IDs and offsets
-    auto ids = arena.alloc_or_dummy(collections_count, c.error, c.ids);
-    return_if_error_m(c.error);
-    auto offs = arena.alloc_or_dummy(collections_count + 1, c.error, c.offsets);
-    return_if_error_m(c.error);
+        // For every collection we also need to export IDs and offsets
+        auto ids = arena.alloc_or_dummy(collections_count, c.error, c.ids);
+        return_if_error_m(c.error);
+        auto offs = arena.alloc_or_dummy(collections_count + 1, c.error, c.offsets);
+        return_if_error_m(c.error);
 
-    std::size_t i = 0;
-    for (auto const& column : db.columns) {
-        if (column->GetName() == rocksdb::kDefaultColumnFamilyName)
-            continue;
+        std::size_t i = 0;
+        for (auto const& column : db.columns) {
+            if (column->GetName() == rocksdb::kDefaultColumnFamilyName)
+                continue;
 
-        auto len = column->GetName().size();
-        std::memcpy(names, column->GetName().data(), len);
-        names[len] = '\0';
-        ids[i] = reinterpret_cast<ustore_collection_t>(column);
+            auto len = column->GetName().size();
+            std::memcpy(names, column->GetName().data(), len);
+            names[len] = '\0';
+            ids[i] = reinterpret_cast<ustore_collection_t>(column);
+            offs[i] = static_cast<ustore_length_t>(names - *c.names);
+            names += len + 1;
+            ++i;
+        }
         offs[i] = static_cast<ustore_length_t>(names - *c.names);
-        names += len + 1;
-        ++i;
-    }
-    offs[i] = static_cast<ustore_length_t>(names - *c.names);
+    });
 }
 
 void ustore_database_control(ustore_database_control_t* c_ptr) {
@@ -914,19 +928,21 @@ void ustore_transaction_init(ustore_transaction_init_t* c_ptr) {
     validate_transaction_begin(c.transaction, c.options, c.error);
     return_if_error_m(c.error);
 
-    bool const safe = c.options & ustore_option_write_flush_k;
-    rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
-    rocks_txn_t& txn = **reinterpret_cast<rocks_txn_t**>(c.transaction);
-    rocksdb::OptimisticTransactionOptions txn_options;
-    txn_options.set_snapshot = false;
-    rocksdb::WriteOptions options;
-    options.sync = safe;
-    options.disableWAL = !safe;
-    auto new_txn = db.native->BeginTransaction(options, txn_options, &txn);
-    if (!new_txn)
-        *c.error = "Couldn't start a transaction!";
-    else
-        *c.transaction = new_txn;
+    safe_section("Initializing Transaction", c.error, [&] {
+        bool const safe = c.options & ustore_option_write_flush_k;
+        rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
+        rocks_txn_t& txn = **reinterpret_cast<rocks_txn_t**>(c.transaction);
+        rocksdb::OptimisticTransactionOptions txn_options;
+        txn_options.set_snapshot = false;
+        rocksdb::WriteOptions options;
+        options.sync = safe;
+        options.disableWAL = !safe;
+        auto new_txn = db.native->BeginTransaction(options, txn_options, &txn);
+        if (!new_txn)
+            *c.error = "Couldn't start a transaction!";
+        else
+            *c.transaction = new_txn;
+    });
 }
 
 void ustore_transaction_commit(ustore_transaction_commit_t* c_ptr) {
@@ -937,18 +953,20 @@ void ustore_transaction_commit(ustore_transaction_commit_t* c_ptr) {
     validate_transaction_commit(c.transaction, c.options, c.error);
     return_if_error_m(c.error);
 
-    rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
-    rocks_txn_t& txn = *reinterpret_cast<rocks_txn_t*>(c.transaction);
+    safe_section("Committing Transaction", c.error, [&] {
+        rocks_db_t& db = *reinterpret_cast<rocks_db_t*>(c.db);
+        rocks_txn_t& txn = *reinterpret_cast<rocks_txn_t*>(c.transaction);
 
-    if (c.sequence_number)
-        db.mutex.lock();
-    rocks_status_t status = txn.Commit();
-    export_error(status, c.error);
-    if (c.sequence_number) {
-        if (status.ok())
-            *c.sequence_number = db.native->GetLatestSequenceNumber();
-        db.mutex.unlock();
-    }
+        if (c.sequence_number)
+            db.mutex.lock();
+        rocks_status_t status = txn.Commit();
+        export_error(status, c.error);
+        if (c.sequence_number) {
+            if (status.ok())
+                *c.sequence_number = db.native->GetLatestSequenceNumber();
+            db.mutex.unlock();
+        }
+    });
 }
 
 void ustore_arena_free(ustore_arena_t c_arena) {
